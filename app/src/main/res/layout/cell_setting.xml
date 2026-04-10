@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/click_view"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="@dimen/px18"
-    android:layout_marginEnd="@dimen/px18"
-    android:background="@drawable/cell_background"
-    android:clickable="true"
-    android:focusable="true"
-    android:minHeight="@dimen/px120"
     android:orientation="vertical">
 
     <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/click_view"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/px18"
+        android:layout_marginEnd="@dimen/px18"
+        android:background="@drawable/cell_background"
+        android:clickable="true"
+        android:focusable="true"
         android:gravity="center_vertical"
+        android:minHeight="@dimen/px120"
         android:orientation="horizontal"
         android:paddingStart="@dimen/px50"
         android:paddingTop="@dimen/px30"

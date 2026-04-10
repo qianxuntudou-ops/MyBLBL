@@ -30,16 +30,12 @@ jobs:
           VERSION=$(grep -A 10 "defaultConfig" app/build.gradle.kts | grep "versionName" | sed 's/.*versionName = "\(.*\)".*/\1/')
           echo "VERSION_NAME=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
-
-      - name: Build Release APK (if secrets are configured)
+      - name: Build Release APK
         env:
           KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        if: ${{ env.KEYSTORE_FILE != '' }}
         run: |
           KEYSTORE_PATH="$GITHUB_WORKSPACE/app/keystore.jks"
           printf '%s' "$KEYSTORE_FILE" | base64 -d > "$KEYSTORE_PATH"
@@ -49,16 +45,7 @@ jobs:
             -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
             -Pandroid.injected.signing.key.password=$KEY_PASSWORD
 
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v6
-        with:
-          name: MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-debug
-          path: app/build/outputs/apk/debug/MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-debug.apk
-
       - name: Upload Release APK
-        env:
-          KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
-        if: ${{ env.KEYSTORE_FILE != '' }}
         uses: actions/upload-artifact@v6
         with:
           name: MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-release
@@ -70,7 +57,5 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') && env.PERSONAL_ACCESS_TOKEN != ''
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            app/build/outputs/apk/debug/MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-debug.apk
-            app/build/outputs/apk/release/MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-release.apk
+          files: app/build/outputs/apk/release/MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-release.apk
           token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}

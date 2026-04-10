@@ -73,13 +73,13 @@ class SettingAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         init {
-            binding.root.setOnClickListener {
+            binding.clickView.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
                     onItemClick?.invoke(position, items[position])
                 }
             }
-            binding.root.setOnFocusChangeListener { _, hasFocus ->
+            binding.clickView.setOnFocusChangeListener { _, hasFocus ->
                 val position = bindingAdapterPosition
                 if (position == RecyclerView.NO_POSITION) {
                     return@setOnFocusChangeListener
@@ -112,17 +112,17 @@ class SettingAdapter(
         }
 
         fun bindFocusState(isFocused: Boolean) {
-            binding.root.isSelected = isFocused
+            binding.clickView.isSelected = isFocused
             binding.iconArrow.alpha = if (isFocused) 1f else 0.72f
             binding.tvInfo.alpha = if (isFocused) 1f else 0.86f
-            val targetTranslation = if (isFocused) binding.root.resources.displayMetrics.density * 6f else 0f
-            binding.root.animate()
+            val targetTranslation = if (isFocused) binding.clickView.resources.displayMetrics.density * 6f else 0f
+            binding.clickView.animate()
                 .scaleX(if (isFocused) 1.02f else 1f)
                 .scaleY(if (isFocused) 1.02f else 1f)
                 .translationX(targetTranslation)
                 .setDuration(120L)
                 .start()
-            ViewCompat.setElevation(binding.root, if (isFocused) binding.root.resources.displayMetrics.density * 3f else 0f)
+            ViewCompat.setElevation(binding.clickView, if (isFocused) binding.clickView.resources.displayMetrics.density * 3f else 0f)
         }
     }
 

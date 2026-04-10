@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import com.tutu.myblbl.model.player.DashAudio
 import com.tutu.myblbl.model.player.DashVideo
 import com.tutu.myblbl.model.player.PlayInfoModel
+import com.tutu.myblbl.model.player.SupportFormat
 import com.tutu.myblbl.model.video.quality.AudioQuality
 import com.tutu.myblbl.model.video.quality.VideoCodecEnum
 import com.tutu.myblbl.model.video.quality.VideoQuality
@@ -92,42 +93,44 @@ internal class VideoPlayerStreamResolver(
         val videos = playInfo.dash?.video.orEmpty()
         val qualityOrder = playInfo.acceptQuality.orEmpty()
 
-        val streamQualities = videos
-            .groupBy { it.id }
-            .values
-            .mapNotNull { streams ->
-                val sample = streams.maxByOrNull { it.bandwidth } ?: return@mapNotNull null
-                val support = formatNames[sample.id]
-                VideoQuality(
-                    id = sample.id,
-                    name = support?.newDescription?.takeIf { it.isNotBlank() }
-                        ?: support?.displayDesc?.takeIf { it.isNotBlank() }
-                        ?: VideoQuality.fromId(sample.id).name,
-                    resolution = "${sample.width}x${sample.height}",
-                    codecId = sample.codecId,
-                    bandwidth = sample.bandwidth,
-                    baseUrl = sample.realBaseUrl,
-                    backupUrls = sample.realBackupUrl
-                )
-            }
+        val streamQualities = if (videos.isNotEmpty()) {
+            videos
+                .groupBy { it.id }
+                .values
+                .mapNotNull { streams ->
+                    val sample = streams.maxByOrNull { it.bandwidth } ?: return@mapNotNull null
+                    buildQualityModel(
+                        qualityId = sample.id,
+                        support = formatNames[sample.id],
+                        resolution = "${sample.width}x${sample.height}",
+                        codecId = sample.codecId,
+                        bandwidth = sample.bandwidth,
+                        baseUrl = sample.realBaseUrl,
+                        backupUrls = sample.realBackupUrl
+                    )
+                }
+        } else {
+            playInfo.durl
+                ?.firstOrNull()
+                ?.takeIf { playInfo.quality > 0 && it.url.isNotBlank() }
+                ?.let { currentStream ->
+                    listOf(
+                        buildQualityModel(
+                            qualityId = playInfo.quality,
+                            support = formatNames[playInfo.quality],
+                            resolution = formatNames[playInfo.quality]?.displayDesc
+                                ?.takeIf { it.isNotBlank() }
+                                ?: VideoQuality.fromId(playInfo.quality).resolution,
+                            bandwidth = currentStream.size,
+                            baseUrl = currentStream.url,
+                            backupUrls = currentStream.backupUrl
+                        )
+                    )
+                }
+                .orEmpty()
+        }
 
-        val streamQualityIds = streamQualities.map { it.id }.toSet()
-        val extraQualities = qualityOrder
-            .filter { it !in streamQualityIds }
-            .map { qn ->
-                val support = formatNames[qn]
-                val static = VideoQuality.fromId(qn)
-                VideoQuality(
-                    id = qn,
-                    name = support?.newDescription?.takeIf { it.isNotBlank() }
-                        ?: support?.displayDesc?.takeIf { it.isNotBlank() }
-                        ?: static.name,
-                    resolution = support?.displayDesc?.takeIf { it.isNotBlank() }
-                        ?: static.resolution
-                )
-            }
-
-        return (streamQualities + extraQualities).sortedWith(
+        return streamQualities.sortedWith(
             compareBy<VideoQuality> {
                 qualityOrder.indexOf(it.id).takeIf { index -> index >= 0 } ?: Int.MAX_VALUE
             }.thenByDescending { it.id }
@@ -403,6 +406,34 @@ internal class VideoPlayerStreamResolver(
                 .filter { it.isNotBlank() }
                 .let(::addAll)
         }.distinct().map(urlNormalizer)
+    }
+
+    private fun buildQualityModel(
+        qualityId: Int,
+        support: SupportFormat?,
+        resolution: String,
+        codecId: Int = 0,
+        bandwidth: Long = 0,
+        baseUrl: String = "",
+        backupUrls: List<String>? = null
+    ): VideoQuality {
+        val static = VideoQuality.fromId(qualityId)
+        val displayName = support?.newDescription?.takeIf(String::isNotBlank)
+            ?: support?.displayDesc?.takeIf(String::isNotBlank)
+            ?: static.name
+        val displayResolution = resolution.ifBlank {
+            support?.displayDesc?.takeIf(String::isNotBlank)
+                ?: static.resolution
+        }
+        return VideoQuality(
+            id = qualityId,
+            name = displayName,
+            resolution = displayResolution,
+            codecId = codecId,
+            bandwidth = bandwidth,
+            baseUrl = baseUrl,
+            backupUrls = backupUrls
+        )
     }
 
     private fun codecPriority(codec: VideoCodecEnum): Int {

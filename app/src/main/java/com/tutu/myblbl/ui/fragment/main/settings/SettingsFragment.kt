@@ -114,7 +114,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         commonSettings = mutableListOf(
             SettingModel(getString(R.string.clear_cache), "0.0kb"),
             SettingModel(getString(R.string.cache_limit), "不限制"),
-            SettingModel(getString(R.string.check_version), BuildConfig.VERSION_NAME),
             SettingModel(getString(R.string.default_start_page), "热门"),
             SettingModel(getString(R.string.image_quality), "中尺寸"),
             SettingModel(getString(R.string.theme), "黑色"),
@@ -244,13 +243,12 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         when (position) {
             0 -> clearCache()
             1 -> showCacheLimitDialog()
-            2 -> checkVersion()
-            3 -> showCommonChoiceDialog(position, KEY_DEFAULT_START_PAGE, HOME_START_PAGE_OPTIONS)
-            4 -> showCommonChoiceDialog(position, KEY_IMAGE_QUALITY, arrayOf("低尺寸", "中尺寸", "高尺寸"))
-            5 -> showCommonChoiceDialog(position, KEY_THEME, resources.getStringArray(R.array.themes).drop(1).toTypedArray())
-            6 -> showCommonChoiceDialog(position, KEY_FULLSCREEN_APP, toggleOptions())
-            7 -> showLiveEntryDialog(position)
-            8 -> showCommonChoiceDialog(position, KEY_MINOR_PROTECTION, toggleOptions())
+            2 -> showCommonChoiceDialog(position, KEY_DEFAULT_START_PAGE, HOME_START_PAGE_OPTIONS)
+            3 -> showCommonChoiceDialog(position, KEY_IMAGE_QUALITY, arrayOf("低尺寸", "中尺寸", "高尺寸"))
+            4 -> showCommonChoiceDialog(position, KEY_THEME, resources.getStringArray(R.array.themes).drop(1).toTypedArray())
+            5 -> showCommonChoiceDialog(position, KEY_FULLSCREEN_APP, toggleOptions())
+            6 -> showLiveEntryDialog(position)
+            7 -> showCommonChoiceDialog(position, KEY_MINOR_PROTECTION, toggleOptions())
         }
     }
 
@@ -323,10 +321,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         }
     }
 
-    private fun checkVersion() {
-        android.widget.Toast.makeText(requireContext(), "当前已是最新版本", android.widget.Toast.LENGTH_SHORT).show()
-    }
-
     private fun getFolderSize(folder: java.io.File): Long {
         var size: Long = 0
         val files = folder.listFiles()
@@ -368,21 +362,21 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         applySavedValue(commonSettings, 1, KEY_CACHE_LIMIT)
         val defaultStartPage = prefs.getInt("defaultStartPage", -1)
         if (defaultStartPage >= 0) {
-            commonSettings[3].info = HOME_START_PAGE_OPTIONS
+            commonSettings[2].info = HOME_START_PAGE_OPTIONS
                 .getOrNull(defaultStartPage)
                 ?: HOME_START_PAGE_OPTIONS.first()
         } else {
-            applySavedValue(commonSettings, 3, KEY_DEFAULT_START_PAGE)
+            applySavedValue(commonSettings, 2, KEY_DEFAULT_START_PAGE)
         }
-        if (commonSettings[3].info !in HOME_START_PAGE_OPTIONS) {
-            commonSettings[3].info = HOME_START_PAGE_OPTIONS.first()
+        if (commonSettings[2].info !in HOME_START_PAGE_OPTIONS) {
+            commonSettings[2].info = HOME_START_PAGE_OPTIONS.first()
         }
-        applySavedValue(commonSettings, 4, KEY_IMAGE_QUALITY)
+        applySavedValue(commonSettings, 3, KEY_IMAGE_QUALITY)
         val theme = try { prefs.getInt("theme", 1) } catch (_: ClassCastException) { prefs.getString("theme", "1")?.toIntOrNull() ?: 1 }
-        commonSettings[5].info = theme.toThemeName()
-        applySavedValue(commonSettings, 6, KEY_FULLSCREEN_APP)
-        applySavedValue(commonSettings, 7, KEY_LIVE_ENTRY)
-        applySavedValue(commonSettings, 8, KEY_MINOR_PROTECTION)
+        commonSettings[4].info = theme.toThemeName()
+        applySavedValue(commonSettings, 5, KEY_FULLSCREEN_APP)
+        applySavedValue(commonSettings, 6, KEY_LIVE_ENTRY)
+        applySavedValue(commonSettings, 7, KEY_MINOR_PROTECTION)
 
         applySavedValue(playerSettings, 0, KEY_DEFAULT_VIDEO_QUALITY)
         applySavedValue(playerSettings, 1, KEY_DEFAULT_AUDIO_TRACK)

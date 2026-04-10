@@ -59,7 +59,6 @@
     <string name="character_counter_content_description">Characters entered %1$d of %2$d</string>
     <string name="character_counter_overflowed_content_description">Character limit exceeded %1$d of %2$d</string>
     <string name="character_counter_pattern">%1$d/%2$d</string>
-    <string name="check_version">检查更新</string>
     <string name="choose_episode">选集</string>
     <string name="clear_cache">清除缓存</string>
     <string name="clear">清空</string>

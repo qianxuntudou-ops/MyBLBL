@@ -38,6 +38,7 @@ object DmProtoParser {
         var totalSegments = 0
         var totalCount = 0L
         val specialDanmakuUrls = mutableListOf<String>()
+        var smartFilterConfig = DmSmartFilterConfigProto()
 
         while (!input.isAtEnd) {
             when (val tag = input.readTag()) {
@@ -49,7 +50,15 @@ object DmProtoParser {
                             segmentDurationMs = dmSge.first
                             totalSegments = dmSge.second
                         }
+                        5 -> smartFilterConfig = parseDanmakuFlagConfig(input.readByteArray())
                         6 -> specialDanmakuUrls += input.readString()
+                        10 -> {
+                            val parsed = parseDanmuWebPlayerConfig(input.readByteArray())
+                            smartFilterConfig = smartFilterConfig.copy(
+                                playerLevel = parsed.first,
+                                playerEnabled = parsed.second
+                            )
+                        }
                         8 -> totalCount = input.readInt64()
                         else -> input.skipField(tag)
                     }
@@ -61,8 +70,53 @@ object DmProtoParser {
             segmentDurationMs = segmentDurationMs,
             totalSegments = totalSegments,
             totalCount = totalCount,
-            specialDanmakuUrls = specialDanmakuUrls
+            specialDanmakuUrls = specialDanmakuUrls,
+            smartFilterConfig = smartFilterConfig
         )
+    }
+
+    private fun parseDanmakuFlagConfig(bytes: ByteArray): DmSmartFilterConfigProto {
+        val input = CodedInputStream.newInstance(bytes)
+        var cloudLevel = 0
+        var cloudText = ""
+        var cloudSwitch = 0
+        while (!input.isAtEnd) {
+            when (val tag = input.readTag()) {
+                0 -> break
+                else -> {
+                    when (tag ushr 3) {
+                        1 -> cloudLevel = input.readInt32()
+                        2 -> cloudText = input.readString()
+                        3 -> cloudSwitch = input.readInt32()
+                        else -> input.skipField(tag)
+                    }
+                }
+            }
+        }
+        return DmSmartFilterConfigProto(
+            cloudLevel = cloudLevel,
+            cloudText = cloudText,
+            cloudSwitch = cloudSwitch
+        )
+    }
+
+    private fun parseDanmuWebPlayerConfig(bytes: ByteArray): Pair<Int, Boolean> {
+        val input = CodedInputStream.newInstance(bytes)
+        var enabled = false
+        var level = 0
+        while (!input.isAtEnd) {
+            when (val tag = input.readTag()) {
+                0 -> break
+                else -> {
+                    when (tag ushr 3) {
+                        2 -> enabled = input.readBool()
+                        3 -> level = input.readInt32()
+                        else -> input.skipField(tag)
+                    }
+                }
+            }
+        }
+        return level to enabled
     }
 
     private fun parseElem(bytes: ByteArray): DanmakuElemProto {

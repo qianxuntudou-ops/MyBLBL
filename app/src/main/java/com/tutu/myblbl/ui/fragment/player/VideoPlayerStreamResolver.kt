@@ -154,8 +154,10 @@ internal class VideoPlayerStreamResolver(
         qualityId: Int?
     ): List<VideoCodecEnum> {
         val videos = playInfo.dash?.video.orEmpty()
-        return videos
+        val filteredVideos = videos
             .filter { qualityId == null || it.id == qualityId }
+            .ifEmpty { videos }
+        return filteredVideos
             .map { VideoCodecEnum.fromId(it.codecId) }
             .distinct()
             .sortedWith(compareBy(::codecPriority))

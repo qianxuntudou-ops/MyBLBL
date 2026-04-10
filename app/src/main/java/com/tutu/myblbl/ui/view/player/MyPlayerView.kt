@@ -878,6 +878,14 @@ class MyPlayerView @JvmOverloads constructor(
         controller?.requestOwnerButtonFocus()
     }
 
+    fun rememberCurrentFocusTarget() {
+        controller?.rememberCurrentFocusTarget()
+    }
+
+    fun restoreRememberedFocus() {
+        controller?.restoreRememberedFocus()
+    }
+
     fun showHideRepeatButton(show: Boolean) {
         controller?.showHideRepeatButton(show)
     }

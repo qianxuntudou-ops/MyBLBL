@@ -67,9 +67,6 @@ class PlayerActivity : BaseActivity<ActivityPlayerBinding>() {
             playQueue: List<VideoModel> = emptyList(),
             startEpisodeIndex: Int = -1
         ) {
-            val resolvedSeekPositionMs = seekPositionMs
-                .takeIf { it > 0L }
-                ?: video.historyProgress.coerceAtLeast(0L)
             start(
                 context = context,
                 aid = video.aid,
@@ -77,7 +74,7 @@ class PlayerActivity : BaseActivity<ActivityPlayerBinding>() {
                 cid = video.cid,
                 epId = video.epid,
                 seasonId = video.playbackSeasonId,
-                seekPositionMs = resolvedSeekPositionMs,
+                seekPositionMs = seekPositionMs,
                 initialVideo = video,
                 playQueue = playQueue,
                 startEpisodeIndex = startEpisodeIndex

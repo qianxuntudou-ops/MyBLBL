@@ -41,7 +41,6 @@ import com.tutu.myblbl.utils.AppLog
 import com.tutu.myblbl.utils.ContentFilter
 import com.tutu.myblbl.utils.PlayerSettings
 import com.tutu.myblbl.utils.PlayerSettingsStore
-import com.tutu.myblbl.utils.PlaybackReturnStore
 import com.tutu.myblbl.utils.TimeUtils
 import com.tutu.myblbl.utils.ViewUtils
 import org.greenrobot.eventbus.EventBus
@@ -352,6 +351,7 @@ class VideoPlayerFragment : Fragment() {
             hideContentPanel()
             hideNextPreview()
             sessionCoordinator.replacePlayQueue(PlayerActivity.buildPlayQueue(relatedAdapter.getItemsSnapshot(), item))
+            sessionCoordinator.updateCurrentVideo(item)
             viewModel.playRelatedVideo(item)
         }
     }
@@ -378,6 +378,7 @@ class VideoPlayerFragment : Fragment() {
             onPlayEpisode = { index -> viewModel.playEpisode(index) },
             onPlayRelatedVideo = { video, playQueue ->
                 sessionCoordinator.replacePlayQueue(playQueue)
+                sessionCoordinator.updateCurrentVideo(video)
                 viewModel.playRelatedVideo(video)
             },
             onOpenFragmentFromHost = ::openFragmentFromPlayerHost,
@@ -1013,7 +1014,10 @@ class VideoPlayerFragment : Fragment() {
                 hasNextEpisode = viewModel.hasNextEpisode(),
                 nextEpisode = viewModel.getNextEpisode(),
                 playNextEpisode = { viewModel.playNext() },
-                playVideo = { viewModel.playRelatedVideo(it) }
+                playVideo = {
+                    sessionCoordinator.updateCurrentVideo(it)
+                    viewModel.playRelatedVideo(it)
+                }
             )
         ) {
             is PlayerSessionCoordinator.ContinuationPlan.PlayNextEpisode -> {
@@ -1132,9 +1136,10 @@ class VideoPlayerFragment : Fragment() {
         AppLog.d(TAG, "onStop")
         playerView.removeCallbacks(resumePlaybackRunnable)
         progressCoordinator.syncNow()
-        postPlaybackProgressEvent()
+        val (snapshotPositionMs, snapshotPlayWhenReady) = capturePlaybackSnapshot()
+        postPlaybackProgressEvent(snapshotPositionMs)
         viewModel.reportPlaybackHeartbeat()
-        resumePlaybackWhenStarted = player?.playWhenReady ?: resumePlaybackWhenStarted
+        resumePlaybackWhenStarted = snapshotPlayWhenReady
         player?.playWhenReady = false
         playerView.pauseDanmaku()
         stopProgressUpdates()
@@ -1194,7 +1199,7 @@ class VideoPlayerFragment : Fragment() {
         )
     }
 
-    private fun postPlaybackProgressEvent() {
+    private fun postPlaybackProgressEvent(positionMs: Long) {
         val info = latestVideoInfo?.view ?: return
         val episodes = sessionCoordinator.getEpisodes()
         val selectedIndex = sessionCoordinator.getSelectedEpisodeIndex()
@@ -1202,13 +1207,12 @@ class VideoPlayerFragment : Fragment() {
             val episode = episodes[selectedIndex]
             if (episode.epId > 0L) {
                 EventBus.getDefault().post(
-                    "playEpisode|${episode.epId}|${selectedIndex + 1}|${episode.title}"
+                    "playEpisode|${episode.epId}|${positionMs.coerceAtLeast(0L).plus(1L)}|${episode.title}"
                 )
                 return
             }
         }
-        val progressMs = player?.currentPosition?.coerceAtLeast(0L)?.plus(1L) ?: 0L
-        PlaybackReturnStore.recordUgcPlaybackEvent(info.aid, info.cid, progressMs)
+        val progressMs = positionMs.coerceAtLeast(0L).plus(1L)
         EventBus.getDefault().post("playUgc|${info.aid}|${info.cid}|$progressMs")
     }
 }

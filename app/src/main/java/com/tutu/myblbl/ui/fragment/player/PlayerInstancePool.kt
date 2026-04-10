@@ -41,8 +41,7 @@ internal object PlayerInstancePool {
             releaseNow("detach_without_reuse")
             return
         }
-        player.stop()
-        player.playbackParameters = PlaybackParameters(1f)
+        resetForReuse(player)
         scheduleRelease()
         AppLog.d(TAG, "detach scheduled release in ${IDLE_RELEASE_DELAY_MS}ms")
     }
@@ -78,6 +77,14 @@ internal object PlayerInstancePool {
     private fun cancelPendingRelease() {
         pendingReleaseRunnable?.let(mainHandler::removeCallbacks)
         pendingReleaseRunnable = null
+    }
+
+    private fun resetForReuse(player: ExoPlayer) {
+        player.playWhenReady = false
+        player.clearVideoSurface()
+        player.clearMediaItems()
+        player.stop()
+        player.playbackParameters = PlaybackParameters(1f)
     }
 
     private fun buildPlayer(context: Context): ExoPlayer {

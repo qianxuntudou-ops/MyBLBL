@@ -37,6 +37,9 @@ import com.tutu.myblbl.utils.ImageLoader
 import com.tutu.myblbl.utils.TimeUtils
 import com.tutu.myblbl.utils.VideoRouteNavigator
 import kotlinx.coroutines.launch
+import org.greenrobot.eventbus.EventBus
+import org.greenrobot.eventbus.Subscribe
+import org.greenrobot.eventbus.ThreadMode
 import java.util.Locale
 
 class VideoDetailFragment : BaseFragment<FragmentVideoDetailBinding>() {
@@ -240,6 +243,43 @@ class VideoDetailFragment : BaseFragment<FragmentVideoDetailBinding>() {
 
     override fun initData() {
         loadVideoDetail()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        EventBus.getDefault().register(this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        EventBus.getDefault().unregister(this)
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    fun onMessageEvent(event: String) {
+        if (!event.startsWith("playUgc|")) {
+            return
+        }
+        try {
+            val parts = event.split("|")
+            if (parts.size != 4) {
+                return
+            }
+            val aid = parts[1].toLongOrNull() ?: return
+            val cid = parts[2].toLongOrNull() ?: return
+            val progressMs = parts[3].toLongOrNull() ?: return
+            val currentVideo = videoModel
+            if (currentVideo == null || aid != currentVideo.aid) {
+                return
+            }
+            videoModel = currentVideo.copy(
+                cid = cid,
+                historyProgress = progressMs.coerceAtLeast(0L)
+            )
+            videoView = videoView?.copy(cid = cid)
+        } catch (e: Exception) {
+            // Keep detail UI resilient to malformed playback events.
+        }
     }
 
     private fun loadVideoDetail() {

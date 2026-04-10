@@ -55,18 +55,30 @@ class VideoPlayerOverlayController(
         val dialog = AppCompatDialog(fragment.requireContext(), R.style.DialogTheme)
         dialog.setContentView(R.layout.dialog_choose_episode)
         dialog.setCanceledOnTouchOutside(true)
-        dialog.findViewById<View>(R.id.dialog_root)?.setOnClickListener { dialog.dismiss() }
 
         val recyclerView = dialog.findViewById<RecyclerView>(R.id.recyclerView)
         val titleView = dialog.findViewById<TextView>(R.id.top_title)
         val moreInfoButton = dialog.findViewById<TextView>(R.id.button_more_info)
-        val latestVideoInfo = latestVideoInfoProvider()
-        val hasVideoInfo = latestVideoInfo?.view != null
+        val catalogSource = episodes.firstOrNull()?.source ?: VideoPlayerViewModel.EpisodeCatalogSource.PAGES
+        val currentVideoInfo = resolveCurrentVideoInfo()
 
-        titleView?.text = latestVideoInfo?.view?.title?.takeIf { it.isNotBlank() }
-            ?: fragment.getString(R.string.choose_episode)
-        moreInfoButton?.isVisible = hasVideoInfo
-        moreInfoButton?.setOnClickListener { showVideoInfoDialog() }
+        titleView?.text = fragment.getString(R.string.choose_episode)
+        val showMoreInfo = catalogSource == VideoPlayerViewModel.EpisodeCatalogSource.PAGES && currentVideoInfo != null
+        moreInfoButton?.isVisible = showMoreInfo
+        moreInfoButton?.setOnClickListener(
+            if (showMoreInfo) {
+                View.OnClickListener {
+                    showVideoInfoDialog(
+                        restorePlayerFocus = false,
+                        onDismiss = {
+                            moreInfoButton.post { moreInfoButton.requestFocus() }
+                        }
+                    )
+                }
+            } else {
+                null
+            }
+        )
 
         val episodeDialogAdapter = PlayerEpisodePanelAdapter { index ->
             dialog.dismiss()
@@ -151,18 +163,79 @@ class VideoPlayerOverlayController(
         }
     }
 
-    fun showVideoInfoDialog() {
-        val video = latestVideoInfoProvider()?.view
+    fun showVideoInfoDialog(
+        restorePlayerFocus: Boolean = true,
+        onDismiss: (() -> Unit)? = null
+    ) {
+        val video = resolveCurrentVideoInfo()
         if (video == null) {
             Toast.makeText(fragment.requireContext(), "当前视频信息未加载完成", Toast.LENGTH_SHORT).show()
             return
         }
+        if (restorePlayerFocus) {
+            keepControllerVisibleForOverlay()
+            playerView.rememberCurrentFocusTarget()
+        }
         VideoInfoDialog(
             context = fragment.requireContext(),
-            coverUrl = video.pic,
+            coverUrl = video.coverUrl,
             title = video.title,
             description = video.desc
-        ).show()
+        ).apply {
+            setOnDismissListener {
+                if (restorePlayerFocus && isViewActive()) {
+                    playerView.showController()
+                    playerView.restoreRememberedFocus()
+                    playerView.resetControllerHideCallbacks()
+                }
+                onDismiss?.invoke()
+            }
+            show()
+        }
+    }
+
+    private fun resolveCurrentVideoInfo(): VideoModel? {
+        val detailView = latestVideoInfoProvider()?.view
+        val selectedEpisode = sessionCoordinator.getSelectedEpisode()
+        val currentVideo = sessionCoordinator.getCurrentVideo()
+        if (detailView == null && currentVideo == null) {
+            return null
+        }
+        return VideoModel(
+            aid = currentVideo?.aid ?: detailView?.aid ?: selectedEpisode?.aid ?: 0L,
+            bvid = currentVideo?.bvid
+                ?.takeIf { it.isNotBlank() }
+                ?: detailView?.bvid
+                    ?.takeIf { it.isNotBlank() }
+                ?: selectedEpisode?.bvid.orEmpty(),
+            cid = detailView?.cid ?: selectedEpisode?.cid ?: currentVideo?.cid ?: 0L,
+            title = detailView?.title
+                ?.takeIf { it.isNotBlank() }
+                ?: currentVideo?.title
+                    ?.takeIf { it.isNotBlank() }
+                ?: selectedEpisode?.title.orEmpty(),
+            pic = currentVideo?.coverUrl
+                ?.takeIf { it.isNotBlank() }
+                ?: detailView?.pic
+                    ?.takeIf { it.isNotBlank() }
+                ?: selectedEpisode?.cover
+                    ?.takeIf { it.isNotBlank() }
+                ?: currentVideo?.pic.orEmpty(),
+            cover = currentVideo?.cover
+                ?.takeIf { it.isNotBlank() }
+                ?: detailView?.pic
+                    ?.takeIf { it.isNotBlank() }
+                ?: selectedEpisode?.cover.orEmpty(),
+            desc = detailView?.desc
+                ?.takeIf { it.isNotBlank() }
+                ?: currentVideo?.desc
+                    ?.takeIf { it.isNotBlank() }
+                ?: "",
+            pubDate = currentVideo?.pubDate ?: detailView?.pubDate ?: 0L,
+            createTime = currentVideo?.createTime ?: detailView?.createTime ?: 0L,
+            owner = currentVideo?.owner ?: detailView?.owner,
+            stat = currentVideo?.stat ?: detailView?.stat
+        )
     }
 
     fun showPlayerActionDialog() {

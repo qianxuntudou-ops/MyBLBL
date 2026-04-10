@@ -61,12 +61,15 @@ class PlayerEpisodePanelAdapter(
             isSelected: Boolean,
             onClick: () -> Unit
         ) {
-            binding.textTitle.text = item.title.ifBlank {
-                item.subtitle.ifBlank {
-                    binding.root.context.getString(R.string.choose_episode)
+            binding.textTitle.text = item.panelTitle.ifBlank {
+                item.title.ifBlank {
+                    item.subtitle.ifBlank {
+                        binding.root.context.getString(R.string.choose_episode)
+                    }
                 }
             }
-            binding.iconPlaying.visibility = if (isSelected) View.VISIBLE else View.INVISIBLE
+            binding.iconPlaying.visibility = if (isSelected) View.VISIBLE else View.GONE
+            binding.clickView.isSelected = isSelected
             binding.root.isSelected = isSelected
             binding.textTitle.isSelected = isSelected
             binding.clickView.setOnClickListener { onClick() }

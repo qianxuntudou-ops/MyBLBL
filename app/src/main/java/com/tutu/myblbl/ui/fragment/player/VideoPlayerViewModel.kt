@@ -52,6 +52,12 @@ class VideoPlayerViewModel(
     context: Context
 ) : ViewModel() {
 
+    enum class EpisodeCatalogSource {
+        PAGES,
+        UGC_SEASON,
+        PGC_EPISODES
+    }
+
     companion object {
         private const val TAG = "VideoPlayerViewModel"
         private const val MAX_FALLBACK_ATTEMPTS = 8
@@ -62,12 +68,14 @@ class VideoPlayerViewModel(
     data class PlayableEpisode(
         val cid: Long,
         val title: String,
+        val panelTitle: String = title,
         val subtitle: String = "",
         val cover: String = "",
         val aid: Long = 0,
         val bvid: String = "",
         val epId: Long = 0L,
-        val seasonId: Long = 0L
+        val seasonId: Long = 0L,
+        val source: EpisodeCatalogSource = EpisodeCatalogSource.PAGES
     )
 
     data class PlaybackRequest(
@@ -854,6 +862,7 @@ class VideoPlayerViewModel(
         val initialQualities = streamResolver.buildQualityList(initialPlayInfo)
         val resolvedQualityId = resolvePlayableQualityId(
             requestedQualityId = lockedQualityId,
+            playInfo = initialPlayInfo,
             availableQualities = initialQualities,
             reason = "initial_request"
         )
@@ -1104,6 +1113,7 @@ class VideoPlayerViewModel(
                 val availableQualities = streamResolver.buildQualityList(playInfo)
                 val resolvedQualityId = resolvePlayableQualityId(
                     requestedQualityId = lockedQualityId,
+                    playInfo = playInfo,
                     availableQualities = availableQualities,
                     reason = "refresh_playurl"
                 )
@@ -1284,9 +1294,28 @@ class VideoPlayerViewModel(
 
     private fun resolvePlayableQualityId(
         requestedQualityId: Int,
+        playInfo: PlayInfoModel,
         availableQualities: List<VideoQuality>,
         reason: String
     ): Int {
+        val streamQualityIds = playInfo.dash?.video
+            .orEmpty()
+            .map { it.id }
+            .distinct()
+        if (streamQualityIds.isNotEmpty()) {
+            if (requestedQualityId in streamQualityIds) {
+                return requestedQualityId
+            }
+            val fallbackQualityId = playInfo.quality
+                .takeIf { it in streamQualityIds }
+                ?: streamQualityIds.maxOrNull()
+                ?: requestedQualityId
+            AppLog.w(
+                TAG,
+                "quality fallback: reason=$reason, requested=$requestedQualityId, fallback=$fallbackQualityId, streamAvailable=$streamQualityIds, declared=${availableQualities.map { it.id }}, responseQuality=${playInfo.quality}"
+            )
+            return fallbackQualityId
+        }
         if (availableQualities.isEmpty()) {
             return requestedQualityId
         }
@@ -1682,9 +1711,10 @@ class VideoPlayerViewModel(
             return
         }
         val specialCount = danmakuView.specialDanmakuUrls.size
+        val smartFilter = danmakuView.smartFilterConfig
         AppLog.d(
             TAG,
-            "loadDanmaku meta: cid=$cid, aid=$aid, durationMs=$durationMs, segments=$segmentCount, totalCount=${danmakuView.totalCount}, pageSizeMs=${danmakuView.segmentDurationMs}, specialPackages=$specialCount"
+            "loadDanmaku meta: cid=$cid, aid=$aid, durationMs=$durationMs, segments=$segmentCount, totalCount=${danmakuView.totalCount}, pageSizeMs=${danmakuView.segmentDurationMs}, specialPackages=$specialCount, smartFilterCloudLevel=${smartFilter.cloudLevel}, smartFilterCloudSwitch=${smartFilter.cloudSwitch}, smartFilterCloudText=${smartFilter.cloudText.ifBlank { "-" }}, smartFilterPlayerLevel=${smartFilter.playerLevel}, smartFilterPlayerEnabled=${smartFilter.playerEnabled}, smartFilterResolvedLevel=${smartFilter.resolvedLevel}, smartFilterResolvedEnabled=${smartFilter.resolvedEnabled}"
         )
         if (specialCount > 0) {
             AppLog.w(

@@ -22,29 +22,31 @@ class VideoPlayerEpisodeCatalogBuilder(
     ): List<VideoPlayerViewModel.PlayableEpisode> {
         val view = detail.view ?: return emptyList()
 
-        val ugcEpisodes = view.ugcSeason?.sections
-            .orEmpty()
-            .flatMap { it.episodes.orEmpty() }
-            .map { episode ->
-                VideoPlayerViewModel.PlayableEpisode(
-                    cid = episode.displayCid,
-                    title = episode.displayTitle,
-                    subtitle = "第 ${episode.displayPage.coerceAtLeast(1)} P",
-                    cover = episode.displayCover.takeIf { it.isNotBlank() } ?: view.pic,
-                    aid = episode.displayAid,
-                    bvid = episode.displayBvid
-                )
-            }
-
-        if (ugcEpisodes.isNotEmpty()) {
-            return ugcEpisodes
-        }
-
         val pages = view.pages.orEmpty().ifEmpty {
             runCatching { apiService.getVideoPv(view.aid, view.bvid) }
                 .getOrNull()
                 ?.data
                 .orEmpty()
+        }
+
+        if (pages.isNotEmpty()) {
+            return pages.mapIndexed { index, page ->
+                page.toPlayableEpisode(index, view)
+            }
+        }
+
+        val ugcEpisodes = view.ugcSeason?.sections
+            .orEmpty()
+            .flatMap { it.episodes.orEmpty() }
+            .mapIndexed { index, episode ->
+                episode.toPlayableEpisode(
+                    index = index,
+                    fallbackView = view
+                )
+            }
+
+        if (ugcEpisodes.isNotEmpty()) {
+            return ugcEpisodes
         }
 
         return pages.mapIndexed { index, page ->
@@ -68,12 +70,14 @@ class VideoPlayerEpisodeCatalogBuilder(
                 VideoPlayerViewModel.PlayableEpisode(
                     cid = episode.cid,
                     title = episode.title.ifBlank { "EP${index + 1}" },
+                    panelTitle = episode.title.ifBlank { "EP${index + 1}" },
                     subtitle = episode.desc.ifBlank { episode.typeName },
                     cover = episode.coverUrl.ifBlank { detail.cover },
                     aid = episode.aid,
                     bvid = episode.bvid,
                     epId = episode.epid,
-                    seasonId = episode.sid.takeIf { it > 0L } ?: seasonId
+                    seasonId = episode.sid.takeIf { it > 0L } ?: seasonId,
+                    source = VideoPlayerViewModel.EpisodeCatalogSource.PGC_EPISODES
                 )
             }
     }
@@ -130,10 +134,36 @@ class VideoPlayerEpisodeCatalogBuilder(
         return VideoPlayerViewModel.PlayableEpisode(
             cid = cid,
             title = part.takeIf { it.isNotBlank() } ?: "P${page.takeIf { it > 0 } ?: index + 1}",
+            panelTitle = part.takeIf { it.isNotBlank() } ?: "P${page.takeIf { it > 0 } ?: index + 1}",
             subtitle = "第 ${page.takeIf { it > 0 } ?: index + 1} P",
             cover = view.pic,
             aid = view.aid,
-            bvid = view.bvid
+            bvid = view.bvid,
+            source = VideoPlayerViewModel.EpisodeCatalogSource.PAGES
+        )
+    }
+
+    private fun com.tutu.myblbl.model.video.detail.UgcEpisode.toPlayableEpisode(
+        index: Int,
+        fallbackView: com.tutu.myblbl.model.video.detail.VideoView
+    ): VideoPlayerViewModel.PlayableEpisode {
+        val displayPart = pageInfo?.part
+            ?.takeIf { it.isNotBlank() }
+            ?: pages.orEmpty().firstOrNull()?.part?.takeIf { it.isNotBlank() }
+            ?: title.takeIf { it.isNotBlank() }
+            ?: arc?.title?.takeIf { it.isNotBlank() }
+            ?: "P${displayPage.takeIf { it > 0 } ?: index + 1}"
+        return VideoPlayerViewModel.PlayableEpisode(
+            cid = displayCid,
+            title = title.takeIf { it.isNotBlank() }
+                ?: arc?.title?.takeIf { it.isNotBlank() }
+                ?: displayPart,
+            panelTitle = displayPart,
+            subtitle = "第 ${displayPage.takeIf { it > 0 } ?: index + 1} P",
+            cover = displayCover.ifBlank { fallbackView.pic },
+            aid = displayAid,
+            bvid = displayBvid,
+            source = VideoPlayerViewModel.EpisodeCatalogSource.UGC_SEASON
         )
     }
 
@@ -152,12 +182,24 @@ class VideoPlayerEpisodeCatalogBuilder(
         return VideoPlayerViewModel.PlayableEpisode(
             cid = cid,
             title = displayTitle,
+            panelTitle = buildString {
+                append(index + 1)
+                append('、')
+                val badgeText = badgeInfo?.text?.takeIf { it.isNotBlank() } ?: badge
+                if (badgeText.isNotBlank()) {
+                    append('(')
+                    append(badgeText)
+                    append(')')
+                }
+                append(displayTitle)
+            },
             subtitle = subTitle,
             cover = cover.ifBlank { seasonCover },
             aid = aid,
             bvid = bvid,
             epId = id,
-            seasonId = seasonId
+            seasonId = seasonId,
+            source = VideoPlayerViewModel.EpisodeCatalogSource.PGC_EPISODES
         )
     }
 

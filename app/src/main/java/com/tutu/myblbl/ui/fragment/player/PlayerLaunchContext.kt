@@ -43,17 +43,13 @@ data class PlayerLaunchContext(
             val resolvedSeasonId = seasonId.takeIf { it > 0L }
                 ?: resolvedVideo?.playbackSeasonId
                 ?: 0L
-            val resolvedSeekPositionMs = seekPositionMs
-                .takeIf { it > 0L }
-                ?: resolvedVideo?.historyProgress
-                ?: 0L
             return PlayerLaunchContext(
                 aid = resolvedAid,
                 bvid = resolvedBvid,
                 cid = resolvedCid,
                 epId = resolvedEpId,
                 seasonId = resolvedSeasonId,
-                seekPositionMs = resolvedSeekPositionMs.coerceAtLeast(0L),
+                seekPositionMs = seekPositionMs.coerceAtLeast(0L),
                 requestElapsedMs = SystemClock.elapsedRealtime(),
                 initialVideo = resolvedVideo,
                 playQueue = ArrayList(playQueue),

@@ -31,6 +31,7 @@ class PlayerSessionCoordinator {
 
     private var launchContext: PlayerLaunchContext? = null
     private var launchVideo: VideoModel? = null
+    private var currentVideo: VideoModel? = null
     private var launchStartEpisodeIndex: Int = -1
     private val launchQueue = ArrayDeque<VideoModel>()
 
@@ -42,6 +43,7 @@ class PlayerSessionCoordinator {
         val resolved = resolveLaunchContext(arguments) ?: return null
         launchContext = resolved
         launchVideo = resolved.initialVideo
+        currentVideo = resolved.initialVideo
         launchStartEpisodeIndex = resolved.startEpisodeIndex
         launchQueue.clear()
         launchQueue.addAll(resolved.playQueue.filter(::isPlayableVideo))
@@ -71,7 +73,15 @@ class PlayerSessionCoordinator {
     }
 
     fun updateVideoInfo(info: VideoDetailModel?) {
-        trimQueueAgainstCurrent(info?.view?.toLaunchVideoModel())
+        val detailView = info?.view
+        trimQueueAgainstCurrent(detailView?.toLaunchVideoModel())
+        if (detailView != null) {
+            currentVideo = mergeCurrentVideo(currentVideo ?: launchVideo, detailView)
+        }
+    }
+
+    fun updateCurrentVideo(video: VideoModel?) {
+        currentVideo = video
     }
 
     fun updateEpisodes(value: List<VideoPlayerViewModel.PlayableEpisode>) {
@@ -92,6 +102,8 @@ class PlayerSessionCoordinator {
     }
 
     fun getLaunchVideo(): VideoModel? = launchVideo
+
+    fun getCurrentVideo(): VideoModel? = currentVideo ?: launchVideo
 
     fun getEpisodes(): List<VideoPlayerViewModel.PlayableEpisode> = episodes
 
@@ -166,6 +178,62 @@ class PlayerSessionCoordinator {
             left.cid > 0L && right.cid > 0L -> left.cid == right.cid
             else -> left.title == right.title && left.coverUrl == right.coverUrl
         }
+    }
+
+    private fun mergeCurrentVideo(
+        base: VideoModel?,
+        detailView: com.tutu.myblbl.model.video.detail.VideoView
+    ): VideoModel {
+        val current = base
+        val preferredCoverUrl = current?.coverUrl
+            ?.takeIf { it.isNotBlank() }
+            ?: detailView.pic.takeIf { it.isNotBlank() }
+            ?: ""
+        return VideoModel(
+            aid = current?.aid?.takeIf { it > 0L } ?: detailView.aid,
+            bvid = current?.bvid
+                ?.takeIf { it.isNotBlank() }
+                ?: detailView.bvid,
+            cid = detailView.cid.takeIf { it > 0L } ?: current?.cid ?: 0L,
+            title = detailView.title
+                .takeIf { it.isNotBlank() }
+                ?: current?.title.orEmpty(),
+            pic = preferredCoverUrl,
+            cover = preferredCoverUrl,
+            desc = detailView.desc
+                .takeIf { it.isNotBlank() }
+                ?: current?.desc.orEmpty(),
+            duration = detailView.duration.takeIf { it > 0L } ?: current?.duration ?: 0L,
+            pubDate = detailView.pubDate.takeIf { it > 0L } ?: current?.pubDate ?: 0L,
+            createTime = detailView.createTime.takeIf { it > 0L } ?: current?.createTime ?: 0L,
+            owner = detailView.owner ?: current?.owner,
+            stat = detailView.stat ?: current?.stat,
+            bangumi = current?.bangumi,
+            pages = current?.pages,
+            ugcSeason = current?.ugcSeason,
+            play = current?.play ?: 0L,
+            videoReview = current?.videoReview ?: 0L,
+            typeName = current?.typeName.orEmpty(),
+            typeId = current?.typeId ?: 0,
+            dynamicText = current?.dynamicText.orEmpty(),
+            dimension = detailView.dimension ?: current?.dimension,
+            isLive = current?.isLive ?: false,
+            roomId = current?.roomId ?: 0L,
+            isFollowed = current?.isFollowed ?: false,
+            isLike = current?.isLike ?: false,
+            isCoin = current?.isCoin ?: false,
+            isFavorite = current?.isFavorite ?: false,
+            epid = current?.epid ?: 0L,
+            sid = current?.sid ?: 0L,
+            seasonType = current?.seasonType ?: 0,
+            isOgv = current?.isOgv ?: false,
+            redirectUrl = detailView.redirectUrl.takeIf { it.isNotBlank() } ?: current?.redirectUrl.orEmpty(),
+            teenageMode = current?.teenageMode ?: 0,
+            historyProgress = current?.historyProgress ?: 0L,
+            historyViewAt = current?.historyViewAt ?: 0L,
+            historyBadge = current?.historyBadge.orEmpty(),
+            historyBusiness = current?.historyBusiness.orEmpty()
+        )
     }
 
     private fun com.tutu.myblbl.model.video.detail.VideoView.toLaunchVideoModel(): VideoModel {

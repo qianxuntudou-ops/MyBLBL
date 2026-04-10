@@ -22,7 +22,6 @@ import com.tutu.myblbl.utils.FileCacheManager
 import com.tutu.myblbl.ui.view.WrapContentGridLayoutManager
 import com.tutu.myblbl.utils.AppLog
 import com.tutu.myblbl.utils.ContentFilter
-import com.tutu.myblbl.utils.PlaybackReturnStore
 import com.tutu.myblbl.utils.SpatialFocusNavigator
 import com.tutu.myblbl.utils.SwipeRefreshHelper
 import com.tutu.myblbl.utils.VideoRouteNavigator
@@ -159,9 +158,6 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     override fun onResume() {
         super.onResume()
         EventBus.getDefault().register(this)
-        if (type == TYPE_HISTORY) {
-            consumePendingHistoryPlaybackEvent()
-        }
         if (pendingRestoreFocus) {
             pendingRestoreFocus = false
             restoreContentFocus()
@@ -462,12 +458,6 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             (item.history?.oid ?: 0L) > 0L -> "aid:${item.history?.oid}"
             else -> "title:${item.title}|cover:${item.cover}"
         }
-    }
-
-    private fun consumePendingHistoryPlaybackEvent() {
-        val event = PlaybackReturnStore.consumeUgcPlaybackEvent() ?: return
-        historyAdapter?.updateProgressFromPlayer(event.aid, event.cid, event.progressMs)
-        cacheHistoryVideos(historyAdapter?.getItemsSnapshot().orEmpty())
     }
 
     private fun restoreCachedContent() {

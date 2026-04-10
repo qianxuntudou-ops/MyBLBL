@@ -68,7 +68,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         private const val KEY_DM_ALLOW_VIP_COLORFUL_DM = "dm_allow_vip_colorful_dm"
         private const val KEY_DM_SHOW_ADVANCED = "dm_show_advanced"
         private const val KEY_DM_MERGE_DUPLICATE = "dm_merge_duplicate"
-        private val DM_SMART_FILTER_OPTIONS = arrayOf("关", "低", "中", "高")
+        private val DM_SMART_FILTER_OPTIONS = arrayOf("关", "1", "2", "3")
 
         private val HOME_START_PAGE_OPTIONS = arrayOf("推荐", "热门", "番剧", "影视")
     }

@@ -17,9 +17,9 @@ import java.io.Serializable
 private const val PREFS_APP_SETTINGS = "app_settings"
 private const val VALUE_ON = "开"
 private const val VALUE_OFF = "关"
-private const val VALUE_LOW = "低"
-private const val VALUE_MEDIUM = "中"
-private const val VALUE_HIGH = "高"
+private const val VALUE_FILTER_LEVEL_1 = "1"
+private const val VALUE_FILTER_LEVEL_2 = "2"
+private const val VALUE_FILTER_LEVEL_3 = "3"
 private val DEFAULT_START_PAGE_OPTIONS = arrayOf("推荐", "热门", "番剧", "影视")
 
 fun Context.toast(message: String, duration: Int = Toast.LENGTH_SHORT) {
@@ -70,9 +70,12 @@ fun Context.isSimpleOperationKeyEnabled(): Boolean {
 
 fun Context.getDanmakuSmartFilterLevel(): Int {
     return when (getSettingString("dm_filter_weight")?.trim()) {
-        VALUE_LOW -> 1
-        VALUE_MEDIUM -> 2
-        VALUE_HIGH -> 3
+        VALUE_FILTER_LEVEL_1 -> 1
+        VALUE_FILTER_LEVEL_2 -> 2
+        VALUE_FILTER_LEVEL_3 -> 3
+        "低" -> 1
+        "中" -> 2
+        "高" -> 3
         VALUE_ON -> 1
         else -> 0
     }
@@ -84,10 +87,13 @@ fun Context.isDanmakuSmartFilterEnabled(): Boolean {
 
 fun normalizeDanmakuSmartFilterValue(value: String?): String {
     return when (value?.trim()) {
-        VALUE_LOW -> VALUE_LOW
-        VALUE_MEDIUM -> VALUE_MEDIUM
-        VALUE_HIGH -> VALUE_HIGH
-        VALUE_ON -> VALUE_LOW
+        VALUE_FILTER_LEVEL_1 -> VALUE_FILTER_LEVEL_1
+        VALUE_FILTER_LEVEL_2 -> VALUE_FILTER_LEVEL_2
+        VALUE_FILTER_LEVEL_3 -> VALUE_FILTER_LEVEL_3
+        "低" -> VALUE_FILTER_LEVEL_1
+        "中" -> VALUE_FILTER_LEVEL_2
+        "高" -> VALUE_FILTER_LEVEL_3
+        VALUE_ON -> VALUE_FILTER_LEVEL_1
         else -> VALUE_OFF
     }
 }

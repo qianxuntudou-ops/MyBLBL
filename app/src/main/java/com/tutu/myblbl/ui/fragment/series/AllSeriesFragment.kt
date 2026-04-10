@@ -8,12 +8,14 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatDialog
+import androidx.core.content.ContextCompat
 import androidx.core.os.bundleOf
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
+import com.tutu.myblbl.databinding.CellSettingBinding
 import com.tutu.myblbl.databinding.FragmentAllSeriesBinding
 import com.tutu.myblbl.model.series.AllSeriesFilterModel
 import com.tutu.myblbl.model.series.SeriesType
@@ -25,6 +27,7 @@ import com.tutu.myblbl.ui.base.OnBackPressedHandler
 import com.tutu.myblbl.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.ui.view.WrapContentGridLayoutManager
 import com.tutu.myblbl.ui.widget.GridSpacingItemDecoration
+import com.tutu.myblbl.ui.widget.LinearSpacingItemDecoration
 import com.tutu.myblbl.utils.AppLog
 import kotlinx.coroutines.launch
 
@@ -40,13 +43,22 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         private const val TAG = "AllSeriesFocus"
         private const val ARG_SEASON_TYPE = "seasonType"
         private const val ARG_MORE_URL = "moreUrl"
-        private const val CONTENT_SPAN_COUNT = 6
+        private const val ARG_ENTRY_TITLE = "entryTitle"
+        private const val MIN_CONTENT_SPAN_COUNT = 2
+        private const val MAX_CONTENT_SPAN_COUNT = 6
+        private const val BASELINE_CARD_WIDTH_PX = 225
+        private const val BASELINE_CARD_SPACING_PX = 20
 
-        fun newInstance(seasonType: Int, moreUrl: String = ""): AllSeriesFragment {
+        fun newInstance(
+            seasonType: Int,
+            moreUrl: String = "",
+            entryTitle: String = ""
+        ): AllSeriesFragment {
             return AllSeriesFragment().apply {
                 arguments = bundleOf(
                     ARG_SEASON_TYPE to seasonType,
-                    ARG_MORE_URL to moreUrl
+                    ARG_MORE_URL to moreUrl,
+                    ARG_ENTRY_TITLE to entryTitle
                 )
             }
         }
@@ -56,6 +68,7 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
 
     private var seasonType: Int = SeriesType.ANIME
     private var moreUrl: String = ""
+    private var entryTitle: String = ""
     private var currentPage = 1
     private var hasMore = true
     private var isLoading = false
@@ -67,12 +80,14 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
 
     private lateinit var adapter: SeriesAdapter
     private lateinit var filterAdapter: AllSeriesFilterAdapter
+    private lateinit var gridLayoutManager: WrapContentGridLayoutManager
     private var filters: List<AllSeriesFilterModel> = emptyList()
     private var lastFocusedArea = FocusArea.CONTENT
 
     override fun initArguments() {
         seasonType = arguments?.getInt(ARG_SEASON_TYPE, SeriesType.ANIME) ?: SeriesType.ANIME
         moreUrl = arguments?.getString(ARG_MORE_URL).orEmpty()
+        entryTitle = arguments?.getString(ARG_ENTRY_TITLE).orEmpty()
     }
 
     override fun getViewBinding(
@@ -83,7 +98,11 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
     }
 
     override fun initView() {
-        filters = AllSeriesFilterFactory.create(requireContext(), seasonType)
+        filters = AllSeriesFilterFactory.applyInitialFilters(
+            context = requireContext(),
+            seasonType = seasonType,
+            moreUrl = moreUrl
+        )
         adapter = SeriesAdapter(
             onItemClick = { series ->
                 if (series.seasonId > 0) {
@@ -110,10 +129,12 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             onLeftEdge = ::focusContentGrid
         )
 
-        binding.textTopTitle.text = getString(
-            R.string.all_series_title_format,
-            SeriesType.titleOf(seasonType)
-        )
+        binding.textTopTitle.text = entryTitle.ifBlank {
+            getString(
+                R.string.all_series_title_format,
+                SeriesType.titleOf(seasonType)
+            )
+        }
         binding.buttonBack1.setOnClickListener {
             parentFragmentManager.popBackStack()
         }
@@ -133,7 +154,8 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         }
         binding.viewFilter.visibility = View.VISIBLE
 
-        binding.recyclerView.layoutManager = WrapContentGridLayoutManager(requireContext(), CONTENT_SPAN_COUNT)
+        gridLayoutManager = WrapContentGridLayoutManager(requireContext(), MAX_CONTENT_SPAN_COUNT)
+        binding.recyclerView.layoutManager = gridLayoutManager
         binding.recyclerView.adapter = adapter
         binding.recyclerView.itemAnimator = null
         binding.recyclerView.setOnTouchListener { _, event ->
@@ -149,18 +171,24 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         }
         binding.recyclerView.addItemDecoration(
             GridSpacingItemDecoration(
-                CONTENT_SPAN_COUNT,
+                MAX_CONTENT_SPAN_COUNT,
                 resources.getDimensionPixelSize(R.dimen.px20),
                 true
             )
         )
         binding.recyclerView.setHasFixedSize(true)
+        binding.recyclerView.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+            if ((right - left) != (oldRight - oldLeft)) {
+                updateContentGridMetrics()
+            }
+        }
         binding.recyclerViewFilter.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerViewFilter.adapter = filterAdapter
         binding.recyclerViewFilter.itemAnimator = null
         filterAdapter.setData(filters)
         filterAdapter.setExpanded(false)
         setFilterExpanded(false, animate = false)
+        binding.recyclerView.post { updateContentGridMetrics(force = true) }
         if (cachedList.isNotEmpty()) {
             adapter.setData(cachedList)
             binding.recyclerView.visibility = View.VISIBLE
@@ -178,7 +206,8 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
                 val layoutManager = recyclerView.layoutManager as? WrapContentGridLayoutManager ?: return
                 val totalItemCount = layoutManager.itemCount
                 val lastVisibleItem = layoutManager.findLastVisibleItemPosition()
-                if (!isLoading && hasMore && lastVisibleItem >= totalItemCount - 6) {
+                val preloadThreshold = layoutManager.spanCount * 2
+                if (!isLoading && hasMore && lastVisibleItem >= totalItemCount - preloadThreshold) {
                     currentPage++
                     loadData()
                 }
@@ -258,24 +287,49 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
 
     private fun showFilterOptions(position: Int) {
         val filter = filters.getOrNull(position) ?: return
-        val labels = filter.options.map { it.title }.toTypedArray()
-        AlertDialog.Builder(requireContext())
-            .setTitle(filter.title)
-            .setSingleChoiceItems(labels, filter.currentSelect) { dialog, which ->
-                if (which != filter.currentSelect) {
-                    filters = filters.toMutableList().apply {
-                        this[position] = filter.copy(currentSelect = which)
-                    }
-                    filterAdapter.setData(filters)
-                    filterAdapter.setExpanded(isFilterExpanded)
-                    currentPage = 1
-                    hasMore = true
-                    loadData()
+        val dialog = AppCompatDialog(requireContext(), R.style.DialogTheme)
+        dialog.setContentView(R.layout.dialog_setting_choice)
+        dialog.setCanceledOnTouchOutside(true)
+        dialog.findViewById<View>(R.id.dialog_root)?.setOnClickListener { dialog.dismiss() }
+
+        val titleView = dialog.findViewById<android.widget.TextView>(R.id.top_title)
+        val recyclerView = dialog.findViewById<RecyclerView>(R.id.recyclerView)
+        titleView?.text = filter.title
+
+        val optionAdapter = FilterOptionDialogAdapter(
+            options = filter.options.map { it.title },
+            currentIndex = filter.currentSelect
+        ) { selectedIndex ->
+            if (selectedIndex != filter.currentSelect) {
+                filters = filters.toMutableList().apply {
+                    this[position] = filter.copy(currentSelect = selectedIndex)
                 }
-                dialog.dismiss()
+                filterAdapter.setData(filters)
+                filterAdapter.setExpanded(isFilterExpanded)
+                currentPage = 1
+                hasMore = true
+                loadData()
             }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            dialog.dismiss()
+        }
+
+        recyclerView?.layoutManager = createDialogLayoutManager()
+        recyclerView?.adapter = optionAdapter
+        if (recyclerView != null && recyclerView.itemDecorationCount == 0) {
+            recyclerView.addItemDecoration(
+                LinearSpacingItemDecoration(
+                    resources.getDimensionPixelSize(R.dimen.px2),
+                    includeBottom = true
+                )
+            )
+        }
+
+        dialog.setOnShowListener {
+            recyclerView?.post {
+                optionAdapter.requestInitialFocus(recyclerView)
+            }
+        }
+        dialog.show()
     }
 
     private fun showInfo(imageRes: Int, message: String) {
@@ -425,6 +479,7 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
                     binding.viewFilter.layoutParams = binding.viewFilter.layoutParams.apply {
                         this.width = width
                     }
+                    updateContentGridMetrics()
                 }
                 start()
             }
@@ -432,6 +487,29 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             binding.viewFilter.layoutParams = binding.viewFilter.layoutParams.apply {
                 width = targetWidth
             }
+            updateContentGridMetrics(force = true)
+        }
+    }
+
+    private fun updateContentGridMetrics(force: Boolean = false) {
+        if (!::gridLayoutManager.isInitialized) {
+            return
+        }
+        val availableWidth = binding.recyclerView.width
+            .minus(binding.recyclerView.paddingStart)
+            .minus(binding.recyclerView.paddingEnd)
+        if (availableWidth <= 0) {
+            return
+        }
+        val spanCount = ((availableWidth + BASELINE_CARD_SPACING_PX) /
+            (BASELINE_CARD_WIDTH_PX + BASELINE_CARD_SPACING_PX))
+            .coerceIn(MIN_CONTENT_SPAN_COUNT, MAX_CONTENT_SPAN_COUNT)
+        if (force || gridLayoutManager.spanCount != spanCount) {
+            AppLog.d(
+                TAG,
+                "updateContentGridMetrics: width=$availableWidth spanCount=${gridLayoutManager.spanCount}->$spanCount"
+            )
+            gridLayoutManager.spanCount = spanCount
         }
     }
 
@@ -451,6 +529,19 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         return isTouchScrolling || (SystemClock.uptimeMillis() - lastTouchInteractionAt) < 600L
     }
 
+    private fun createDialogLayoutManager(): LinearLayoutManager {
+        val extraLayoutSpacePx = resources.getDimensionPixelSize(R.dimen.px100)
+        return object : LinearLayoutManager(requireContext()) {
+            override fun calculateExtraLayoutSpace(
+                state: RecyclerView.State,
+                extraLayoutSpace: IntArray
+            ) {
+                extraLayoutSpace[0] = extraLayoutSpacePx
+                extraLayoutSpace[1] = extraLayoutSpacePx
+            }
+        }
+    }
+
     override fun onBackPressed(): Boolean {
         if (!isFilterExpanded || !isAdded || view == null) {
             return false
@@ -463,5 +554,92 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             }
         }
         return true
+    }
+
+    private class FilterOptionDialogAdapter(
+        private val options: List<String>,
+        currentIndex: Int,
+        private val onItemSelected: (Int) -> Unit
+    ) : RecyclerView.Adapter<FilterOptionDialogAdapter.FilterOptionViewHolder>() {
+
+        private var selectedIndex = currentIndex.coerceIn(0, options.lastIndex.coerceAtLeast(0))
+        private var focusedPosition = RecyclerView.NO_POSITION
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): FilterOptionViewHolder {
+            val binding = CellSettingBinding.inflate(
+                LayoutInflater.from(parent.context),
+                parent,
+                false
+            )
+            return FilterOptionViewHolder(binding)
+        }
+
+        override fun onBindViewHolder(holder: FilterOptionViewHolder, position: Int) {
+            holder.bind(option = options[position], isSelected = position == selectedIndex)
+        }
+
+        override fun getItemCount(): Int = options.size
+
+        fun requestInitialFocus(recyclerView: RecyclerView?) {
+            val targetPosition = selectedIndex.coerceIn(0, options.lastIndex.coerceAtLeast(0))
+            recyclerView?.scrollToPosition(targetPosition)
+            recyclerView?.post {
+                recyclerView.findViewHolderForAdapterPosition(targetPosition)?.itemView?.requestFocus()
+            }
+        }
+
+        inner class FilterOptionViewHolder(
+            private val binding: CellSettingBinding
+        ) : RecyclerView.ViewHolder(binding.root) {
+
+            init {
+                binding.root.setOnClickListener {
+                    val position = bindingAdapterPosition
+                    if (position == RecyclerView.NO_POSITION) {
+                        return@setOnClickListener
+                    }
+                    selectedIndex = position
+                    onItemSelected(position)
+                }
+                binding.root.setOnFocusChangeListener { _, hasFocus ->
+                    val position = bindingAdapterPosition
+                    if (position == RecyclerView.NO_POSITION) {
+                        return@setOnFocusChangeListener
+                    }
+                    if (hasFocus) {
+                        val oldFocusedPosition = focusedPosition
+                        focusedPosition = position
+                        if (oldFocusedPosition != RecyclerView.NO_POSITION && oldFocusedPosition != position) {
+                            notifyItemChanged(oldFocusedPosition)
+                        }
+                        notifyItemChanged(position)
+                    } else if (focusedPosition == position) {
+                        focusedPosition = RecyclerView.NO_POSITION
+                        notifyItemChanged(position)
+                    }
+                }
+            }
+
+            fun bind(option: String, isSelected: Boolean) {
+                binding.tvTitle.text = option
+                binding.tvInfo.text = if (isSelected) "当前" else ""
+                binding.tvInfo.visibility = if (isSelected) View.VISIBLE else View.INVISIBLE
+                binding.tvInfo.alpha = if (isSelected) 1f else 0f
+                binding.tvInfo.setTextColor(
+                    ContextCompat.getColor(binding.root.context, R.color.colorAccent)
+                )
+                binding.iconArrow.visibility = View.GONE
+                binding.root.isSelected = isSelected
+                val isFocused = bindingAdapterPosition == focusedPosition
+                binding.root.animate()
+                    .scaleX(if (isFocused) 1.02f else 1f)
+                    .scaleY(if (isFocused) 1.02f else 1f)
+                    .translationX(
+                        if (isFocused) binding.root.resources.displayMetrics.density * 6f else 0f
+                    )
+                    .setDuration(120L)
+                    .start()
+            }
+        }
     }
 }

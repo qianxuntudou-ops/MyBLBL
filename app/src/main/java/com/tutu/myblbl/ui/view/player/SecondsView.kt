@@ -2,13 +2,18 @@ package com.tutu.myblbl.ui.view.player
 
 import android.animation.ValueAnimator
 import android.content.Context
-import android.text.TextUtils
+import android.graphics.Bitmap
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.constraintlayout.widget.ConstraintLayout
 import com.tutu.myblbl.R
 import java.util.Locale
@@ -19,7 +24,9 @@ class SecondsView @JvmOverloads constructor(
     defStyleAttr: Int = 0
 ) : ConstraintLayout(context, attrs, defStyleAttr) {
 
+    private val previewContainer: FrameLayout
     private val triangleContainer: LinearLayout
+    private val previewImage: ImageView
     private val tvSeconds: TextView
     private val icon1: ImageView
     private val icon2: ImageView
@@ -32,15 +39,17 @@ class SecondsView @JvmOverloads constructor(
     private var animator5: ValueAnimator? = null
 
     private var cycleDuration: Long = 750L
-    private var currentProgressStr: String = ""
     private var seconds: Int = 0
     var isForward: Boolean = true
         private set
     private var iconRes: Int = R.drawable.ic_play_triangle
+    private val secondaryTextColor by lazy { ContextCompat.getColor(context, R.color.white_70) }
 
     init {
         val view = LayoutInflater.from(context).inflate(R.layout.yt_seconds_view, this, true)
+        previewContainer = view.findViewById(R.id.preview_container)
         triangleContainer = view.findViewById(R.id.triangle_container)
+        previewImage = view.findViewById(R.id.image_preview)
         tvSeconds = view.findViewById(R.id.tv_seconds)
         icon1 = view.findViewById(R.id.icon_1)
         icon2 = view.findViewById(R.id.icon_2)
@@ -48,6 +57,7 @@ class SecondsView @JvmOverloads constructor(
 
         initAnimators()
         setForward(true)
+        showPreviewLoading()
     }
 
     private fun initAnimators() {
@@ -172,12 +182,24 @@ class SecondsView @JvmOverloads constructor(
         animator1?.start()
     }
 
-    fun setCurrentProgressStr(str: String) {
-        currentProgressStr = str
+    fun showPreviewLoading() {
+        previewContainer.visibility = View.VISIBLE
+        previewImage.setImageDrawable(null)
+        previewImage.visibility = View.GONE
+        triangleContainer.visibility = View.VISIBLE
     }
 
-    fun getCurrentProgressStr(): String {
-        return currentProgressStr
+    fun showPreviewBitmap(bitmap: Bitmap) {
+        previewContainer.visibility = View.VISIBLE
+        previewImage.setImageBitmap(bitmap)
+        previewImage.visibility = View.VISIBLE
+        triangleContainer.visibility = View.GONE
+    }
+
+    fun hidePreview() {
+        previewImage.setImageDrawable(null)
+        previewImage.visibility = View.GONE
+        triangleContainer.visibility = View.VISIBLE
     }
 
     fun getCycleDuration(): Long {
@@ -220,17 +242,30 @@ class SecondsView @JvmOverloads constructor(
         iconRes = resId
     }
 
-    fun setSeconds(sec: Int) {
-        val isEmpty = TextUtils.isEmpty(currentProgressStr)
-        if (isEmpty) {
-            val quantity = if (sec == 1) R.plurals.quick_seek_x_second else R.plurals.quick_seek_x_second
-            tvSeconds.text = context.resources.getQuantityString(quantity, sec, sec)
+    fun setSeekText(sec: Int, progressText: String? = null) {
+        val quantity = if (sec == 1) R.plurals.quick_seek_x_second else R.plurals.quick_seek_x_second
+        val secondsText = context.resources.getQuantityString(quantity, sec, sec)
+        tvSeconds.text = if (progressText.isNullOrBlank()) {
+            secondsText
         } else {
-            val quantity = if (sec == 1) R.plurals.quick_seek_x_second else R.plurals.quick_seek_x_second
-            val secondsText = context.resources.getQuantityString(quantity, sec, sec)
-            tvSeconds.text = String.format(Locale.getDefault(), "%s(%s)", secondsText, currentProgressStr)
+            String.format(Locale.getDefault(), "%s(%s)", secondsText, progressText)
         }
         seconds = sec
+    }
+
+    fun setDurationText(targetText: String, totalText: String) {
+        val builder = SpannableStringBuilder(targetText)
+        val secondaryStart = builder.length
+        builder.append(" / ")
+        builder.append(totalText)
+        builder.setSpan(
+            ForegroundColorSpan(secondaryTextColor),
+            secondaryStart,
+            builder.length,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        tvSeconds.text = builder
+        seconds = 0
     }
 
     fun setSpeedText(speed: Float) {

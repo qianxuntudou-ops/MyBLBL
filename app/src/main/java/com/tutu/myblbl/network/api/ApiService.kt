@@ -25,6 +25,7 @@ import com.tutu.myblbl.model.video.UserDynamicResponse
 import com.tutu.myblbl.model.video.AllDynamicResponse
 import com.tutu.myblbl.model.video.GetVideoByChannelWrapper
 import com.tutu.myblbl.model.player.PlayInfoModel
+import com.tutu.myblbl.model.player.VideoSnapshotData
 import com.tutu.myblbl.model.recommend.RecommendListDataModel
 import com.tutu.myblbl.model.favorite.FavoriteFolderModel
 import com.tutu.myblbl.model.favorite.CheckFavoriteModel
@@ -161,6 +162,14 @@ interface ApiService {
         @Query("bvid") bvid: String?,
         @Query("cid") cid: Long
     ): BaseResponse<PlayerInfoDataWrapper>
+
+    @GET("x/player/videoshot")
+    suspend fun getVideoSnapshot(
+        @Query("aid") aid: Long?,
+        @Query("bvid") bvid: String?,
+        @Query("cid") cid: Long,
+        @Query("index") index: Int = 1
+    ): BaseResponse<VideoSnapshotData>
 
     @GET("x/player/wbi/v2")
     suspend fun getPlayerInfoWbi(

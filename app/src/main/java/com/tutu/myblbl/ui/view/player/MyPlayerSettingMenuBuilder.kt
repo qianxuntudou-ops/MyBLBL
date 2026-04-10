@@ -193,11 +193,7 @@ internal class MyPlayerSettingMenuBuilder(
     }
 
     fun buildDmSettingMenu(state: PanelState): List<PlayerSettingRow> {
-        fun dmTextSizeToLabel(size: Int): String = when (size) {
-            35 -> "小号"
-            45 -> "大号"
-            else -> "中号"
-        }
+        fun dmTextSizeToLabel(size: Int): String = size.toString()
 
         return listOf(
             PlayerSettingRow.Header(title = context.getString(R.string.dm_setting)),
@@ -230,7 +226,7 @@ internal class MyPlayerSettingMenuBuilder(
             MyPlayerSettingView.ITEM_DM_TEXT_SIZE -> buildChoiceMenu(
                 menuKey = MyPlayerSettingView.ITEM_DM_TEXT_SIZE,
                 title = context.getString(R.string.dm_text_size),
-                values = listOf("小号", "中号", "大号"),
+                values = MyPlayerSettingView.DM_TEXT_SIZE_VALUES.map(Int::toString),
                 selectedIndex = MyPlayerSettingView.DM_TEXT_SIZE_VALUES.indexOf(state.dmTextSize).coerceAtLeast(0)
             )
 

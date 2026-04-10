@@ -58,8 +58,10 @@ open class SimpleRenderer : DanmakuRenderer {
   private val strokePaint = TextPaint().apply {
     textSize = textPaint.textSize
     color = Color.BLACK
-    strokeWidth = 3f
-    style = Paint.Style.FILL_AND_STROKE
+    strokeWidth = 2f
+    style = Paint.Style.STROKE
+    strokeJoin = Paint.Join.ROUND
+    strokeCap = Paint.Cap.ROUND
     isAntiAlias = true
   }
   private val debugPaint by lazy {
@@ -97,8 +99,11 @@ open class SimpleRenderer : DanmakuRenderer {
     strokePaint.clearShadowLayer()
     strokePaint.textSize = textPaint.textSize
     strokePaint.typeface = textPaint.typeface
-    strokePaint.color = if (textPaint.color == DEFAULT_DARK_COLOR) Color.WHITE else Color.BLACK
-    strokePaint.style = Paint.Style.FILL_AND_STROKE
+    strokePaint.color = resolveStandardStrokeColor(textPaint.color)
+    strokePaint.style = Paint.Style.STROKE
+    strokePaint.strokeWidth = (textPaint.textSize * 0.085f).coerceIn(1.6f, 3.1f)
+    strokePaint.strokeJoin = Paint.Join.ROUND
+    strokePaint.strokeCap = Paint.Cap.ROUND
   }
 
   override fun measure(
@@ -264,6 +269,31 @@ open class SimpleRenderer : DanmakuRenderer {
     return DEFAULT_VIP_GRADIENT_COLORS.map { color ->
       blendColor(color, resolved, 0.26f)
     }.toIntArray()
+  }
+
+  private fun resolveStandardStrokeColor(textColor: Int): Int {
+    val resolved = textColor or Color.argb(255, 0, 0, 0)
+    if (isDarkTextColor(resolved)) {
+      return withAlpha(Color.WHITE, 238)
+    }
+    if ((resolved and 0x00FFFFFF) == 0x00FFFFFF) {
+      return withAlpha(Color.BLACK, 232)
+    }
+    val tonedOutline = blendColor(
+      Color.BLACK,
+      darkenColor(resolved, 0.72f),
+      0.32f
+    )
+    return withAlpha(tonedOutline, 236)
+  }
+
+  private fun isDarkTextColor(color: Int): Boolean {
+    val luminance = (
+      Color.red(color) * 0.299f +
+        Color.green(color) * 0.587f +
+        Color.blue(color) * 0.114f
+      ) / 255f
+    return luminance < 0.33f
   }
 
   private fun lightenColor(color: Int, amount: Float): Int {

@@ -21,7 +21,7 @@ import com.tutu.myblbl.ui.base.BaseAdapter
 
 class HomeLaneAdapter(
     private val onSeriesClick: (LaneItemModel) -> Unit,
-    private val onMoreClick: (Int, String) -> Unit,
+    private val onMoreClick: (Int, String, String) -> Unit,
     private val onTimelineClick: (SeriesTimeLineModel) -> Unit,
     private val defaultMoreSeasonType: Int? = null,
     private val onTopEdgeUp: () -> Boolean = { false }
@@ -125,7 +125,7 @@ class HomeLaneAdapter(
     class ScrollableViewHolder(
         private val binding: CellLaneScrollableBinding,
         onSeriesClick: (LaneItemModel) -> Unit,
-        private val onMoreClick: (Int, String) -> Unit,
+        private val onMoreClick: (Int, String, String) -> Unit,
         private val defaultMoreSeasonType: Int?,
         private val onTopEdgeUp: () -> Boolean,
         private val onViewFocused: (View) -> Unit
@@ -159,7 +159,7 @@ class HomeLaneAdapter(
                 }
             }
             val openMore = View.OnClickListener {
-                moreSeasonType?.let { onMoreClick(it, currentMoreUrl) }
+                moreSeasonType?.let { onMoreClick(it, currentMoreUrl, binding.topTitle.text.toString()) }
             }
             val trackFocus = View.OnFocusChangeListener { view, hasFocus ->
                 if (hasFocus) {

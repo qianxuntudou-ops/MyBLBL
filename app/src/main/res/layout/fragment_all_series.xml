@@ -7,8 +7,10 @@
         android:orientation="horizontal"
         android:id="@+id/view_top"
         android:descendantFocusability="afterDescendants"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="@dimen/px100"
+        app:layout_constraintEnd_toStartOf="@+id/viewFilter"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent">
         <androidx.appcompat.widget.AppCompatImageView
             android:id="@+id/button_back_1"
@@ -37,10 +39,12 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
         android:clipToPadding="false"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="0dp"
         android:paddingStart="@dimen/px10"
-        android:paddingEnd="@dimen/px90"
+        android:paddingEnd="@dimen/px10"
+        app:layout_constraintEnd_toStartOf="@+id/viewFilter"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/view_top"/>
     <androidx.constraintlayout.widget.ConstraintLayout
@@ -48,8 +52,10 @@
         android:background="?attr/backgroundColor"
         android:visibility="gone"
         android:descendantFocusability="afterDescendants"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="0dp"
+        app:layout_constraintEnd_toStartOf="@+id/viewFilter"
+        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/view_top">
         <androidx.appcompat.widget.AppCompatImageView

@@ -45,6 +45,9 @@ object AllSeriesFilterFactory {
         val urlFilters = createFiltersForUrl(moreUrl, seasonType)
         val defaultFilters = create(context, seasonType)
         return defaultFilters.map { defaultFilter ->
+            if (shouldIgnoreInitialUrlSelection(seasonType, defaultFilter.key)) {
+                return@map defaultFilter
+            }
             val urlFilter = urlFilters.find { it.key == defaultFilter.key }
             if (urlFilter != null && urlFilter.currentSelect > 0) {
                 val matchedIndex = defaultFilter.options.indexOfFirst { it.value == urlFilter.options[urlFilter.currentSelect].value }
@@ -57,6 +60,10 @@ object AllSeriesFilterFactory {
                 defaultFilter
             }
         }
+    }
+
+    private fun shouldIgnoreInitialUrlSelection(seasonType: Int, filterKey: String): Boolean {
+        return seasonType == SeriesType.ANIME && filterKey == "area"
     }
 
     private fun createAnimeFilters(context: Context): List<AllSeriesFilterModel> = buildList {

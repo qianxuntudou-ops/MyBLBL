@@ -39,9 +39,10 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         if: ${{ env.KEYSTORE_FILE != '' }}
         run: |
-          printf '%s' "$KEYSTORE_FILE" | base64 -d > app/keystore.jks
+          KEYSTORE_PATH="$GITHUB_WORKSPACE/app/keystore.jks"
+          printf '%s' "$KEYSTORE_FILE" | base64 -d > "$KEYSTORE_PATH"
           ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file=app/keystore.jks \
+            -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
             -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
             -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
             -Pandroid.injected.signing.key.password=$KEY_PASSWORD

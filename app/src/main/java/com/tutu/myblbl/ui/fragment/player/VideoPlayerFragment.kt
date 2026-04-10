@@ -700,6 +700,10 @@ class VideoPlayerFragment : Fragment() {
             }
         }
 
+        viewModel.videoSnapshot.observe(viewLifecycleOwner) { snapshot ->
+            playerView.setSeekPreviewSnapshot(snapshot)
+        }
+
         viewModel.currentCidLive.observe(viewLifecycleOwner) { cid ->
             interactionView.setCurrentCid(cid)
         }

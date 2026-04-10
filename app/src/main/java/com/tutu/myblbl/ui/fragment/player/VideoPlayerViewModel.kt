@@ -17,6 +17,7 @@ import com.tutu.myblbl.model.dm.SpecialDanmakuModel
 import com.tutu.myblbl.model.dm.SpecialDanmakuParser
 import com.tutu.myblbl.model.interaction.InteractionModel
 import com.tutu.myblbl.model.player.PlayInfoModel
+import com.tutu.myblbl.model.player.VideoSnapshotData
 import com.tutu.myblbl.model.proto.DmProtoParser
 import com.tutu.myblbl.model.proto.DmWebViewReplyProto
 import com.tutu.myblbl.model.subtitle.SubtitleData
@@ -218,6 +219,9 @@ class VideoPlayerViewModel(
     private val _interactionModel = MutableLiveData<InteractionModel?>(null)
     val interactionModel: LiveData<InteractionModel?> = _interactionModel
 
+    private val _videoSnapshot = MutableLiveData<VideoSnapshotData?>(null)
+    val videoSnapshot: LiveData<VideoSnapshotData?> = _videoSnapshot
+
     private val _currentCidLive = MutableLiveData(0L)
     val currentCidLive: LiveData<Long> = _currentCidLive
 
@@ -296,6 +300,7 @@ class VideoPlayerViewModel(
         currentSubtitleCueIndex = 0
         clearDanmaku()
         _interactionModel.value = null
+        _videoSnapshot.value = null
         _error.value = null
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { playInfoGateway.warmupWbiKeys() }
@@ -413,6 +418,7 @@ class VideoPlayerViewModel(
         _selectedSubtitleIndex.value = -1
         _currentSubtitleText.value = null
         _interactionModel.value = null
+        _videoSnapshot.value = null
         _error.value = null
         loadPlayUrl(preferLastPlayTime = false)
     }
@@ -454,6 +460,7 @@ class VideoPlayerViewModel(
         _currentSubtitleText.value = null
         loadPlayUrl(preferLastPlayTime = false)
         loadInteractionInfo(edgeId)
+        loadVideoSnapshot()
     }
 
     fun selectVideoQuality(
@@ -958,9 +965,12 @@ class VideoPlayerViewModel(
         loadPlayerExtras()
         if (loadedDanmakuCid != preparedPlayback.identity.cid) {
             loadedDanmakuCid = preparedPlayback.identity.cid
+            val danmakuAid = currentAid
+                ?: preparedPlayback.identity.aid
+                ?: 0L
             loadDanmaku(
                 cid = preparedPlayback.identity.cid,
-                aid = preparedPlayback.identity.aid ?: 0L,
+                aid = danmakuAid,
                 durationMs = preparedPlayback.playInfo.timeLength
             )
         }
@@ -1320,15 +1330,29 @@ class VideoPlayerViewModel(
     private fun loadPlayerExtras() {
         val cid = currentCid
         if (cid <= 0L) {
+            _videoSnapshot.value = null
             return
         }
 
         viewModelScope.launch {
-            playInfoGateway.requestPlayerInfoData(
-                aid = currentAid,
-                bvid = currentBvid,
-                cid = cid
-            )?.let { wrapper ->
+            val aid = currentAid
+            val bvid = currentBvid
+            val playerInfoDeferred = async {
+                playInfoGateway.requestPlayerInfoData(
+                    aid = aid,
+                    bvid = bvid,
+                    cid = cid
+                )
+            }
+            val snapshotDeferred = async {
+                playInfoGateway.requestVideoSnapshot(
+                    aid = aid,
+                    bvid = bvid,
+                    cid = cid
+                )
+            }
+
+            playerInfoDeferred.await()?.let { wrapper ->
                 AppLog.d(
                     TAG,
                     "loadPlayerExtras success: cid=$cid, subtitles=${wrapper.subtitle?.subtitles?.size ?: 0}, interaction=${wrapper.interaction != null}"
@@ -1347,6 +1371,35 @@ class VideoPlayerViewModel(
                     _interactionModel.value = null
                 }
             } ?: AppLog.e(TAG, "loadPlayerExtras failed: cid=$cid")
+
+            val snapshot = snapshotDeferred.await()
+            if (currentCid == cid && currentAid == aid && currentBvid == bvid) {
+                _videoSnapshot.value = snapshot
+            }
+        }
+    }
+
+    private fun loadVideoSnapshot() {
+        val cid = currentCid.takeIf { it > 0L } ?: run {
+            _videoSnapshot.value = null
+            return
+        }
+        val aid = currentAid
+        val bvid = currentBvid
+        if ((aid == null || aid <= 0L) && bvid.isNullOrBlank()) {
+            _videoSnapshot.value = null
+            return
+        }
+
+        viewModelScope.launch {
+            val snapshot = playInfoGateway.requestVideoSnapshot(
+                aid = aid,
+                bvid = bvid,
+                cid = cid
+            )
+            if (currentCid == cid && currentAid == aid && currentBvid == bvid) {
+                _videoSnapshot.value = snapshot
+            }
         }
     }
 

@@ -419,13 +419,19 @@ class MyPlayerDanmakuController(
     private fun List<DmModel>.mergeDuplicateDanmaku(enabled: Boolean): List<DmModel> {
         if (!enabled || isEmpty()) return this
 
-        val firstIndexByContent = HashMap<String, Int>()
+        val firstIndexByContent = HashMap<MergeDuplicateKey, Int>()
         val mergeCount = IntArray(size)
         val removed = BooleanArray(size)
 
         for (i in indices) {
             val item = this[i]
-            val key = item.content.trim().lowercase()
+            val key = MergeDuplicateKey(
+                content = item.content.trim().lowercase(),
+                mode = item.mode,
+                color = item.color,
+                colorful = item.colorful,
+                colorfulSrc = item.colorfulSrc.trim()
+            )
             val existingIndex = firstIndexByContent[key]
             if (existingIndex != null &&
                 item.progress - this[existingIndex].progress <= MERGE_DUPLICATE_WINDOW_MS
@@ -450,6 +456,14 @@ class MyPlayerDanmakuController(
             }
         }
     }
+
+    private data class MergeDuplicateKey(
+        val content: String,
+        val mode: Int,
+        val color: Int,
+        val colorful: Int,
+        val colorfulSrc: String
+    )
 
     private fun DmModel.toDanmakuItemData(index: Long, allowVipColorful: Boolean): DanmakuItemData? {
         val renderContent = toRenderableContent() ?: return null
@@ -565,7 +579,7 @@ class MyPlayerDanmakuController(
     private fun Int.toDanmakuScreenPart(): Float {
         return when (this) {
             -1 -> 1f / 8f
-            0 -> 1f / 6f
+            0 -> 0.16f
             1 -> 1f / 4f
             3 -> 1f / 2f
             7 -> 3f / 4f

@@ -1,18 +1,26 @@
 package com.tutu.myblbl.ui.view.player
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
+import android.util.LruCache
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.ProgressBar
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
 import androidx.core.widget.TextViewCompat
 import androidx.media3.common.Player
+import com.bumptech.glide.Glide
+import com.bumptech.glide.load.model.GlideUrl
+import com.bumptech.glide.load.model.LazyHeaders
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
 import com.tutu.myblbl.R
+import com.tutu.myblbl.model.player.VideoSnapshotData
+import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.utils.NumberUtils
 import kotlin.math.abs
 
@@ -21,6 +29,12 @@ class YouTubeOverlay @JvmOverloads constructor(
     attrs: AttributeSet? = null,
     defStyleAttr: Int = 0
 ) : ConstraintLayout(context, attrs, defStyleAttr) {
+
+    private enum class IndicatorLayoutMode {
+        START,
+        END,
+        CENTER
+    }
 
     private val rootConstraintLayout: ConstraintLayout
     private val secondsView: SecondsView
@@ -31,6 +45,14 @@ class YouTubeOverlay @JvmOverloads constructor(
     private var playerView: MyPlayerView? = null
     private var callback: Callback? = null
     private var overlayShowing = false
+    private var layoutMode = IndicatorLayoutMode.CENTER
+    private var previewSnapshot: VideoSnapshotData? = null
+    private var swipePreviewActive = false
+    private var lastSwipeTargetPositionMs = 0L
+    private var currentPreviewFrameKey: String? = null
+    private var previewRequestToken = 0
+    private var currentPreviewTarget: CustomTarget<Bitmap>? = null
+    private val previewBitmapCache = object : LruCache<String, Bitmap>(24) {}
 
     private val hideOverlayRunnable = Runnable {
         hideOverlayImmediately()
@@ -40,7 +62,7 @@ class YouTubeOverlay @JvmOverloads constructor(
         set(value) {
             field = value
             secondsView.let {
-                // Do nothing for now, handled separately
+                // Bound to controller preferences; text rendering is handled on demand.
             }
         }
 
@@ -59,13 +81,33 @@ class YouTubeOverlay @JvmOverloads constructor(
 
         if (attrs != null) {
             val a = context.obtainStyledAttributes(attrs, R.styleable.YouTubeOverlay, 0, 0)
-            circleClipTapView.setAnimationDuration(a.getInt(R.styleable.YouTubeOverlay_yt_animationDuration, 650).toLong())
+            circleClipTapView.setAnimationDuration(
+                a.getInt(R.styleable.YouTubeOverlay_yt_animationDuration, 650).toLong()
+            )
             seekSeconds = a.getInt(R.styleable.YouTubeOverlay_yt_seekSeconds, 10)
-            secondsView.setCycleDuration(a.getInt(R.styleable.YouTubeOverlay_yt_iconAnimationDuration, 750).toLong())
-            circleClipTapView.setArcSize(a.getDimensionPixelSize(R.styleable.YouTubeOverlay_yt_arcSize, context.resources.getDimensionPixelSize(R.dimen.px100)).toFloat())
-            circleClipTapView.setCircleColor(a.getColor(R.styleable.YouTubeOverlay_yt_tapCircleColor, ContextCompat.getColor(context, R.color.dtpv_yt_tap_circle_color)))
-            circleClipTapView.setCircleBackgroundColor(a.getColor(R.styleable.YouTubeOverlay_yt_backgroundCircleColor, ContextCompat.getColor(context, R.color.dtpv_yt_background_circle_color)))
-            val textAppearance = a.getResourceId(R.styleable.YouTubeOverlay_yt_textAppearance, R.style.YTOSecondsTextAppearance)
+            secondsView.setCycleDuration(
+                a.getInt(R.styleable.YouTubeOverlay_yt_iconAnimationDuration, 750).toLong()
+            )
+            circleClipTapView.setArcSize(
+                a.getDimensionPixelSize(
+                    R.styleable.YouTubeOverlay_yt_arcSize,
+                    context.resources.getDimensionPixelSize(R.dimen.px100)
+                ).toFloat()
+            )
+            circleClipTapView.setCircleColor(
+                a.getColor(
+                    R.styleable.YouTubeOverlay_yt_tapCircleColor,
+                    ContextCompat.getColor(context, R.color.dtpv_yt_tap_circle_color)
+                )
+            )
+            circleClipTapView.setCircleBackgroundColor(
+                a.getColor(
+                    R.styleable.YouTubeOverlay_yt_backgroundCircleColor,
+                    ContextCompat.getColor(context, R.color.dtpv_yt_background_circle_color)
+                )
+            )
+            val textAppearance =
+                a.getResourceId(R.styleable.YouTubeOverlay_yt_textAppearance, R.style.YTOSecondsTextAppearance)
             TextViewCompat.setTextAppearance(secondsView.getTextView(), textAppearance)
             val iconRes = a.getResourceId(R.styleable.YouTubeOverlay_yt_icon, R.drawable.ic_play_triangle)
             secondsView.m()
@@ -74,7 +116,9 @@ class YouTubeOverlay @JvmOverloads constructor(
         } else {
             circleClipTapView.setArcSize(context.resources.getDimensionPixelSize(R.dimen.px100).toFloat())
             circleClipTapView.setCircleColor(ContextCompat.getColor(context, R.color.dtpv_yt_tap_circle_color))
-            circleClipTapView.setCircleBackgroundColor(ContextCompat.getColor(context, R.color.dtpv_yt_background_circle_color))
+            circleClipTapView.setCircleBackgroundColor(
+                ContextCompat.getColor(context, R.color.dtpv_yt_background_circle_color)
+            )
             circleClipTapView.setAnimationDuration(650L)
             secondsView.setCycleDuration(750L)
             seekSeconds = 10
@@ -82,8 +126,7 @@ class YouTubeOverlay @JvmOverloads constructor(
         }
 
         secondsView.setForward(true)
-        m(true)
-
+        applyLayoutMode(IndicatorLayoutMode.CENTER)
         circleClipTapView.setPerformAtEnd(null)
     }
 
@@ -99,30 +142,27 @@ class YouTubeOverlay @JvmOverloads constructor(
         this.callback = callback
     }
 
-    fun setIconDrawables(@Suppress("UNUSED_PARAMETER") forward: Drawable?, @Suppress("UNUSED_PARAMETER") rewind: Drawable?) {
+    fun setSeekPreviewSnapshot(snapshot: VideoSnapshotData?) {
+        previewSnapshot = snapshot
+        if (snapshot == null) {
+            cancelPreviewRequest(resetFrameKey = true)
+        } else if (swipePreviewActive && overlayShowing) {
+            requestSwipePreview(lastSwipeTargetPositionMs)
+        }
     }
 
-    private fun m(forward: Boolean) {
-        val constraintSet = ConstraintSet()
-        constraintSet.clone(rootConstraintLayout)
-        if (forward) {
-            constraintSet.clear(secondsView.id, ConstraintSet.START)
-            constraintSet.connect(secondsView.id, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
-        } else {
-            constraintSet.clear(secondsView.id, ConstraintSet.END)
-            constraintSet.connect(secondsView.id, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
-        }
-        secondsView.visibility = View.VISIBLE
-        secondsView.m()
-        val valueAnimator = secondsView.animator1
-        valueAnimator?.start()
-        constraintSet.applyTo(rootConstraintLayout)
-        rootConstraintLayout.requestLayout()
+    fun setIconDrawables(
+        @Suppress("UNUSED_PARAMETER") forward: Drawable?,
+        @Suppress("UNUSED_PARAMETER") rewind: Drawable?
+    ) {
     }
 
     fun show(forward: Boolean, x: Float, y: Float) {
+        swipePreviewActive = false
+        cancelPreviewRequest(resetFrameKey = true)
         removeCallbacks(hideOverlayRunnable)
         ensureOverlayVisible()
+        secondsView.hidePreview()
         secondsView.cancel()
         secondsView.setForward(forward)
         secondsView.x = x - secondsView.width / 2
@@ -148,108 +188,95 @@ class YouTubeOverlay @JvmOverloads constructor(
         val currentPlayer = player ?: return
         val currentPlayerView = playerView ?: return
 
-        val shouldForward = callback?.shouldForward(currentPlayer, currentPlayerView, x)
-        if (shouldForward == null) {
-            return
-        }
-
-        val currentVisibility = visibility
-        if (currentVisibility != View.VISIBLE) {
-            callback?.onAnimationStart()
-            secondsView.visibility = View.VISIBLE
-            m(shouldForward)
-        }
+        val shouldForward = callback?.shouldForward(currentPlayer, currentPlayerView, x) ?: return
+        val wasShowing = overlayShowing
+        swipePreviewActive = false
+        cancelPreviewRequest(resetFrameKey = true)
+        ensureOverlayVisible()
 
         val isRewind = !shouldForward
-        if (isRewind) {
-            if (secondsView.isForward) {
-                m(false)
-                secondsView.setForward(false)
-                secondsView.setSeconds(0)
-            }
-            circleClipTapView.animate {
-                circleClipTapView.setTapPosition(x, y)
-            }
-            currentPlayer.currentPosition.let { pos ->
-                secondsView.setCurrentProgressStr(NumberUtils.formatDuration((pos / 1000) + seekSeconds))
-            }
-            secondsView.setSeconds(secondsView.getSeconds() + seekSeconds)
-            o(currentPlayer.currentPosition - (seekSeconds * 1000L))
+        val directionChanged = secondsView.isForward != shouldForward
+        if (!wasShowing || directionChanged || secondsView.visibility != View.VISIBLE) {
+            startIndicatorAnimation(
+                forward = shouldForward,
+                layout = if (shouldForward) IndicatorLayoutMode.END else IndicatorLayoutMode.START
+            )
+            secondsView.setSeekText(0)
         } else {
-            if (!secondsView.isForward) {
-                m(true)
-                secondsView.setForward(true)
-                secondsView.setSeconds(0)
-            }
-            circleClipTapView.animate {
-                circleClipTapView.setTapPosition(x, y)
-            }
-            currentPlayer.currentPosition.let { pos ->
-                secondsView.setCurrentProgressStr(NumberUtils.formatDuration((pos / 1000) + seekSeconds))
-            }
-            secondsView.setSeconds(secondsView.getSeconds() + seekSeconds)
-            o(currentPlayer.currentPosition + (seekSeconds * 1000L))
+            secondsView.hidePreview()
         }
 
-        currentPlayer.duration.let { duration ->
-            progressBar.max = duration.toInt()
-            progressBar.progress = currentPlayer.currentPosition.toInt()
+        circleClipTapView.animate {
+            circleClipTapView.setTapPosition(x, y)
         }
+
+        val targetPositionMs = if (isRewind) {
+            (currentPlayer.currentPosition - (seekSeconds * 1000L)).coerceAtLeast(0L)
+        } else {
+            (currentPlayer.currentPosition + (seekSeconds * 1000L))
+                .coerceAtMost(currentPlayer.duration.coerceAtLeast(0L))
+        }
+        val progressText = NumberUtils.formatDuration(targetPositionMs / 1000L)
+        secondsView.setSeekText(secondsView.getSeconds() + seekSeconds, progressText)
+        seekWithinDoubleTap(targetPositionMs)
+
+        updateProgress(targetPositionMs, currentPlayer.duration)
     }
 
-    private fun o(positionMs: Long?) {
-        if (positionMs == null) {
-            return
-        }
+    private fun seekWithinDoubleTap(positionMs: Long) {
         val currentPlayer = player ?: return
-        if (positionMs <= 0L) {
-            currentPlayer.seekTo(0L)
-            return
-        }
-        if (positionMs >= currentPlayer.duration) {
-            currentPlayer.seekTo(currentPlayer.duration)
-            return
-        }
+        val boundedPositionMs = positionMs.coerceIn(0L, currentPlayer.duration.coerceAtLeast(0L))
         playerView?.keepInDoubleTapMode()
-        currentPlayer.seekTo(positionMs)
-        playerView?.syncDanmakuPosition(positionMs, forceSeek = true)
+        currentPlayer.seekTo(boundedPositionMs)
+        playerView?.syncDanmakuPosition(boundedPositionMs, forceSeek = true)
     }
 
     fun showSwipeSeek(targetPositionMs: Long, durationMs: Long, deltaMs: Long) {
+        val forward = deltaMs >= 0L
+        val directionChanged = secondsView.isForward != forward
+        val wasShowing = overlayShowing
+
+        swipePreviewActive = true
+        lastSwipeTargetPositionMs = targetPositionMs
         removeCallbacks(hideOverlayRunnable)
         ensureOverlayVisible()
-
-        val forward = deltaMs >= 0
-        val directionChanged = secondsView.isForward != forward
         resetSecondsViewPosition()
-        if (directionChanged) {
-            m(forward)
+
+        if (!wasShowing || directionChanged || secondsView.visibility != View.VISIBLE) {
+            startIndicatorAnimation(forward = forward, layout = IndicatorLayoutMode.CENTER)
+        } else {
+            applyLayoutMode(IndicatorLayoutMode.CENTER)
             secondsView.setForward(forward)
         }
 
-        secondsView.cancel()
         secondsView.visibility = View.VISIBLE
-        secondsView.setCurrentProgressStr(NumberUtils.formatDuration(targetPositionMs / 1000L))
-        secondsView.setSeconds(abs(deltaMs / 1000L).toInt())
+        secondsView.setDurationText(
+            targetText = NumberUtils.formatDuration(targetPositionMs / 1000L),
+            totalText = NumberUtils.formatDuration(durationMs / 1000L)
+        )
         updateProgress(targetPositionMs, durationMs)
+        requestSwipePreview(targetPositionMs)
     }
 
     fun showControllerSeek(targetPositionMs: Long, durationMs: Long, deltaMs: Long) {
-        removeCallbacks(hideOverlayRunnable)
-        ensureOverlayVisible()
-
         val forward = deltaMs >= 0L
         val directionChanged = secondsView.isForward != forward
-        val shouldRestartIndicators = !overlayShowing || secondsView.visibility != View.VISIBLE || directionChanged
+        val wasShowing = overlayShowing
 
+        swipePreviewActive = false
+        cancelPreviewRequest(resetFrameKey = true)
+        removeCallbacks(hideOverlayRunnable)
+        ensureOverlayVisible()
         resetSecondsViewPosition()
-        if (directionChanged) {
-            m(forward)
-            secondsView.setForward(forward)
-            secondsView.setSeconds(0)
-        } else if (shouldRestartIndicators) {
-            secondsView.m()
-            secondsView.animator1?.start()
+
+        if (!wasShowing || directionChanged || secondsView.visibility != View.VISIBLE) {
+            startIndicatorAnimation(
+                forward = forward,
+                layout = if (forward) IndicatorLayoutMode.END else IndicatorLayoutMode.START
+            )
+            secondsView.setSeekText(0)
+        } else {
+            secondsView.hidePreview()
         }
 
         val overlayX = if (forward) width * 0.75f else width * 0.25f
@@ -259,14 +286,13 @@ class YouTubeOverlay @JvmOverloads constructor(
         }
 
         secondsView.visibility = View.VISIBLE
-        secondsView.setCurrentProgressStr(NumberUtils.formatDuration(targetPositionMs / 1000L))
         val deltaSeconds = abs(deltaMs / 1000L).toInt().coerceAtLeast(1)
-        val displaySeconds = if (directionChanged || shouldRestartIndicators) {
+        val displaySeconds = if (!wasShowing || directionChanged) {
             deltaSeconds
         } else {
             secondsView.getSeconds() + deltaSeconds
         }
-        secondsView.setSeconds(displaySeconds)
+        secondsView.setSeekText(displaySeconds)
         updateProgress(targetPositionMs, durationMs)
         scheduleHide(minIndicatorDisplayDurationMs())
     }
@@ -280,19 +306,24 @@ class YouTubeOverlay @JvmOverloads constructor(
     }
 
     fun showSpeedSeek(forward: Boolean, speed: Float) {
+        val directionChanged = secondsView.isForward != forward
+        val wasShowing = overlayShowing
+
+        swipePreviewActive = false
+        cancelPreviewRequest(resetFrameKey = true)
         removeCallbacks(hideOverlayRunnable)
         ensureOverlayVisible()
-
-        val directionChanged = secondsView.isForward != forward
-        val shouldRestart = !overlayShowing || directionChanged
         resetSecondsViewPosition()
-        if (directionChanged) {
-            m(forward)
-            secondsView.setForward(forward)
-        } else if (shouldRestart) {
-            secondsView.m()
-            secondsView.animator1?.start()
+
+        if (!wasShowing || directionChanged || secondsView.visibility != View.VISIBLE) {
+            startIndicatorAnimation(
+                forward = forward,
+                layout = if (forward) IndicatorLayoutMode.END else IndicatorLayoutMode.START
+            )
+        } else {
+            secondsView.hidePreview()
         }
+
         secondsView.visibility = View.VISIBLE
         secondsView.setSpeedText(speed)
         val overlayX = if (forward) width * 0.75f else width * 0.25f
@@ -313,8 +344,82 @@ class YouTubeOverlay @JvmOverloads constructor(
 
     override fun onDetachedFromWindow() {
         removeCallbacks(hideOverlayRunnable)
+        cancelPreviewRequest(resetFrameKey = true)
         secondsView.cancel()
         super.onDetachedFromWindow()
+    }
+
+    private fun requestSwipePreview(targetPositionMs: Long) {
+        val snapshot = previewSnapshot ?: run {
+            showPreviewLoadingIndicator()
+            return
+        }
+        val frame = snapshot.resolveFrame(targetPositionMs) ?: run {
+            showPreviewLoadingIndicator()
+            return
+        }
+        if (frame.cacheKey == currentPreviewFrameKey) {
+            return
+        }
+        currentPreviewFrameKey = frame.cacheKey
+
+        previewBitmapCache.get(frame.cacheKey)?.let { cachedBitmap ->
+            secondsView.showPreviewBitmap(cachedBitmap)
+            return
+        }
+
+        showPreviewLoadingIndicator()
+        val requestToken = ++previewRequestToken
+        currentPreviewTarget?.let { Glide.with(this).clear(it) }
+        currentPreviewTarget = object : CustomTarget<Bitmap>() {
+            override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                if (requestToken != previewRequestToken || !swipePreviewActive) {
+                    return
+                }
+                val croppedBitmap = cropFrameBitmap(resource, frame)
+                previewBitmapCache.put(frame.cacheKey, croppedBitmap)
+                secondsView.showPreviewBitmap(croppedBitmap)
+            }
+
+            override fun onLoadCleared(placeholder: Drawable?) = Unit
+
+            override fun onLoadFailed(errorDrawable: Drawable?) {
+                if (requestToken == previewRequestToken && swipePreviewActive) {
+                    showPreviewLoadingIndicator()
+                }
+            }
+        }
+
+        Glide.with(this)
+            .asBitmap()
+            .load(buildImageModel(frame.imageUrl))
+            .into(currentPreviewTarget!!)
+    }
+
+    private fun cropFrameBitmap(source: Bitmap, frame: VideoSnapshotData.Frame): Bitmap {
+        val boundedX = frame.offsetX.coerceIn(0, (source.width - 1).coerceAtLeast(0))
+        val boundedY = frame.offsetY.coerceIn(0, (source.height - 1).coerceAtLeast(0))
+        val boundedWidth = frame.width.coerceAtMost(source.width - boundedX).coerceAtLeast(1)
+        val boundedHeight = frame.height.coerceAtMost(source.height - boundedY).coerceAtLeast(1)
+        return Bitmap.createBitmap(source, boundedX, boundedY, boundedWidth, boundedHeight)
+    }
+
+    private fun showPreviewLoadingIndicator() {
+        secondsView.showPreviewLoading()
+        if (secondsView.animator1?.isRunning != true) {
+            secondsView.m()
+            secondsView.animator1?.start()
+        }
+    }
+
+    private fun cancelPreviewRequest(resetFrameKey: Boolean) {
+        previewRequestToken += 1
+        currentPreviewTarget?.let { Glide.with(this).clear(it) }
+        currentPreviewTarget = null
+        if (resetFrameKey) {
+            currentPreviewFrameKey = null
+        }
+        secondsView.hidePreview()
     }
 
     private fun ensureOverlayVisible() {
@@ -330,9 +435,11 @@ class YouTubeOverlay @JvmOverloads constructor(
         if (!overlayShowing) {
             return
         }
+        swipePreviewActive = false
         overlayShowing = false
+        cancelPreviewRequest(resetFrameKey = true)
         secondsView.cancel()
-        secondsView.setSeconds(0)
+        secondsView.setSeekText(0)
         secondsView.visibility = View.INVISIBLE
         visibility = View.GONE
         callback?.onAnimationEnd()
@@ -354,20 +461,55 @@ class YouTubeOverlay @JvmOverloads constructor(
         progressBar.progress = safePosition
     }
 
-    private fun centerSecondsView() {
-        val updatePosition = {
-            secondsView.x = ((width - secondsView.width) / 2f).coerceAtLeast(0f)
-            secondsView.y = ((height - secondsView.height) / 2f).coerceAtLeast(0f)
-        }
-        if (width == 0 || height == 0 || secondsView.width == 0 || secondsView.height == 0) {
-            post(updatePosition)
-        } else {
-            updatePosition()
-        }
-    }
-
     private fun resetSecondsViewPosition() {
         secondsView.translationX = 0f
         secondsView.translationY = 0f
+    }
+
+    private fun startIndicatorAnimation(forward: Boolean, layout: IndicatorLayoutMode) {
+        applyLayoutMode(layout)
+        secondsView.hidePreview()
+        secondsView.setForward(forward)
+        secondsView.visibility = View.VISIBLE
+        secondsView.m()
+        secondsView.animator1?.start()
+    }
+
+    private fun applyLayoutMode(mode: IndicatorLayoutMode) {
+        if (layoutMode == mode) {
+            return
+        }
+        layoutMode = mode
+        val constraintSet = ConstraintSet()
+        constraintSet.clone(rootConstraintLayout)
+        constraintSet.clear(secondsView.id, ConstraintSet.START)
+        constraintSet.clear(secondsView.id, ConstraintSet.END)
+        when (mode) {
+            IndicatorLayoutMode.START -> {
+                constraintSet.connect(secondsView.id, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+            }
+
+            IndicatorLayoutMode.END -> {
+                constraintSet.connect(secondsView.id, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+            }
+
+            IndicatorLayoutMode.CENTER -> {
+                constraintSet.connect(secondsView.id, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+                constraintSet.connect(secondsView.id, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+                constraintSet.setHorizontalBias(secondsView.id, 0.5f)
+            }
+        }
+        constraintSet.applyTo(rootConstraintLayout)
+        rootConstraintLayout.requestLayout()
+    }
+
+    private fun buildImageModel(url: String): Any {
+        return GlideUrl(
+            url,
+            LazyHeaders.Builder()
+                .addHeader("Referer", "https://www.bilibili.com/")
+                .addHeader("User-Agent", NetworkManager.getCurrentUserAgent())
+                .build()
+        )
     }
 }

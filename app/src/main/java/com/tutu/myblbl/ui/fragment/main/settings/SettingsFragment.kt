@@ -57,10 +57,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         private const val KEY_SHOW_NEXT_PREVIOUS = "show_next_previous"
         private const val KEY_SHOW_DM_SWITCH = "show_dm_switch"
         private const val KEY_FF_SEEK_SECOND = "ff_seek_second"
-        private const val KEY_DM_SWITCH = "dm_switch"
+        private const val KEY_DM_SWITCH = "dm_enable"
         private const val KEY_DM_ALPHA = "dm_alpha"
         private const val KEY_DM_TEXT_SIZE = "dm_text_size"
-        private const val KEY_DM_SCREEN_AREA = "dm_screen_area"
+        private const val KEY_DM_SCREEN_AREA = "dm_area"
         private const val KEY_DM_SPEED = "dm_speed"
         private const val KEY_DM_ALLOW_TOP = "dm_allow_top"
         private const val KEY_DM_ALLOW_BOTTOM = "dm_allow_bottom"
@@ -144,8 +144,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
 
         dmSettings = mutableListOf(
             SettingModel(getString(R.string.dm_switch), "开"),
-            SettingModel(getString(R.string.dm_alpha), "0.8"),
-            SettingModel(getString(R.string.dm_text_size), "中号"),
+            SettingModel(getString(R.string.dm_alpha), "1.0"),
+            SettingModel(getString(R.string.dm_text_size), "40"),
             SettingModel(getString(R.string.dm_screen_area), "1/2"),
             SettingModel(getString(R.string.dm_speed), "4"),
             SettingModel(getString(R.string.dm_allow_top), "关"),
@@ -265,7 +265,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         when (position) {
             0 -> showPlayerChoiceDialog(position, KEY_DEFAULT_VIDEO_QUALITY, arrayOf("自动", "8K", "杜比视界", "HDR Vivid", "HDR", "4K", "1080P60", "1080P+", "智能修复", "1080P", "720P60", "720P", "480P", "360P", "240P"))
             1 -> showPlayerChoiceDialog(position, KEY_DEFAULT_AUDIO_TRACK, arrayOf("192kbps", "132kbps", "64kbps"))
-            2 -> showPlayerChoiceDialog(position, KEY_DEFAULT_PLAY_SPEED, arrayOf("0.5", "0.75", "1.0", "1.25", "1.5", "2.0"))
+            2 -> showPlayerChoiceDialog(position, KEY_DEFAULT_PLAY_SPEED, arrayOf("0.25", "0.5", "0.75", "1.0", "1.25", "1.5", "2.0"))
             3 -> showPlayerChoiceDialog(position, KEY_AFTER_PLAY, toggleOptions())
             4 -> showPlayerChoiceDialog(position, KEY_PLAY_FINISH_EXIT_PLAYER, toggleOptions())
             5 -> showPlayerChoiceDialog(position, KEY_SHOW_RE_FF, toggleOptions())
@@ -286,10 +286,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     private fun handleDmSettingClick(position: Int, @Suppress("UNUSED_PARAMETER") item: SettingModel) {
         when (position) {
             0 -> showDmChoiceDialog(position, KEY_DM_SWITCH, toggleOptions())
-            1 -> showDmChoiceDialog(position, KEY_DM_ALPHA, arrayOf("0.2", "0.4", "0.6", "0.8", "1.0"))
-            2 -> showDmChoiceDialog(position, KEY_DM_TEXT_SIZE, arrayOf("小号", "中号", "大号"))
-            3 -> showDmChoiceDialog(position, KEY_DM_SCREEN_AREA, arrayOf("1/4", "1/2", "3/4", "全屏"))
-            4 -> showDmChoiceDialog(position, KEY_DM_SPEED, arrayOf("2", "4", "6", "8"))
+            1 -> showDmChoiceDialog(position, KEY_DM_ALPHA, arrayOf("0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0"))
+            2 -> showDmChoiceDialog(position, KEY_DM_TEXT_SIZE, Array(26) { (30 + it).toString() })
+            3 -> showDmChoiceDialog(position, KEY_DM_SCREEN_AREA, arrayOf("1/8", "1/6", "1/4", "1/2", "3/4", "全屏"))
+            4 -> showDmChoiceDialog(position, KEY_DM_SPEED, arrayOf("1", "2", "3", "4", "5", "6", "7", "8", "9"))
             5 -> showDmChoiceDialog(position, KEY_DM_ALLOW_TOP, toggleOptions())
             6 -> showDmChoiceDialog(position, KEY_DM_ALLOW_BOTTOM, toggleOptions())
             7 -> showDmChoiceDialog(position, KEY_DM_FILTER_WEIGHT, toggleOptions())

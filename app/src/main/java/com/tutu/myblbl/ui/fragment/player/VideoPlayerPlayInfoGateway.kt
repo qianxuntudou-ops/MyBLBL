@@ -1,6 +1,7 @@
 package com.tutu.myblbl.ui.fragment.player
 
 import com.tutu.myblbl.model.player.PlayInfoModel
+import com.tutu.myblbl.model.player.VideoSnapshotData
 import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.network.WbiGenerator
 import com.tutu.myblbl.network.api.ApiService
@@ -152,6 +153,38 @@ class VideoPlayerPlayInfoGateway(
             )
         }
         return normalResponse?.data?.takeIf { normalResponse.isSuccess }
+    }
+
+    suspend fun requestVideoSnapshot(
+        aid: Long?,
+        bvid: String?,
+        cid: Long
+    ): VideoSnapshotData? {
+        if ((aid == null || aid <= 0L) && bvid.isNullOrBlank()) {
+            return null
+        }
+        if (cid <= 0L) {
+            return null
+        }
+
+        val response = runCatching {
+            apiService.getVideoSnapshot(
+                aid = aid,
+                bvid = bvid,
+                cid = cid
+            )
+        }.onFailure { throwable ->
+            AppLog.e(logTag, "requestVideoSnapshot exception: ${throwable.message}", throwable)
+        }.getOrNull()
+
+        if (response != null) {
+            AppLog.d(
+                logTag,
+                "requestVideoSnapshot response: code=${response.code}, success=${response.isSuccess}, images=${response.data?.images?.size ?: 0}, indexSize=${response.data?.index?.size ?: 0}, cid=$cid"
+            )
+        }
+
+        return response?.data?.takeIf { response.isSuccess }
     }
 
     suspend fun requestDanmakuSegmentBytes(

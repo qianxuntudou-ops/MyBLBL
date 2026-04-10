@@ -74,8 +74,8 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
                     )
                 }
             },
-            onMoreClick = { seasonType, moreUrl ->
-                openInHostContainer(AllSeriesFragment.newInstance(seasonType, moreUrl))
+            onMoreClick = { seasonType, moreUrl, entryTitle ->
+                openInHostContainer(AllSeriesFragment.newInstance(seasonType, moreUrl, entryTitle))
             },
             onTimelineClick = { item ->
                 if (item.seasonId > 0 || item.episodeId > 0) {

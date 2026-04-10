@@ -914,6 +914,10 @@ class MyPlayerControlView @JvmOverloads constructor(
         controlViewLayoutManager.setAnimationEnabled(enabled)
     }
 
+    fun setProgressOnlyUiEnabled(enabled: Boolean) {
+        controlViewLayoutManager.setProgressOnlyUiEnabled(enabled)
+    }
+
     fun updateAll() {
         updatePlayPauseButton()
         updateNavigation()

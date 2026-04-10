@@ -94,6 +94,10 @@ internal class PlayerSettingListAdapter(
 
         fun bind(item: PlayerSettingRow.Item) {
             currentItem = item
+            itemView.isPressed = false
+            itemView.isActivated = false
+            itemView.isSelected = false
+            itemView.jumpDrawablesToCurrentState()
             titleView.text = item.title
             val hasValue = item.value.isNotBlank()
             valueView.visibility = if (hasValue) View.VISIBLE else View.GONE

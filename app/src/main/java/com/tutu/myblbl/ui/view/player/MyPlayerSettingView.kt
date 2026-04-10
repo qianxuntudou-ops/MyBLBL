@@ -53,6 +53,9 @@ class MyPlayerSettingView @JvmOverloads constructor(
         private const val LEVEL_MAIN = 1
         private const val LEVEL_SUB = 2
         private const val LEVEL_DM = 3
+        private const val PANEL_ANIMATION_DURATION_MS = 180L
+        private const val MENU_FADE_OUT_DURATION_MS = 60L
+        private const val MENU_FADE_IN_DURATION_MS = 120L
 
         internal const val ITEM_MAIN_MENU = 0
         internal const val ITEM_VIDEO_QUALITY = 1
@@ -97,6 +100,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
         recyclerView.layoutManager = LinearLayoutManager(context)
         adapter = PlayerSettingListAdapter(::onItemClicked)
         recyclerView.adapter = adapter
+        recyclerView.itemAnimator = null
 
         updateMainMenu()
         updateBackIcon()
@@ -121,6 +125,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
             animate()
                 .translationX(panelWidthPx.toFloat())
                 .alpha(0f)
+                .setDuration(PANEL_ANIMATION_DURATION_MS)
                 .setListener(object : AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: Animator) {
                         visibility = GONE
@@ -140,6 +145,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
         animate()
             .translationX(0f)
             .alpha(1f)
+            .setDuration(PANEL_ANIMATION_DURATION_MS)
             .setListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     requestMenuFocus()
@@ -462,48 +468,94 @@ class MyPlayerSettingView @JvmOverloads constructor(
     }
 
     private fun showDmSettingMenu() {
+        showDmSettingMenu(animateTransition = true)
+    }
+
+    private fun showDmSettingMenu(animateTransition: Boolean) {
         menuLevel = LEVEL_SUB
         updateBackIcon()
-        adapter.submitRows(menuKey = ITEM_DM_SETTING, newRows = menuBuilder.buildDmSettingMenu(panelState))
-        recyclerView.scrollToPosition(0)
-        requestMenuFocus()
+        submitMenuRows(
+            menuKey = ITEM_DM_SETTING,
+            rows = menuBuilder.buildDmSettingMenu(panelState),
+            animateTransition = animateTransition
+        )
     }
 
     private fun showSubMenu(menuKey: Int, rows: List<PlayerSettingRow>) {
+        showSubMenu(menuKey, rows, animateTransition = true)
+    }
+
+    private fun showSubMenu(
+        menuKey: Int,
+        rows: List<PlayerSettingRow>,
+        animateTransition: Boolean
+    ) {
         menuLevel = LEVEL_SUB
         updateBackIcon()
-        adapter.submitRows(menuKey, rows)
-        recyclerView.scrollToPosition(0)
-        requestMenuFocus()
+        submitMenuRows(menuKey = menuKey, rows = rows, animateTransition = animateTransition)
     }
 
     private fun goBackToMainMenu() {
         menuLevel = LEVEL_MAIN
-        updateMainMenu()
+        updateMainMenu(animateTransition = true)
         updateBackIcon()
     }
 
     private fun updateMainMenu() {
-        adapter.submitRows(ITEM_MAIN_MENU, menuBuilder.buildMainMenu(panelState))
-        recyclerView.scrollToPosition(0)
-        requestMenuFocus()
+        updateMainMenu(animateTransition = false)
+    }
+
+    private fun updateMainMenu(animateTransition: Boolean) {
+        submitMenuRows(
+            menuKey = ITEM_MAIN_MENU,
+            rows = menuBuilder.buildMainMenu(panelState),
+            animateTransition = animateTransition
+        )
     }
 
     // Refreshes only the currently visible menu so state changes do not rebuild unrelated levels.
     private fun refreshCurrentMenu() {
         when (menuLevel) {
-            LEVEL_MAIN -> updateMainMenu()
+            LEVEL_MAIN -> updateMainMenu(animateTransition = false)
             LEVEL_SUB -> when (adapter.currentMenuKey) {
-                ITEM_VIDEO_QUALITY -> showVideoQualityMenu()
-                ITEM_PLAYBACK_SPEED -> showPlaybackSpeedMenu()
-                ITEM_SUBTITLE -> showSubtitles()
-                ITEM_VIDEO_CODEC -> showVideoCodecMenu()
-                ITEM_AUDIO_QUALITY -> showAudioQualityMenu()
-                ITEM_ASPECT_RATIO -> showScreenRatioMenu()
-                ITEM_DM_SETTING -> showDmSettingMenu()
+                ITEM_VIDEO_QUALITY -> showSubMenu(
+                    ITEM_VIDEO_QUALITY,
+                    menuBuilder.buildVideoQualityMenu(panelState),
+                    animateTransition = false
+                )
+                ITEM_PLAYBACK_SPEED -> showSubMenu(
+                    ITEM_PLAYBACK_SPEED,
+                    menuBuilder.buildPlaybackSpeedMenu(panelState),
+                    animateTransition = false
+                )
+                ITEM_SUBTITLE -> {
+                    if (panelState.subtitles.isNotEmpty()) {
+                        showSubMenu(
+                            ITEM_SUBTITLE,
+                            menuBuilder.buildSubtitleMenu(panelState),
+                            animateTransition = false
+                        )
+                    }
+                }
+                ITEM_VIDEO_CODEC -> showSubMenu(
+                    ITEM_VIDEO_CODEC,
+                    menuBuilder.buildVideoCodecMenu(panelState),
+                    animateTransition = false
+                )
+                ITEM_AUDIO_QUALITY -> showSubMenu(
+                    ITEM_AUDIO_QUALITY,
+                    menuBuilder.buildAudioQualityMenu(panelState),
+                    animateTransition = false
+                )
+                ITEM_ASPECT_RATIO -> showSubMenu(
+                    ITEM_ASPECT_RATIO,
+                    menuBuilder.buildScreenRatioMenu(panelState),
+                    animateTransition = false
+                )
+                ITEM_DM_SETTING -> showDmSettingMenu(animateTransition = false)
             }
 
-            LEVEL_DM -> showDmOptionSubMenu(adapter.currentMenuKey)
+            LEVEL_DM -> showDmOptionSubMenu(adapter.currentMenuKey, animateTransition = false)
         }
     }
 
@@ -512,12 +564,17 @@ class MyPlayerSettingView @JvmOverloads constructor(
     }
 
     private fun showDmOptionSubMenu(itemId: Int) {
+        showDmOptionSubMenu(itemId, animateTransition = true)
+    }
+
+    private fun showDmOptionSubMenu(itemId: Int, animateTransition: Boolean) {
         val menu = menuBuilder.buildDmChoiceMenu(itemId, panelState) ?: return
         showDmChoiceMenu(
             menuKey = menu.menuKey,
             title = menu.title,
             values = menu.values,
-            selectedIndex = menu.selectedIndex
+            selectedIndex = menu.selectedIndex,
+            animateTransition = animateTransition
         )
     }
 
@@ -525,7 +582,8 @@ class MyPlayerSettingView @JvmOverloads constructor(
         menuKey: Int,
         title: String,
         values: List<String>,
-        selectedIndex: Int
+        selectedIndex: Int,
+        animateTransition: Boolean
     ) {
         menuLevel = LEVEL_DM
         updateBackIcon()
@@ -538,9 +596,67 @@ class MyPlayerSettingView @JvmOverloads constructor(
                 showArrow = false
             )
         }
+        submitMenuRows(menuKey = menuKey, rows = rows, animateTransition = animateTransition)
+    }
+
+    private fun submitMenuRows(
+        menuKey: Int,
+        rows: List<PlayerSettingRow>,
+        animateTransition: Boolean
+    ) {
+        recyclerView.animate().cancel()
+        clearTransientItemStates()
+        if (!animateTransition || !isShowing() || adapter.itemCount == 0) {
+            applyMenuRows(menuKey, rows)
+            return
+        }
+
+        recyclerView.animate()
+            .alpha(0f)
+            .setDuration(MENU_FADE_OUT_DURATION_MS)
+            .setListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: Animator) {
+                    recyclerView.animate().setListener(null)
+                    applyMenuRows(menuKey, rows, requestFocusAfter = false)
+                    recyclerView.alpha = 0f
+                    recyclerView.animate()
+                        .alpha(1f)
+                        .setDuration(MENU_FADE_IN_DURATION_MS)
+                        .setListener(object : AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: Animator) {
+                                recyclerView.animate().setListener(null)
+                                requestMenuFocus()
+                            }
+                        })
+                        .start()
+                }
+            })
+            .start()
+    }
+
+    private fun applyMenuRows(
+        menuKey: Int,
+        rows: List<PlayerSettingRow>,
+        requestFocusAfter: Boolean = true
+    ) {
         adapter.submitRows(menuKey, rows)
         recyclerView.scrollToPosition(0)
-        requestMenuFocus()
+        if (requestFocusAfter) {
+            requestMenuFocus()
+        }
+    }
+
+    private fun clearTransientItemStates() {
+        recyclerView.isPressed = false
+        recyclerView.jumpDrawablesToCurrentState()
+        for (index in 0 until recyclerView.childCount) {
+            recyclerView.getChildAt(index)?.let { child ->
+                child.isPressed = false
+                child.isActivated = false
+                child.isSelected = false
+                child.jumpDrawablesToCurrentState()
+            }
+        }
     }
 
     private fun requestMenuFocus() {

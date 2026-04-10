@@ -2,6 +2,7 @@ package com.tutu.myblbl.ui.view.player
 
 import android.content.Context
 import android.graphics.Color
+import android.os.SystemClock
 import com.kuaishou.akdanmaku.DanmakuConfig
 import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.data.DanmakuVipGradientStyle
@@ -37,6 +38,8 @@ class MyPlayerDanmakuController(
         private const val MERGE_DUPLICATE_MIN_COUNT = 2
         private const val MAX_SYNC_DRIFT_MS = 1200L
         private const val COLORFUL_VIP_GRADIENT = 0xEA61
+        private const val SEEK_DEDUP_WINDOW_MS = 300L
+        private const val SEEK_DEDUP_POSITION_TOLERANCE_MS = 80L
         private const val SMART_FILTER_LEVEL_OFF = 0
         private const val SMART_FILTER_LEVEL_LOW = 1
         private const val SMART_FILTER_LEVEL_MEDIUM = 2
@@ -70,6 +73,8 @@ class MyPlayerDanmakuController(
     private var rawDanmakuCount: Int = 0
     private var preparedDanmakuSignature: Long = 0L
     private var preparedDanmakuCount: Int = 0
+    private var lastSeekPositionMs: Long = Long.MIN_VALUE
+    private var lastSeekRealtimeMs: Long = 0L
     private val controllerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var prepareJob: Job? = null
     private var preloadTextureJob: Job? = null
@@ -185,20 +190,22 @@ class MyPlayerDanmakuController(
     fun syncPosition(positionMs: Long, forceSeek: Boolean = false) {
         val safePosition = positionMs.coerceAtLeast(0L)
         danmakuPositionMs = safePosition
+        val player = danmakuPlayer ?: return
         if (!isDanmakuStarted) {
             return
         }
-        val currentTime = danmakuPlayer?.getCurrentTimeMs() ?: return
+        val currentTime = player.getCurrentTimeMs()
         if (!forceSeek && safePosition < currentTime) {
             return
         }
         if (forceSeek || abs(currentTime - safePosition) > MAX_SYNC_DRIFT_MS) {
-            danmakuPlayer?.seekTo(safePosition)
-            // AkDanmaku seekTo() will restart its timer, so we need to restore
-            // the paused snapshot when the video itself is still paused.
-            if (isDanmakuPaused) {
-                danmakuPlayer?.pause()
-            }
+            seekPlayerTo(
+                player = player,
+                targetPositionMs = safePosition,
+                currentTimeMs = currentTime,
+                forceSeek = forceSeek,
+                reason = "sync"
+            )
         }
     }
 
@@ -268,7 +275,14 @@ class MyPlayerDanmakuController(
                 player.updateData(danmakuData)
             }
             if (danmakuPositionMs > 0L) {
-                player.seekTo(danmakuPositionMs)
+                seekPlayerTo(
+                    player = player,
+                    targetPositionMs = danmakuPositionMs,
+                    currentTimeMs = null,
+                    forceSeek = true,
+                    reason = "init",
+                    bypassDedup = true
+                )
             }
             if (isDanmakuStarted && hasPreparedData()) {
                 player.start(danmakuConfig)
@@ -319,6 +333,8 @@ class MyPlayerDanmakuController(
     private fun releasePlayer() {
         danmakuPlayer?.release()
         danmakuPlayer = null
+        lastSeekPositionMs = Long.MIN_VALUE
+        lastSeekRealtimeMs = 0L
     }
 
     private fun scheduleVipTexturePreload(
@@ -350,6 +366,52 @@ class MyPlayerDanmakuController(
         if ((mergeChanged || smartFilterChanged) && rawDanmakuData.isNotEmpty()) {
             rebuildAndApplyData()
         }
+    }
+
+    private fun seekPlayerTo(
+        player: DanmakuPlayer,
+        targetPositionMs: Long,
+        currentTimeMs: Long?,
+        forceSeek: Boolean,
+        reason: String,
+        bypassDedup: Boolean = false
+    ) {
+        if (!bypassDedup && shouldSuppressDuplicateSeek(targetPositionMs, currentTimeMs)) {
+            AppLog.d(
+                TAG,
+                "skip duplicate danmaku seek[$reason]: target=$targetPositionMs, current=${currentTimeMs ?: -1}, force=$forceSeek"
+            )
+            return
+        }
+        player.seekTo(targetPositionMs)
+        lastSeekPositionMs = targetPositionMs
+        lastSeekRealtimeMs = SystemClock.elapsedRealtime()
+        // AkDanmaku seekTo() will restart its timer, so we need to restore
+        // the paused snapshot when the video itself is still paused.
+        if (isDanmakuPaused) {
+            player.pause()
+        }
+    }
+
+    private fun shouldSuppressDuplicateSeek(
+        targetPositionMs: Long,
+        currentTimeMs: Long?
+    ): Boolean {
+        val lastPosition = lastSeekPositionMs
+        if (lastPosition == Long.MIN_VALUE) {
+            return false
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastSeekRealtimeMs > SEEK_DEDUP_WINDOW_MS) {
+            return false
+        }
+        if (abs(lastPosition - targetPositionMs) > SEEK_DEDUP_POSITION_TOLERANCE_MS) {
+            return false
+        }
+        if (currentTimeMs != null && abs(currentTimeMs - targetPositionMs) <= SEEK_DEDUP_POSITION_TOLERANCE_MS) {
+            return true
+        }
+        return true
     }
 
     private fun updateVisibility(enabled: Boolean) {

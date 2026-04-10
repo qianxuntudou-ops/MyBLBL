@@ -2,6 +2,7 @@ package com.tutu.myblbl.ui.adapter
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import android.view.View
 import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
@@ -49,7 +50,7 @@ class SettingAdapter(
     }
 
     override fun onBindViewHolder(holder: SettingViewHolder, position: Int) {
-        holder.bind(items[position])
+        holder.bind(items[position], isLast = position == items.lastIndex)
     }
 
     override fun onBindViewHolder(
@@ -61,6 +62,7 @@ class SettingAdapter(
             super.onBindViewHolder(holder, position, payloads)
         } else {
             holder.bindFocusState(position == focusedPosition)
+            holder.bindDivider(position == items.lastIndex)
         }
     }
 
@@ -98,10 +100,15 @@ class SettingAdapter(
             }
         }
 
-        fun bind(item: SettingModel) {
+        fun bind(item: SettingModel, isLast: Boolean) {
             binding.tvTitle.text = item.title
             binding.tvInfo.text = item.info
+            bindDivider(isLast)
             bindFocusState(bindingAdapterPosition == focusedPosition)
+        }
+
+        fun bindDivider(isLast: Boolean) {
+            binding.dividerLine.visibility = if (isLast) View.GONE else View.VISIBLE
         }
 
         fun bindFocusState(isFocused: Boolean) {

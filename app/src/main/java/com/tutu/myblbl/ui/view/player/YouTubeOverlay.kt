@@ -55,6 +55,7 @@ class YouTubeOverlay @JvmOverloads constructor(
     private var previewSnapshot: VideoSnapshotData? = null
     private var swipePreviewActive = false
     private var showBottomProgress = true
+    private var persistentBottomProgressEnabled = false
     private var lastSwipeTargetPositionMs = 0L
     private var currentPreviewFrameKey: String? = null
     private var previewRequestToken = 0
@@ -159,6 +160,11 @@ class YouTubeOverlay @JvmOverloads constructor(
         }
     }
 
+    fun setPersistentBottomProgressEnabled(enabled: Boolean) {
+        persistentBottomProgressEnabled = enabled
+        updateProgressBarVisibility()
+    }
+
     fun setIconDrawables(
         @Suppress("UNUSED_PARAMETER") forward: Drawable?,
         @Suppress("UNUSED_PARAMETER") rewind: Drawable?
@@ -169,7 +175,10 @@ class YouTubeOverlay @JvmOverloads constructor(
         swipePreviewActive = false
         cancelPreviewRequest(resetFrameKey = true)
         removeCallbacks(hideOverlayRunnable)
-        ensureOverlayVisible(displayMode = DisplayMode.EXCLUSIVE, showBottomProgress = true)
+        ensureOverlayVisible(
+            displayMode = DisplayMode.EXCLUSIVE,
+            showBottomProgress = !persistentBottomProgressEnabled
+        )
         secondsView.hidePreview()
         secondsView.cancel()
         secondsView.setForward(forward)
@@ -200,7 +209,10 @@ class YouTubeOverlay @JvmOverloads constructor(
         val wasShowing = overlayShowing
         swipePreviewActive = false
         cancelPreviewRequest(resetFrameKey = true)
-        ensureOverlayVisible(displayMode = DisplayMode.EXCLUSIVE, showBottomProgress = true)
+        ensureOverlayVisible(
+            displayMode = DisplayMode.EXCLUSIVE,
+            showBottomProgress = !persistentBottomProgressEnabled
+        )
 
         val isRewind = !shouldForward
         val directionChanged = secondsView.isForward != shouldForward
@@ -270,7 +282,12 @@ class YouTubeOverlay @JvmOverloads constructor(
         requestSwipePreview(targetPositionMs)
     }
 
-    fun showControllerSeek(targetPositionMs: Long, durationMs: Long, deltaMs: Long) {
+    fun showControllerSeek(
+        targetPositionMs: Long,
+        durationMs: Long,
+        deltaMs: Long,
+        showBottomProgress: Boolean = true
+    ) {
         val forward = deltaMs >= 0L
         val directionChanged = secondsView.isForward != forward
         val wasShowing = overlayShowing
@@ -278,7 +295,10 @@ class YouTubeOverlay @JvmOverloads constructor(
         swipePreviewActive = false
         cancelPreviewRequest(resetFrameKey = true)
         removeCallbacks(hideOverlayRunnable)
-        ensureOverlayVisible(displayMode = DisplayMode.EXCLUSIVE, showBottomProgress = true)
+        ensureOverlayVisible(
+            displayMode = DisplayMode.EXCLUSIVE,
+            showBottomProgress = showBottomProgress
+        )
         resetSecondsViewPosition()
 
         if (!wasShowing || directionChanged || secondsView.visibility != View.VISIBLE) {
@@ -325,7 +345,10 @@ class YouTubeOverlay @JvmOverloads constructor(
         swipePreviewActive = false
         cancelPreviewRequest(resetFrameKey = true)
         removeCallbacks(hideOverlayRunnable)
-        ensureOverlayVisible(displayMode = DisplayMode.EXCLUSIVE, showBottomProgress = true)
+        ensureOverlayVisible(
+            displayMode = DisplayMode.EXCLUSIVE,
+            showBottomProgress = !persistentBottomProgressEnabled
+        )
         resetSecondsViewPosition()
 
         if (!wasShowing || directionChanged || secondsView.visibility != View.VISIBLE) {
@@ -488,7 +511,11 @@ class YouTubeOverlay @JvmOverloads constructor(
     }
 
     private fun updateProgressBarVisibility() {
-        progressBar.visibility = if (showBottomProgress) View.VISIBLE else View.GONE
+        progressBar.visibility = if (showBottomProgress && !persistentBottomProgressEnabled) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
     }
 
     private fun resetSecondsViewPosition() {

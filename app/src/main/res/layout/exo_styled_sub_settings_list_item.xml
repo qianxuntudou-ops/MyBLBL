@@ -1,33 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layoutDirection="locale"
     android:background="?android:attr/selectableItemBackground"
-    android:minHeight="@dimen/exo_settings_height"
-    android:minWidth="@dimen/exo_setting_width"
-    android:orientation="horizontal">
-
-    <ImageView
-        android:id="@+id/exo_check"
-        android:layout_width="@dimen/exo_settings_icon_size"
-        android:layout_height="@dimen/exo_settings_icon_size"
-        android:layout_marginLeft="8dp"
-        android:layout_marginTop="12dp"
-        android:layout_marginRight="8dp"
-        android:contentDescription="@null"
-        android:src="@drawable/exo_styled_controls_check"
-        android:visibility="invisible" />
+    android:minHeight="@dimen/px120"
+    android:paddingStart="@dimen/px40"
+    android:paddingTop="@dimen/px24"
+    android:paddingEnd="@dimen/px40"
+    android:paddingBottom="@dimen/px24">
 
     <TextView
         android:id="@+id/exo_text"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginRight="4dp"
-        android:layout_marginEnd="4dp"
+        android:layout_marginEnd="@dimen/px20"
         android:gravity="start|center_vertical"
-        android:minHeight="@dimen/exo_settings_height"
-        android:textColor="@color/exo_white"
+        android:textColor="@color/textColor"
         android:textDirection="locale"
-        android:textSize="@dimen/exo_settings_main_text_size" />
-</LinearLayout>
+        android:textSize="@dimen/px30"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/exo_check"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageView
+        android:id="@+id/exo_check"
+        android:layout_width="@dimen/px35"
+        android:layout_height="@dimen/px35"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_check"
+        android:visibility="invisible"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:tint="@color/colorAccent" />
+</androidx.constraintlayout.widget.ConstraintLayout>

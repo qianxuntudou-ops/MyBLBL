@@ -61,6 +61,8 @@ class MyPlayerView @JvmOverloads constructor(
         private const val STARTUP_BUFFERING_INDICATOR_DELAY_MS = 700L
         private const val REBUFFER_BUFFERING_INDICATOR_DELAY_MS = 150L
         private const val SHUTTER_FADE_DURATION_MS = 180L
+        private const val SWIPE_SEEK_PREVIEW_CLEAR_DELAY_MS = 180L
+        private const val DISCRETE_SEEK_PREVIEW_CLEAR_DELAY_MS = 900L
     }
 
     private var contentFrame: AspectRatioFrameLayout? = null
@@ -91,6 +93,9 @@ class MyPlayerView @JvmOverloads constructor(
 
     private val controllerComponentListener = object : MyPlayerControlView.VisibilityListener {
         override fun onVisibilityChange(visibility: Int) {
+            if (visibility == View.VISIBLE) {
+                clearHiddenSeekPreview()
+            }
             updateContentDescription()
             controllerVisibilityListener?.onVisibilityChanged(visibility)
         }
@@ -124,8 +129,15 @@ class MyPlayerView @JvmOverloads constructor(
     private var swipeSeekStartPositionMs = 0L
     private var swipeSeekTargetPositionMs = 0L
     private var hasRenderedFirstFrame = false
+    private var persistentBottomProgressEnabled = false
+    private var hiddenSeekPreviewActive = false
+    private var hiddenSeekPreviewPositionMs = 0L
+    private var hiddenSeekPreviewDurationMs = 0L
 
     private val progressiveSeekHelper = ProgressiveSeekHelper()
+    private val clearHiddenSeekPreviewRunnable = Runnable {
+        dispatchSeekPreviewState(active = false, positionMs = 0L, durationMs = 0L)
+    }
 
     interface ControllerVisibilityListener {
         fun onVisibilityChanged(visibility: Int)
@@ -135,8 +147,13 @@ class MyPlayerView @JvmOverloads constructor(
         fun onRenderedFirstFrame()
     }
 
+    interface SeekPreviewListener {
+        fun onSeekPreviewStateChanged(active: Boolean, positionMs: Long, durationMs: Long)
+    }
+
     var onResumeProgressCancelled: (() -> Boolean)? = null
     private var renderEventListener: RenderEventListener? = null
+    private var seekPreviewListener: SeekPreviewListener? = null
 
     private val componentListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -251,6 +268,7 @@ class MyPlayerView @JvmOverloads constructor(
             controller?.setOnSeekCommitListener { positionMs ->
                 syncDanmakuPosition(positionMs, forceSeek = true)
             }
+            controller?.setProgressOnlyUiEnabled(!persistentBottomProgressEnabled)
             controller?.addVisibilityListener(controllerComponentListener)
         }
 
@@ -324,6 +342,7 @@ class MyPlayerView @JvmOverloads constructor(
     private fun setupYouTubeOverlay() {
         tapOverlayView = findViewById(R.id.view_youtube_overlay)
         tapOverlayView?.setPlayerView(this)
+        tapOverlayView?.setPersistentBottomProgressEnabled(persistentBottomProgressEnabled)
         tapOverlayView?.setCallback(object : YouTubeOverlay.Callback {
             override fun onAnimationStart(displayMode: YouTubeOverlay.DisplayMode) {
                 if (displayMode == YouTubeOverlay.DisplayMode.EXCLUSIVE) {
@@ -699,8 +718,26 @@ class MyPlayerView @JvmOverloads constructor(
         renderEventListener = listener
     }
 
+    fun setSeekPreviewListener(listener: SeekPreviewListener?) {
+        seekPreviewListener = listener
+        listener?.onSeekPreviewStateChanged(
+            hiddenSeekPreviewActive,
+            hiddenSeekPreviewPositionMs,
+            hiddenSeekPreviewDurationMs
+        )
+    }
+
     fun setTouchInterceptListener(listener: ((MotionEvent) -> Boolean)?) {
         touchInterceptListener = listener
+    }
+
+    fun setPersistentBottomProgressEnabled(enabled: Boolean) {
+        persistentBottomProgressEnabled = enabled
+        tapOverlayView?.setPersistentBottomProgressEnabled(enabled)
+        controller?.setProgressOnlyUiEnabled(!enabled)
+        if (!enabled) {
+            clearHiddenSeekPreview()
+        }
     }
 
     fun setShowBuffering(mode: Int) {
@@ -1058,17 +1095,11 @@ class MyPlayerView @JvmOverloads constructor(
                     swipeSeekUsesControllerPreview = controller?.isVisible() == true
                     parent?.requestDisallowInterceptTouchEvent(true)
                     val deltaMs = (deltaX / width.coerceAtLeast(1)) * currentPlayer.duration
-                    if (swipeSeekUsesControllerPreview) {
-                        controller?.beginSeekPreview(
-                            swipeSeekStartPositionMs + deltaMs.toLong().coerceIn(0L, currentPlayer.duration)
-                        )
-                    }
-                    tapOverlayView?.showSwipeSeek(
-                        swipeSeekStartPositionMs + deltaMs.toLong()
+                    renderSwipeSeekPreview(
+                        targetPositionMs = swipeSeekStartPositionMs + deltaMs.toLong()
                             .coerceIn(0L, currentPlayer.duration),
-                        currentPlayer.duration,
-                        deltaMs.toLong(),
-                        showBottomProgress = !swipeSeekUsesControllerPreview
+                        durationMs = currentPlayer.duration,
+                        deltaMs = deltaMs.toLong()
                     )
                 }
                 val durationMs = currentPlayer.duration.coerceAtLeast(0L)
@@ -1079,14 +1110,10 @@ class MyPlayerView @JvmOverloads constructor(
                         .coerceIn(0L, durationMs)
                 swipeSeekTargetPositionMs = targetPositionMs
                 val deltaMs = swipeSeekTargetPositionMs - swipeSeekStartPositionMs
-                if (swipeSeekUsesControllerPreview) {
-                    controller?.beginSeekPreview(targetPositionMs)
-                }
-                tapOverlayView?.showSwipeSeek(
-                    targetPositionMs,
-                    durationMs,
-                    deltaMs,
-                    showBottomProgress = !swipeSeekUsesControllerPreview
+                renderSwipeSeekPreview(
+                    targetPositionMs = targetPositionMs,
+                    durationMs = durationMs,
+                    deltaMs = deltaMs
                 )
                 return true
             }
@@ -1099,6 +1126,9 @@ class MyPlayerView @JvmOverloads constructor(
                 syncDanmakuPosition(swipeSeekTargetPositionMs, forceSeek = true)
                 if (swipeSeekUsesControllerPreview) {
                     controller?.endSeekPreview(swipeSeekTargetPositionMs, 180L)
+                } else if (persistentBottomProgressEnabled) {
+                    dispatchSeekPreviewState(true, swipeSeekTargetPositionMs, currentPlayer.duration)
+                    scheduleHiddenSeekPreviewClear(SWIPE_SEEK_PREVIEW_CLEAR_DELAY_MS)
                 }
                 tapOverlayView?.finishSwipeSeek()
                 isSwipeSeeking = false
@@ -1114,6 +1144,7 @@ class MyPlayerView @JvmOverloads constructor(
                 if (swipeSeekUsesControllerPreview) {
                     controller?.cancelSeekPreview()
                 }
+                clearHiddenSeekPreview()
                 tapOverlayView?.cancelSwipeSeek()
                 isSwipeSeeking = false
                 swipeSeekUsesControllerPreview = false
@@ -1132,6 +1163,48 @@ class MyPlayerView @JvmOverloads constructor(
             maybeShowController(true)
         }
         controller?.resetHideCallbacks()
+    }
+
+    private fun renderSwipeSeekPreview(targetPositionMs: Long, durationMs: Long, deltaMs: Long) {
+        if (swipeSeekUsesControllerPreview) {
+            controller?.beginSeekPreview(targetPositionMs)
+            clearHiddenSeekPreview()
+        } else if (persistentBottomProgressEnabled) {
+            dispatchSeekPreviewState(true, targetPositionMs, durationMs)
+        } else {
+            clearHiddenSeekPreview()
+        }
+        tapOverlayView?.showSwipeSeek(
+            targetPositionMs = targetPositionMs,
+            durationMs = durationMs,
+            deltaMs = deltaMs,
+            showBottomProgress = !swipeSeekUsesControllerPreview && !persistentBottomProgressEnabled
+        )
+    }
+
+    private fun dispatchSeekPreviewState(active: Boolean, positionMs: Long, durationMs: Long) {
+        val safePositionMs = positionMs.coerceAtLeast(0L)
+        val safeDurationMs = durationMs.coerceAtLeast(0L)
+        if (hiddenSeekPreviewActive == active &&
+            hiddenSeekPreviewPositionMs == safePositionMs &&
+            hiddenSeekPreviewDurationMs == safeDurationMs
+        ) {
+            return
+        }
+        hiddenSeekPreviewActive = active
+        hiddenSeekPreviewPositionMs = safePositionMs
+        hiddenSeekPreviewDurationMs = safeDurationMs
+        seekPreviewListener?.onSeekPreviewStateChanged(active, safePositionMs, safeDurationMs)
+    }
+
+    private fun scheduleHiddenSeekPreviewClear(delayMs: Long) {
+        handler.removeCallbacks(clearHiddenSeekPreviewRunnable)
+        handler.postDelayed(clearHiddenSeekPreviewRunnable, delayMs)
+    }
+
+    private fun clearHiddenSeekPreview() {
+        handler.removeCallbacks(clearHiddenSeekPreviewRunnable)
+        dispatchSeekPreviewState(active = false, positionMs = 0L, durationMs = 0L)
     }
 
     private inner class ProgressiveSeekHelper {
@@ -1227,7 +1300,19 @@ class MyPlayerView @JvmOverloads constructor(
             val targetMs = (currentPlayer.currentPosition - seekMs).coerceAtLeast(0L)
             currentPlayer.seekTo(targetMs)
             syncDanmakuPosition(targetMs, forceSeek = true)
-            tapOverlayView?.showControllerSeek(targetMs, duration, -seekMs)
+            val usePersistentBottomProgress = persistentBottomProgressEnabled && controller?.isVisible() != true
+            if (usePersistentBottomProgress) {
+                dispatchSeekPreviewState(true, targetMs, duration)
+                scheduleHiddenSeekPreviewClear(DISCRETE_SEEK_PREVIEW_CLEAR_DELAY_MS)
+            } else {
+                clearHiddenSeekPreview()
+            }
+            tapOverlayView?.showControllerSeek(
+                targetPositionMs = targetMs,
+                durationMs = duration,
+                deltaMs = -seekMs,
+                showBottomProgress = !usePersistentBottomProgress
+            )
         }
 
         private fun finishSeek() {
@@ -1260,7 +1345,19 @@ class MyPlayerView @JvmOverloads constructor(
             val targetMs = (currentPlayer.currentPosition + deltaMs).coerceIn(0L, duration)
             currentPlayer.seekTo(targetMs)
             syncDanmakuPosition(targetMs, forceSeek = true)
-            tapOverlayView?.showControllerSeek(targetMs, duration, deltaMs)
+            val usePersistentBottomProgress = persistentBottomProgressEnabled && controller?.isVisible() != true
+            if (usePersistentBottomProgress) {
+                dispatchSeekPreviewState(true, targetMs, duration)
+                scheduleHiddenSeekPreviewClear(DISCRETE_SEEK_PREVIEW_CLEAR_DELAY_MS)
+            } else {
+                clearHiddenSeekPreview()
+            }
+            tapOverlayView?.showControllerSeek(
+                targetPositionMs = targetMs,
+                durationMs = duration,
+                deltaMs = deltaMs,
+                showBottomProgress = !usePersistentBottomProgress
+            )
         }
 
         private fun cancelSeek() {
@@ -1273,6 +1370,7 @@ class MyPlayerView @JvmOverloads constructor(
             if (currentPlayer != null && isForward) {
                 currentPlayer.playbackParameters = PlaybackParameters(originalSpeed)
             }
+            clearHiddenSeekPreview()
             tapOverlayView?.cancelSwipeSeek()
             restoreControllerAfterGesture()
         }
@@ -1297,6 +1395,7 @@ class MyPlayerView @JvmOverloads constructor(
             if (currentPlayer != null && isForward) {
                 currentPlayer.playbackParameters = PlaybackParameters(originalSpeed)
             }
+            clearHiddenSeekPreview()
             tapOverlayView?.cancelSwipeSeek()
             restoreControllerAfterGesture()
         }

@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.recyclerview.widget.RecyclerView xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/exo_settings_listview"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/exo_black_opacity_70"
+    android:layout_width="@dimen/px800"
+    android:layout_height="wrap_content"
+    android:background="@drawable/dialog_background"
+    android:clipToPadding="false"
+    android:descendantFocusability="afterDescendants"
+    android:paddingStart="@dimen/px18"
+    android:paddingTop="@dimen/px18"
+    android:paddingEnd="@dimen/px18"
+    android:paddingBottom="@dimen/px18"
     android:scrollbars="vertical" />

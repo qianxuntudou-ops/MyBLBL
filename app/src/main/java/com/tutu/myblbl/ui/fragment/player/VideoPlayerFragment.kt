@@ -134,6 +134,11 @@ class VideoPlayerFragment : Fragment() {
     private var latestVideoInfo: VideoDetailModel? = null
     private lateinit var playerSettings: PlayerSettings
     private var latestControllerVisibility: Int = View.GONE
+    private var latestPlaybackPositionMs: Long = 0L
+    private var latestPlaybackDurationMs: Long = 0L
+    private var bottomProgressSeekPreviewActive: Boolean = false
+    private var bottomProgressSeekPreviewPositionMs: Long = 0L
+    private var bottomProgressSeekPreviewDurationMs: Long = 0L
     private val sessionCoordinator = PlayerSessionCoordinator()
     private var resumePlaybackWhenStarted: Boolean = false
     private var playbackTraceSessionId: Long = 0L
@@ -412,6 +417,14 @@ class VideoPlayerFragment : Fragment() {
                 if (visibility != View.VISIBLE) {
                     progressCoordinator.syncNow(publishProgressState = true)
                 }
+            }
+        })
+        playerView.setSeekPreviewListener(object : MyPlayerView.SeekPreviewListener {
+            override fun onSeekPreviewStateChanged(active: Boolean, positionMs: Long, durationMs: Long) {
+                bottomProgressSeekPreviewActive = active
+                bottomProgressSeekPreviewPositionMs = positionMs
+                bottomProgressSeekPreviewDurationMs = durationMs
+                renderBottomProgressBar()
             }
         })
         playerView.setControllerAutoShow(false)
@@ -729,15 +742,13 @@ class VideoPlayerFragment : Fragment() {
         }
 
         viewModel.currentPosition.observe(viewLifecycleOwner) { position ->
-            bottomProgressBar.progress = position.coerceAtLeast(0L)
-                .coerceAtMost(Int.MAX_VALUE.toLong())
-                .toInt()
+            latestPlaybackPositionMs = position.coerceAtLeast(0L)
+            renderBottomProgressBar()
         }
 
         viewModel.duration.observe(viewLifecycleOwner) { duration ->
-            bottomProgressBar.max = duration.coerceAtLeast(0L)
-                .coerceAtMost(Int.MAX_VALUE.toLong())
-                .toInt()
+            latestPlaybackDurationMs = duration.coerceAtLeast(0L)
+            renderBottomProgressBar()
         }
 
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
@@ -859,6 +870,7 @@ class VideoPlayerFragment : Fragment() {
         playerView.setPlaySpeed(settings.defaultPlaybackSpeed)
         playerView.setSeekSecond(settings.fastSeekSeconds)
         playerView.setSimpleKeyPressEnabled(settings.simpleKeyPress)
+        playerView.setPersistentBottomProgressEnabled(settings.showBottomProgressBar)
         playerView.showHideFfRe(settings.showRewindFastForward)
         textSubtitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, settings.subtitleTextSizePx.toFloat())
         renderDebugState()
@@ -869,6 +881,9 @@ class VideoPlayerFragment : Fragment() {
 
     private fun renderControllerChrome(visibility: Int = latestControllerVisibility) {
         latestControllerVisibility = visibility
+        if (visibility == View.VISIBLE) {
+            clearBottomProgressSeekPreview()
+        }
         val subtitleBottomMarginRes = if (visibility == View.VISIBLE) {
             R.dimen.px300
         } else {
@@ -881,11 +896,50 @@ class VideoPlayerFragment : Fragment() {
                 textSubtitle.layoutParams = params
             }
         }
-        if (::playerSettings.isInitialized) {
-            bottomProgressBar.isVisible =
-                playerSettings.showBottomProgressBar && visibility != View.VISIBLE
-        }
+        renderBottomProgressBar()
         textClock.visibility = visibility
+    }
+
+    private fun renderBottomProgressBar() {
+        if (!::playerSettings.isInitialized) {
+            bottomProgressBar.isVisible = false
+            return
+        }
+        val shouldShow = playerSettings.showBottomProgressBar && latestControllerVisibility != View.VISIBLE
+        bottomProgressBar.isVisible = shouldShow
+        if (!shouldShow) {
+            return
+        }
+        val durationMs = if (bottomProgressSeekPreviewActive) {
+            bottomProgressSeekPreviewDurationMs
+        } else {
+            latestPlaybackDurationMs
+        }
+        val positionMs = if (bottomProgressSeekPreviewActive) {
+            bottomProgressSeekPreviewPositionMs
+        } else {
+            latestPlaybackPositionMs
+        }
+        val safeDuration = durationMs.coerceAtLeast(0L)
+            .coerceAtMost(Int.MAX_VALUE.toLong())
+            .toInt()
+        val safePosition = positionMs.coerceAtLeast(0L)
+            .coerceAtMost(safeDuration.toLong())
+            .toInt()
+        bottomProgressBar.max = safeDuration
+        bottomProgressBar.progress = safePosition
+    }
+
+    private fun clearBottomProgressSeekPreview() {
+        if (!bottomProgressSeekPreviewActive &&
+            bottomProgressSeekPreviewPositionMs == 0L &&
+            bottomProgressSeekPreviewDurationMs == 0L
+        ) {
+            return
+        }
+        bottomProgressSeekPreviewActive = false
+        bottomProgressSeekPreviewPositionMs = 0L
+        bottomProgressSeekPreviewDurationMs = 0L
     }
 
     private fun updateEpisodeNavigationVisibility() {

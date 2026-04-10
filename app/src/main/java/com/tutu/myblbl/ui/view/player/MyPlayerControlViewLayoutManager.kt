@@ -93,6 +93,7 @@ class MyPlayerControlViewLayoutManager(
     private var needToShowBars: Boolean = false
     private var isOverflowVisible: Boolean = false
     private var isCompactMode: Boolean = false
+    private var progressOnlyUiEnabled: Boolean = true
 
     init {
         overflowShowButton.setOnClickListener { showOverflowControls() }
@@ -143,6 +144,10 @@ class MyPlayerControlViewLayoutManager(
 
     fun isAnimationEnabled(): Boolean = isAnimationEnabled
 
+    fun setProgressOnlyUiEnabled(enabled: Boolean) {
+        progressOnlyUiEnabled = enabled
+    }
+
     fun getShowButton(button: View?): Boolean = button != null && shownButtons.contains(button)
 
     fun setShowButton(button: View?, show: Boolean) {
@@ -176,7 +181,7 @@ class MyPlayerControlViewLayoutManager(
         }
         if (!isAnimationEnabled) {
             playerControlView.postDelayed(hideControllerRunnable, playerControlView.getShowTimeoutMs().toLong())
-        } else if (uxState == UX_STATE_ONLY_PROGRESS_VISIBLE) {
+        } else if (uxState == UX_STATE_ONLY_PROGRESS_VISIBLE && progressOnlyUiEnabled) {
             playerControlView.postDelayed(hideProgressBarRunnable, PROGRESS_ONLY_DURATION_MS)
         } else {
             playerControlView.postDelayed(hideMainBarRunnable, playerControlView.getShowTimeoutMs().toLong())
@@ -249,6 +254,25 @@ class MyPlayerControlViewLayoutManager(
         timeBar.hideScrubber(ANIMATION_DURATION_MS)
         if (bottomBarController.hasFocus() || titleView.hasFocus() || playerControlView.isAnyPrimaryControlFocused()) {
             timeBar.requestFocus()
+        }
+        if (!progressOnlyUiEnabled) {
+            controlsBackground.visibility = View.INVISIBLE
+            animateMainInfo(visible = false) {}
+            bottomBar.animate()
+                .translationY(hiddenTranslationY)
+                .setDuration(ANIMATION_DURATION_MS)
+                .setListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator) {
+                        hideController()
+                        restoreMainBarImmediately()
+                        if (needToShowBars) {
+                            needToShowBars = false
+                            playerControlView.post { showAllBars() }
+                        }
+                    }
+                })
+                .start()
+            return
         }
         bottomBar.animate()
             .translationY(progressOnlyTranslationY)

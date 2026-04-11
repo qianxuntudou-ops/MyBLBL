@@ -172,7 +172,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
         }
 
         isLoading = true
-        val hasExistingItems = favoriteAdapter.getItem(0) != null
+        val hasExistingItems = favoriteAdapter.itemCount > 0
         if (currentPage == 1 && !hasExistingItems) {
             binding.progressBar.visibility = View.VISIBLE
         }
@@ -233,7 +233,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
     }
 
     private fun handleLoadError(message: String) {
-        if (currentPage == 1 && favoriteAdapter.getItem(0) == null) {
+        if (currentPage == 1 && favoriteAdapter.itemCount == 0) {
             showEmpty(message)
             return
         }

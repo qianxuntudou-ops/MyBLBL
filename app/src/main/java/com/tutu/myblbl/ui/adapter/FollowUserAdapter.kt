@@ -4,6 +4,7 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellUserBinding
@@ -13,26 +14,31 @@ import com.tutu.myblbl.core.ui.image.ImageLoader
 class FollowUserAdapter(
     private val onItemClick: (FollowingModel) -> Unit,
     private val onItemFocused: ((Int) -> Unit)? = null
-) : RecyclerView.Adapter<FollowUserAdapter.ViewHolder>() {
+) : ListAdapter<FollowingModel, FollowUserAdapter.ViewHolder>(DIFF_CALLBACK) {
 
-    private val items = mutableListOf<FollowingModel>()
     private var focusedPosition = RecyclerView.NO_POSITION
 
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<FollowingModel>() {
+            override fun areItemsTheSame(oldItem: FollowingModel, newItem: FollowingModel): Boolean {
+                return oldItem.mid == newItem.mid
+            }
+
+            override fun areContentsTheSame(oldItem: FollowingModel, newItem: FollowingModel): Boolean {
+                return oldItem == newItem
+            }
+        }
+    }
+
     fun setData(newItems: List<FollowingModel>) {
-        val oldList = items.toList()
-        val diffResult = DiffUtil.calculateDiff(FollowUserDiffCallback(oldList, newItems))
-        items.clear()
-        items.addAll(newItems)
         focusedPosition = focusedPosition
-            .takeIf { it != RecyclerView.NO_POSITION && it < items.size }
-            ?: if (items.isEmpty()) RecyclerView.NO_POSITION else 0
-        diffResult.dispatchUpdatesTo(this)
+            .takeIf { it != RecyclerView.NO_POSITION && it < newItems.size }
+            ?: if (newItems.isEmpty()) RecyclerView.NO_POSITION else 0
+        submitList(newItems)
     }
 
     fun addData(newItems: List<FollowingModel>) {
-        val start = items.size
-        items.addAll(newItems)
-        notifyItemRangeInserted(start, newItems.size)
+        submitList(currentList + newItems)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -45,10 +51,8 @@ class FollowUserAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(items[position], position == focusedPosition)
+        holder.bind(getItem(position), position == focusedPosition)
     }
-
-    override fun getItemCount(): Int = items.size
 
     fun getFocusedPosition(): Int = focusedPosition
 
@@ -60,7 +64,7 @@ class FollowUserAdapter(
             binding.root.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
-                    onItemClick(items[position])
+                    onItemClick(currentList[position])
                 }
             }
 
@@ -96,24 +100,6 @@ class FollowUserAdapter(
                 placeholder = R.drawable.default_avatar,
                 error = R.drawable.default_avatar
             )
-        }
-    }
-
-    private class FollowUserDiffCallback(
-        private val oldList: List<FollowingModel>,
-        private val newList: List<FollowingModel>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition].mid == newList[newItemPosition].mid
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
         }
     }
 }

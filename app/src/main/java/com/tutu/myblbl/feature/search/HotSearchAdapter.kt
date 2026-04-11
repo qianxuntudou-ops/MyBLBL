@@ -6,6 +6,7 @@ import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellSearchRecentlyBinding
@@ -14,12 +15,22 @@ import com.tutu.myblbl.model.search.HotWordModel
 class HotSearchAdapter(
     private val onItemClick: (String) -> Unit,
     private val onLeftEdge: ((View) -> Boolean)? = null
-) : RecyclerView.Adapter<HotSearchAdapter.ViewHolder>() {
+) : ListAdapter<HotWordModel, HotSearchAdapter.ViewHolder>(DIFF_CALLBACK) {
 
-    private val data = mutableListOf<HotWordModel>()
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<HotWordModel>() {
+            override fun areItemsTheSame(oldItem: HotWordModel, newItem: HotWordModel): Boolean {
+                return oldItem.keyword == newItem.keyword
+            }
+
+            override fun areContentsTheSame(oldItem: HotWordModel, newItem: HotWordModel): Boolean {
+                return oldItem == newItem
+            }
+        }
+    }
 
     fun setData(list: List<HotWordModel>) {
-        updateData(list)
+        submitList(list)
     }
 
     fun setKeywords(keywords: List<String>) {
@@ -30,14 +41,7 @@ class HotSearchAdapter(
                 pos = index + 1
             )
         }
-        updateData(keywordRows)
-    }
-
-    private fun updateData(newList: List<HotWordModel>) {
-        val diffResult = DiffUtil.calculateDiff(HotWordDiff(data, newList))
-        data.clear()
-        data.addAll(newList)
-        diffResult.dispatchUpdatesTo(this)
+        submitList(keywordRows)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -50,10 +54,8 @@ class HotSearchAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(data[position])
+        holder.bind(getItem(position))
     }
-
-    override fun getItemCount(): Int = data.size
 
     inner class ViewHolder(
         private val binding: CellSearchRecentlyBinding
@@ -63,7 +65,7 @@ class HotSearchAdapter(
             binding.clickView.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
-                    onItemClick(data[position].keyword)
+                    onItemClick(currentList[position].keyword)
                 }
             }
             binding.clickView.setOnKeyListener { view, keyCode, event ->
@@ -97,24 +99,6 @@ class HotSearchAdapter(
                     icon.setImageResource(R.drawable.ic_hot)
                 }
             }
-        }
-    }
-
-    private class HotWordDiff(
-        private val oldList: List<HotWordModel>,
-        private val newList: List<HotWordModel>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition].keyword == newList[newItemPosition].keyword
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
         }
     }
 }

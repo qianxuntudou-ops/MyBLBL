@@ -15,14 +15,12 @@ import com.tutu.myblbl.network.WbiGenerator
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.network.response.HotWordWrapper
 import com.tutu.myblbl.network.response.SearchSuggestWrapper
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import retrofit2.http.QueryMap
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Query
-import retrofit2.http.QueryMap
 
 private interface SearchApiService {
     @GET("x/web-interface/search/all/v2")
@@ -80,7 +78,7 @@ class SearchRepository(
             .create(SearchApiService::class.java)
     }
 
-    suspend fun loadHotSearchWords(): Result<List<HotWordModel>> = withContext(Dispatchers.IO) {
+    suspend fun loadHotSearchWords(): Result<List<HotWordModel>> =
         runCatching {
             val response = searchApiService.getHotSearchWords()
             response.list.mapIndexed { index, item ->
@@ -93,9 +91,8 @@ class SearchRepository(
                 )
             }
         }
-    }
 
-    suspend fun searchSuggest(keyword: String): Result<List<HotWordModel>> = withContext(Dispatchers.IO) {
+    suspend fun searchSuggest(keyword: String): Result<List<HotWordModel>> =
         runCatching {
             val response = searchApiService.searchSuggest(keyword)
             response.result.tag.mapNotNull { item ->
@@ -109,9 +106,8 @@ class SearchRepository(
                 )
             }
         }
-    }
 
-    suspend fun searchAll(keyword: String): Result<SearchAllResponseData> = withContext(Dispatchers.IO) {
+    suspend fun searchAll(keyword: String): Result<SearchAllResponseData> =
         runCatching {
             val response = if (hasWbiKeys()) {
                 searchApiService.searchAllWbi(
@@ -135,7 +131,6 @@ class SearchRepository(
 
             response.data ?: SearchAllResponseData()
         }
-    }
 
     suspend fun searchByType(
         searchType: SearchType,
@@ -143,7 +138,7 @@ class SearchRepository(
         page: Int,
         pageSize: Int,
         order: SearchVideoOrder = SearchVideoOrder.TotalRank
-    ): Result<SearchResponseWrapper> = withContext(Dispatchers.IO) {
+    ): Result<SearchResponseWrapper> =
         runCatching {
             val response = if (hasWbiKeys()) {
                 searchApiService.searchByTypeWbi(
@@ -177,14 +172,13 @@ class SearchRepository(
 
             response.data ?: SearchResponseWrapper(page = page, pageSize = pageSize)
         }
-    }
 
     suspend fun search(
         keyword: String,
         page: Int,
         pageSize: Int,
         order: SearchVideoOrder = SearchVideoOrder.TotalRank
-    ): Result<List<VideoModel>> = withContext(Dispatchers.IO) {
+    ): Result<List<VideoModel>> =
         searchByType(
             searchType = SearchType.Video,
             keyword = keyword,
@@ -194,7 +188,6 @@ class SearchRepository(
         ).map { wrapper ->
             wrapper.result.orEmpty().map { it.toVideoModel() }
         }
-    }
 
     private fun SearchItemModel.toVideoModel(): VideoModel {
         return VideoModel(

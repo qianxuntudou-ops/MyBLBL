@@ -4,6 +4,7 @@ import android.view.View
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import androidx.appcompat.widget.AppCompatTextView
 import com.tutu.myblbl.R
@@ -16,46 +17,54 @@ class FavoriteFolderAdapter(
     private val onItemClick: ((position: Int, item: FavoriteFolderModel) -> Unit)? = null,
     private val onItemFocused: ((Int) -> Unit)? = null,
     private val onTopEdgeUp: (() -> Boolean)? = null
-) : RecyclerView.Adapter<FavoriteFolderAdapter.FolderViewHolder>() {
+) : ListAdapter<FavoriteFolderModel, FavoriteFolderAdapter.FolderViewHolder>(DIFF_CALLBACK) {
 
-    private val items = mutableListOf<FavoriteFolderModel>()
     private var focusedPosition = RecyclerView.NO_POSITION
     private var focusedView: View? = null
     private var attachedRecyclerView: RecyclerView? = null
+
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<FavoriteFolderModel>() {
+            override fun areItemsTheSame(oldItem: FavoriteFolderModel, newItem: FavoriteFolderModel): Boolean {
+                return oldItem.id == newItem.id
+            }
+
+            override fun areContentsTheSame(oldItem: FavoriteFolderModel, newItem: FavoriteFolderModel): Boolean {
+                return oldItem == newItem
+            }
+        }
+    }
 
     init {
         setHasStableIds(true)
     }
 
     fun setData(newItems: List<FavoriteFolderModel>) {
-        val oldList = items.toList()
-        val diffResult = DiffUtil.calculateDiff(FavoriteFolderDiffCallback(oldList, newItems))
-        items.clear()
-        items.addAll(newItems)
         focusedPosition = focusedPosition
-            .takeIf { it != RecyclerView.NO_POSITION && it < items.size && hasActiveFocus() }
+            .takeIf { it != RecyclerView.NO_POSITION && it < newItems.size && hasActiveFocus() }
             ?: RecyclerView.NO_POSITION
-        diffResult.dispatchUpdatesTo(this)
+        submitList(newItems)
     }
 
     fun getFocusedPosition(): Int = focusedPosition
 
-    fun getItemsSnapshot(): List<FavoriteFolderModel> = items.toList()
+    fun getItemsSnapshot(): List<FavoriteFolderModel> = currentList.toList()
 
     fun updateCover(folderId: Long, coverUrl: String) {
         if (coverUrl.isBlank()) {
             return
         }
-        val index = items.indexOfFirst { it.id == folderId }
+        val index = currentList.indexOfFirst { it.id == folderId }
         if (index == -1) {
             return
         }
-        val item = items[index]
+        val item = currentList[index]
         if (item.displayImageUrl == coverUrl) {
             return
         }
-        item.imageUrl = coverUrl
-        notifyItemChangedSafely(index)
+        val newList = currentList.toMutableList()
+        newList[index] = item.apply { imageUrl = coverUrl }
+        submitList(newList)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): FolderViewHolder {
@@ -68,12 +77,10 @@ class FavoriteFolderAdapter(
     }
 
     override fun onBindViewHolder(holder: FolderViewHolder, position: Int) {
-        holder.bind(items[position], position == focusedPosition && hasActiveFocus())
+        holder.bind(getItem(position), position == focusedPosition && hasActiveFocus())
     }
 
-    override fun getItemCount(): Int = items.size
-
-    override fun getItemId(position: Int): Long = items[position].id
+    override fun getItemId(position: Int): Long = getItem(position).id
 
     override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
         super.onAttachedToRecyclerView(recyclerView)
@@ -105,7 +112,7 @@ class FavoriteFolderAdapter(
             binding.root.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
-                    onItemClick?.invoke(position, items[position])
+                    onItemClick?.invoke(position, currentList[position])
                 }
             }
             binding.root.setOnFocusChangeListener { _, hasFocus ->
@@ -160,32 +167,5 @@ class FavoriteFolderAdapter(
         view.findViewById<AppCompatTextView>(com.tutu.myblbl.R.id.tvTitle)?.isSelected = focused
     }
 
-    private fun notifyItemChangedSafely(position: Int) {
-        val recyclerView = attachedRecyclerView
-        if (recyclerView != null && recyclerView.isComputingLayout) {
-            recyclerView.post { notifyItemChanged(position) }
-        } else {
-            notifyItemChanged(position)
-        }
-    }
-
     private fun hasActiveFocus(): Boolean = focusedView?.hasFocus() == true
-
-    private class FavoriteFolderDiffCallback(
-        private val oldList: List<FavoriteFolderModel>,
-        private val newList: List<FavoriteFolderModel>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition].id == newList[newItemPosition].id
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
-        }
-    }
 }

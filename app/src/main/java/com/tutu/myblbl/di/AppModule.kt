@@ -2,6 +2,7 @@ package com.tutu.myblbl.di
 
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.event.AppEventHub
 import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.network.api.ApiService
@@ -90,6 +91,7 @@ val viewModelModule = module {
 
 val eventModule = module {
     single { AppEventHub() }
+    single { AppSettingsDataStore(androidContext()) }
 }
 
 val appModules = listOf(

@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.core.text.HtmlCompat
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellLiveRoomBinding
@@ -35,35 +36,19 @@ class SearchItemAdapter(
     private val searchType: SearchType,
     private val onItemClick: (SearchResultEntry) -> Unit,
     private val onTopEdgeUp: ((View) -> Boolean)? = null
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-
-    private val items = mutableListOf<SearchItemModel>()
+) : ListAdapter<SearchItemModel, RecyclerView.ViewHolder>(DiffCallback) {
 
     fun setItems(list: List<SearchItemModel>) {
-        val diffResult = DiffUtil.calculateDiff(SearchItemDiff(items, list))
-        items.clear()
-        items.addAll(list)
-        diffResult.dispatchUpdatesTo(this)
+        submitList(list)
     }
 
     private fun removeBlockedItems(blockedName: String) {
-        val oldList = items.toList()
-        val filtered = oldList.filter {
+        val filtered = currentList.filter {
             val authorName = it.author.ifBlank { it.uname }
             !authorName.equals(blockedName, ignoreCase = true)
         }
-        if (filtered.size == oldList.size) return
-        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
-            override fun getOldListSize(): Int = oldList.size
-            override fun getNewListSize(): Int = filtered.size
-            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean =
-                oldList[oldPos].id == filtered[newPos].id
-            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean =
-                oldList[oldPos] == filtered[newPos]
-        })
-        items.clear()
-        items.addAll(filtered)
-        diffResult.dispatchUpdatesTo(this)
+        if (filtered.size == currentList.size) return
+        submitList(filtered)
     }
 
     override fun getItemViewType(position: Int): Int = when (searchType) {
@@ -96,15 +81,14 @@ class SearchItemAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        val item = getItem(position)
         when (holder) {
-            is VideoViewHolder -> holder.bind(items[position])
-            is LiveViewHolder -> holder.bind(items[position])
-            is SeriesViewHolder -> holder.bind(items[position])
-            is UserViewHolder -> holder.bind(items[position])
+            is VideoViewHolder -> holder.bind(item)
+            is LiveViewHolder -> holder.bind(item)
+            is SeriesViewHolder -> holder.bind(item)
+            is UserViewHolder -> holder.bind(item)
         }
     }
-
-    override fun getItemCount(): Int = items.size
 
     private inner class VideoViewHolder(
         private val binding: CellVideoBinding
@@ -267,7 +251,7 @@ class SearchItemAdapter(
                             longPressRunnable = Runnable {
                                 val pos = bindingAdapterPosition
                                 if (pos != RecyclerView.NO_POSITION) {
-                                    val item = items[pos]
+                                    val item = getItem(pos)
                                     val authorName = item.author.ifBlank { item.uname }
                                     if (authorName.isNotBlank()) {
                                         triggerBlock(authorName)
@@ -293,7 +277,7 @@ class SearchItemAdapter(
             }
             val position = bindingAdapterPosition
             if (position != RecyclerView.NO_POSITION) {
-                onItemClick(SearchResultEntry(searchType, items[position]))
+                onItemClick(SearchResultEntry(searchType, getItem(position)))
             }
         }
         view.setOnKeyListener(keyListener)
@@ -305,7 +289,7 @@ class SearchItemAdapter(
                     longPressRunnable = Runnable {
                         val pos = bindingAdapterPosition
                         if (pos != RecyclerView.NO_POSITION) {
-                            val item = items[pos]
+                            val item = getItem(pos)
                             val authorName = item.author.ifBlank { item.uname }
                             if (authorName.isNotBlank()) {
                                 triggerBlock(authorName)
@@ -347,30 +331,20 @@ class SearchItemAdapter(
         const val VIEW_TYPE_LIVE = 1
         const val VIEW_TYPE_SERIES = 2
         const val VIEW_TYPE_USER = 3
-    }
 
-    private class SearchItemDiff(
-        private val oldList: List<SearchItemModel>,
-        private val newList: List<SearchItemModel>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            val oldItem = oldList[oldItemPosition]
-            val newItem = newList[newItemPosition]
-            return when {
-                oldItem.id != 0L && newItem.id != 0L -> oldItem.id == newItem.id
-                oldItem.aid != 0L && newItem.aid != 0L -> oldItem.aid == newItem.aid
-                oldItem.bvid.isNotBlank() && newItem.bvid.isNotBlank() -> oldItem.bvid == newItem.bvid
-                else -> oldItem.title == newItem.title
+        private val DiffCallback = object : DiffUtil.ItemCallback<SearchItemModel>() {
+            override fun areItemsTheSame(oldItem: SearchItemModel, newItem: SearchItemModel): Boolean {
+                return when {
+                    oldItem.id != 0L && newItem.id != 0L -> oldItem.id == newItem.id
+                    oldItem.aid != 0L && newItem.aid != 0L -> oldItem.aid == newItem.aid
+                    oldItem.bvid.isNotBlank() && newItem.bvid.isNotBlank() -> oldItem.bvid == newItem.bvid
+                    else -> oldItem.title == newItem.title
+                }
             }
-        }
 
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
+            override fun areContentsTheSame(oldItem: SearchItemModel, newItem: SearchItemModel): Boolean {
+                return oldItem == newItem
+            }
         }
     }
 }

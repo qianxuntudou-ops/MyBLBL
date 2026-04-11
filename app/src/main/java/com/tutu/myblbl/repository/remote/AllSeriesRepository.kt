@@ -4,8 +4,6 @@ import com.tutu.myblbl.model.lane.LaneItemModel
 import com.tutu.myblbl.model.series.AllSeriesFilterModel
 import com.tutu.myblbl.model.series.SeriesModel
 import com.tutu.myblbl.network.api.ApiService
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 data class AllSeriesPage(
     val list: List<SeriesModel> = emptyList(),
@@ -21,18 +19,16 @@ class AllSeriesRepository(
         page: Int,
         filters: List<AllSeriesFilterModel> = emptyList()
     ): Result<AllSeriesPage> {
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val response = apiService.getAllSeries(buildParams(type, page, filters))
-                if (response.code != 0 || response.data == null) {
-                    throw IllegalStateException(response.message.ifEmpty { response.msg })
-                }
-
-                AllSeriesPage(
-                    list = response.data.list.map { it.toSeriesModel() },
-                    hasMore = response.data.list.size >= 24
-                )
+        return runCatching {
+            val response = apiService.getAllSeries(buildParams(type, page, filters))
+            if (response.code != 0 || response.data == null) {
+                throw IllegalStateException(response.message.ifEmpty { response.msg })
             }
+
+            AllSeriesPage(
+                list = response.data.list.map { it.toSeriesModel() },
+                hasMore = response.data.list.size >= 24
+            )
         }
     }
 

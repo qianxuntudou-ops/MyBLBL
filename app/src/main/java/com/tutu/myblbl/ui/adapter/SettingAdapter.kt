@@ -5,39 +5,34 @@ import android.view.ViewGroup
 import android.view.View
 import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.databinding.CellSettingBinding
 import com.tutu.myblbl.model.SettingModel
 
 class SettingAdapter(
     private val onItemClick: ((position: Int, item: SettingModel) -> Unit)? = null
-) : RecyclerView.Adapter<SettingAdapter.SettingViewHolder>() {
+) : ListAdapter<SettingModel, SettingAdapter.SettingViewHolder>(DIFF_CALLBACK) {
 
-    private val items = mutableListOf<SettingModel>()
     private var focusedPosition = RecyclerView.NO_POSITION
 
-    fun setData(newItems: List<SettingModel>) {
-        val diffResult = DiffUtil.calculateDiff(
-            object : DiffUtil.Callback() {
-                override fun getOldListSize(): Int = items.size
+    companion object {
+        private const val PAYLOAD_FOCUS = "payload_focus"
 
-                override fun getNewListSize(): Int = newItems.size
-
-                override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                    return items[oldItemPosition].title == newItems[newItemPosition].title
-                }
-
-                override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                    val oldItem = items[oldItemPosition]
-                    val newItem = newItems[newItemPosition]
-                    return oldItem.title == newItem.title && oldItem.info == newItem.info
-                }
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<SettingModel>() {
+            override fun areItemsTheSame(oldItem: SettingModel, newItem: SettingModel): Boolean {
+                return oldItem.title == newItem.title
             }
-        )
-        items.clear()
-        items.addAll(newItems)
+
+            override fun areContentsTheSame(oldItem: SettingModel, newItem: SettingModel): Boolean {
+                return oldItem.title == newItem.title && oldItem.info == newItem.info
+            }
+        }
+    }
+
+    fun setData(newItems: List<SettingModel>) {
         focusedPosition = RecyclerView.NO_POSITION
-        diffResult.dispatchUpdatesTo(this)
+        submitList(newItems)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SettingViewHolder {
@@ -50,7 +45,7 @@ class SettingAdapter(
     }
 
     override fun onBindViewHolder(holder: SettingViewHolder, position: Int) {
-        holder.bind(items[position], isLast = position == items.lastIndex)
+        holder.bind(getItem(position), isLast = position == currentList.lastIndex)
     }
 
     override fun onBindViewHolder(
@@ -62,11 +57,9 @@ class SettingAdapter(
             super.onBindViewHolder(holder, position, payloads)
         } else {
             holder.bindFocusState(position == focusedPosition)
-            holder.bindDivider(position == items.lastIndex)
+            holder.bindDivider(position == currentList.lastIndex)
         }
     }
-
-    override fun getItemCount(): Int = items.size
 
     inner class SettingViewHolder(
         private val binding: CellSettingBinding
@@ -76,7 +69,7 @@ class SettingAdapter(
             binding.clickView.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
-                    onItemClick?.invoke(position, items[position])
+                    onItemClick?.invoke(position, currentList[position])
                 }
             }
             binding.clickView.setOnFocusChangeListener { _, hasFocus ->
@@ -124,9 +117,5 @@ class SettingAdapter(
                 .start()
             ViewCompat.setElevation(binding.clickView, if (isFocused) binding.clickView.resources.displayMetrics.density * 3f else 0f)
         }
-    }
-
-    private companion object {
-        private const val PAYLOAD_FOCUS = "payload_focus"
     }
 }

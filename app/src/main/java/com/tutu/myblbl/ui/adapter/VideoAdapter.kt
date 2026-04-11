@@ -29,6 +29,25 @@ class VideoAdapter(
     private val onItemFocused: ((Int) -> Unit)? = null
 ) : BaseAdapter<VideoModel, VideoAdapter.VideoViewHolder>() {
 
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<VideoModel>() {
+            override fun areItemsTheSame(oldItem: VideoModel, newItem: VideoModel): Boolean =
+                videoKey(oldItem) == videoKey(newItem)
+
+            override fun areContentsTheSame(oldItem: VideoModel, newItem: VideoModel): Boolean =
+                oldItem == newItem
+        }
+
+        private fun videoKey(video: VideoModel): String {
+            return when {
+                video.bvid.isNotBlank() -> "bvid:${video.bvid}"
+                video.aid > 0 -> "aid:${video.aid}"
+                video.cid > 0 -> "cid:${video.cid}"
+                else -> "title:${video.title}|cover:${video.coverUrl}"
+            }
+        }
+    }
+
     init {
         setHasStableIds(true)
     }
@@ -103,30 +122,25 @@ class VideoAdapter(
         return source.filter { seenKeys.add(videoKey(it)) }
     }
 
-    private fun videoKey(video: VideoModel): String {
-        return when {
-            video.bvid.isNotBlank() -> "bvid:${video.bvid}"
-            video.aid > 0 -> "aid:${video.aid}"
-            video.cid > 0 -> "cid:${video.cid}"
-            else -> "title:${video.title}|cover:${video.coverUrl}"
-        }
+    private fun submitItems(newItems: List<VideoModel>) {
+        val oldItems = items.toList()
+        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = oldItems.size
+            override fun getNewListSize() = newItems.size
+            override fun areItemsTheSame(oldPos: Int, newPos: Int) =
+                DIFF_CALLBACK.areItemsTheSame(oldItems[oldPos], newItems[newPos])
+            override fun areContentsTheSame(oldPos: Int, newPos: Int) =
+                DIFF_CALLBACK.areContentsTheSame(oldItems[oldPos], newItems[newPos])
+        })
+        items.clear()
+        items.addAll(newItems)
+        diffResult.dispatchUpdatesTo(this)
     }
 
     private fun removeBlockedItems(blockedName: String) {
-        val oldList = items.toList()
-        val filtered = oldList.filter { !it.authorName.equals(blockedName, ignoreCase = true) }
-        if (filtered.size == oldList.size) return
-        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
-            override fun getOldListSize(): Int = oldList.size
-            override fun getNewListSize(): Int = filtered.size
-            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean =
-                videoKey(oldList[oldPos]) == videoKey(filtered[newPos])
-            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean =
-                oldList[oldPos] == filtered[newPos]
-        })
-        items.clear()
-        items.addAll(filtered)
-        diffResult.dispatchUpdatesTo(this)
+        val filtered = items.filter { !it.authorName.equals(blockedName, ignoreCase = true) }
+        if (filtered.size == items.size) return
+        submitItems(filtered)
         focusedView?.requestFocus()
     }
 

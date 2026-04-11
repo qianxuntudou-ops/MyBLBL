@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.PageSearchResultBinding
@@ -14,7 +15,6 @@ import com.tutu.myblbl.model.search.SearchItemModel
 import com.tutu.myblbl.model.search.SearchType
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.content.ContentFilter
-import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
 
@@ -22,9 +22,8 @@ class SearchResultPagerAdapter(
     private val onItemClick: (SearchResultEntry) -> Unit,
     private val onLoadMore: (SearchType) -> Unit,
     private val onTopEdgeUp: ((View) -> Boolean)? = null
-) : RecyclerView.Adapter<SearchResultPagerAdapter.ViewHolder>() {
+) : ListAdapter<SearchResultPagerAdapter.SearchResultPage, SearchResultPagerAdapter.ViewHolder>(DiffCallback) {
 
-    private val pages = mutableListOf<SearchResultPage>()
     private val holders = mutableMapOf<SearchType, ViewHolder>()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -37,7 +36,7 @@ class SearchResultPagerAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val page = pages[position]
+        val page = getItem(position)
         holders[page.type] = holder
         holder.bind(page)
     }
@@ -47,14 +46,12 @@ class SearchResultPagerAdapter(
         super.onViewRecycled(holder)
     }
 
-    override fun getItemCount(): Int = pages.size
+    fun getPageTitle(position: Int): String = getItem(position).title
 
-    fun getPageTitle(position: Int): String = pages[position].title
-
-    fun getPageType(position: Int): SearchType? = pages.getOrNull(position)?.type
+    fun getPageType(position: Int): SearchType? = currentList.getOrNull(position)?.type
 
     fun setPages(categories: List<SearchCategoryItem>) {
-        val existing = pages.associateBy { it.type }
+        val existing = currentList.associateBy { it.type }
         val newPages = categories.map { category ->
             SearchResultPage(
                 type = category.type,
@@ -62,38 +59,34 @@ class SearchResultPagerAdapter(
                 items = existing[category.type]?.items ?: mutableListOf()
             )
         }
-        val diffResult = DiffUtil.calculateDiff(SearchResultPageDiff(pages, newPages))
-        pages.clear()
-        pages.addAll(newPages)
         holders.clear()
-        diffResult.dispatchUpdatesTo(this)
+        submitList(newPages)
     }
 
     fun clearResults() {
-        pages.forEach { page ->
+        currentList.forEach { page ->
             page.items.clear()
             page.loading = false
         }
         holders.values.forEach { holder ->
             holder.submitEmpty()
         }
-        notifyItemRangeChanged(0, pages.size)
     }
 
     fun submitResults(type: SearchType, items: List<SearchItemModel>) {
-        val page = pages.firstOrNull { it.type == type } ?: return
+        val page = currentList.firstOrNull { it.type == type } ?: return
         page.items.clear()
         page.items.addAll(items)
-        holders[type]?.submit(page) ?: notifyItemChanged(pages.indexOf(page))
+        holders[type]?.submit(page) ?: notifyItemChanged(currentList.indexOf(page))
     }
 
     fun submitState(type: SearchType, items: List<SearchItemModel>, loading: Boolean, hasMore: Boolean) {
-        val page = pages.firstOrNull { it.type == type } ?: return
+        val page = currentList.firstOrNull { it.type == type } ?: return
         page.items.clear()
         page.items.addAll(items)
         page.loading = loading
         page.hasMore = hasMore
-        holders[type]?.submit(page) ?: notifyItemChanged(pages.indexOf(page))
+        holders[type]?.submit(page) ?: notifyItemChanged(currentList.indexOf(page))
     }
 
     fun scrollToTop(position: Int) {
@@ -224,21 +217,15 @@ class SearchResultPagerAdapter(
 
     private fun Int?.orZero(): Int = this ?: 0
 
-    private class SearchResultPageDiff(
-        private val oldList: List<SearchResultPage>,
-        private val newList: List<SearchResultPage>
-    ) : DiffUtil.Callback() {
+    companion object {
+        private val DiffCallback = object : DiffUtil.ItemCallback<SearchResultPage>() {
+            override fun areItemsTheSame(oldItem: SearchResultPage, newItem: SearchResultPage): Boolean {
+                return oldItem.type == newItem.type
+            }
 
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition].type == newList[newItemPosition].type
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
+            override fun areContentsTheSame(oldItem: SearchResultPage, newItem: SearchResultPage): Boolean {
+                return oldItem == newItem
+            }
         }
     }
 }

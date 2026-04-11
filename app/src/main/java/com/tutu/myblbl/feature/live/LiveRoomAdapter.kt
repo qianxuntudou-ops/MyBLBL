@@ -10,6 +10,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellVideoBinding
@@ -23,21 +24,14 @@ import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
 class LiveRoomAdapter(
     private val onItemClick: (LiveRoomItem) -> Unit,
     private val onTopEdgeUp: (() -> Boolean)? = null
-) : RecyclerView.Adapter<LiveRoomAdapter.ViewHolder>() {
-
-    private val data = mutableListOf<LiveRoomItem>()
+) : ListAdapter<LiveRoomItem, LiveRoomAdapter.ViewHolder>(DiffCallback) {
 
     fun setData(list: List<LiveRoomItem>) {
-        val diffResult = DiffUtil.calculateDiff(LiveRoomDiff(data, list))
-        data.clear()
-        data.addAll(list)
-        diffResult.dispatchUpdatesTo(this)
+        submitList(list)
     }
 
     fun addData(list: List<LiveRoomItem>) {
-        val startPosition = data.size
-        data.addAll(list)
-        notifyItemRangeInserted(startPosition, list.size)
+        submitList(currentList + list)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -50,26 +44,13 @@ class LiveRoomAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(data[position])
+        holder.bind(getItem(position))
     }
 
-    override fun getItemCount(): Int = data.size
-
     private fun removeBlockedItems(blockedName: String) {
-        val oldList = data.toList()
-        val filtered = oldList.filter { !it.uname.equals(blockedName, ignoreCase = true) }
-        if (filtered.size == oldList.size) return
-        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
-            override fun getOldListSize(): Int = oldList.size
-            override fun getNewListSize(): Int = filtered.size
-            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean =
-                oldList[oldPos].roomId == filtered[newPos].roomId
-            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean =
-                oldList[oldPos] == filtered[newPos]
-        })
-        data.clear()
-        data.addAll(filtered)
-        diffResult.dispatchUpdatesTo(this)
+        val filtered = currentList.filter { !it.uname.equals(blockedName, ignoreCase = true) }
+        if (filtered.size == currentList.size) return
+        submitList(filtered)
     }
 
     inner class ViewHolder(
@@ -132,7 +113,7 @@ class LiveRoomAdapter(
                 }
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
-                    onItemClick(data[position])
+                    onItemClick(getItem(position))
                 }
             }
             binding.root.setOnKeyListener(keyListener)
@@ -172,22 +153,16 @@ class LiveRoomAdapter(
             )
         }
     }
-}
 
-private class LiveRoomDiff(
-    private val oldList: List<LiveRoomItem>,
-    private val newList: List<LiveRoomItem>
-) : DiffUtil.Callback() {
+    companion object {
+        private val DiffCallback = object : DiffUtil.ItemCallback<LiveRoomItem>() {
+            override fun areItemsTheSame(oldItem: LiveRoomItem, newItem: LiveRoomItem): Boolean {
+                return oldItem.roomId == newItem.roomId
+            }
 
-    override fun getOldListSize(): Int = oldList.size
-
-    override fun getNewListSize(): Int = newList.size
-
-    override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-        return oldList[oldItemPosition].roomId == newList[newItemPosition].roomId
-    }
-
-    override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-        return oldList[oldItemPosition] == newList[newItemPosition]
+            override fun areContentsTheSame(oldItem: LiveRoomItem, newItem: LiveRoomItem): Boolean {
+                return oldItem == newItem
+            }
+        }
     }
 }

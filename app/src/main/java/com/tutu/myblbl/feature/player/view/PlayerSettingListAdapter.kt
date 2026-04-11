@@ -6,35 +6,29 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 
-/**
- * Keeps row rendering and diffing separate from MyPlayerSettingView's menu flow logic.
- */
 internal class PlayerSettingListAdapter(
     private val onClick: (PlayerSettingRow.Item) -> Unit
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+) : ListAdapter<PlayerSettingRow, RecyclerView.ViewHolder>(DiffCallback) {
 
     companion object {
         private const val VIEW_TYPE_HEADER = 0
         private const val VIEW_TYPE_ITEM = 1
     }
 
-    private val rows = mutableListOf<PlayerSettingRow>()
     var currentMenuKey: Int = 0
         private set
 
     fun submitRows(menuKey: Int, newRows: List<PlayerSettingRow>) {
         currentMenuKey = menuKey
-        val diffResult = DiffUtil.calculateDiff(PlayerSettingRowDiff(rows, newRows))
-        rows.clear()
-        rows.addAll(newRows)
-        diffResult.dispatchUpdatesTo(this)
+        submitList(newRows)
     }
 
     override fun getItemViewType(position: Int): Int {
-        return when (rows[position]) {
+        return when (getItem(position)) {
             is PlayerSettingRow.Header -> VIEW_TYPE_HEADER
             is PlayerSettingRow.Item -> VIEW_TYPE_ITEM
         }
@@ -53,13 +47,11 @@ internal class PlayerSettingListAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        when (val row = rows[position]) {
+        when (val row = getItem(position)) {
             is PlayerSettingRow.Header -> (holder as HeaderViewHolder).bind(row)
             is PlayerSettingRow.Item -> (holder as ItemViewHolder).bind(row)
         }
     }
-
-    override fun getItemCount(): Int = rows.size
 
     private class HeaderViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val titleView: TextView = view.findViewById(R.id.textView)
@@ -116,18 +108,8 @@ internal class PlayerSettingListAdapter(
         }
     }
 
-    private class PlayerSettingRowDiff(
-        private val oldList: List<PlayerSettingRow>,
-        private val newList: List<PlayerSettingRow>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            val oldItem = oldList[oldItemPosition]
-            val newItem = newList[newItemPosition]
+    private object DiffCallback : DiffUtil.ItemCallback<PlayerSettingRow>() {
+        override fun areItemsTheSame(oldItem: PlayerSettingRow, newItem: PlayerSettingRow): Boolean {
             return when {
                 oldItem is PlayerSettingRow.Header && newItem is PlayerSettingRow.Header ->
                     oldItem.title == newItem.title && oldItem.subTitle == newItem.subTitle
@@ -139,8 +121,8 @@ internal class PlayerSettingListAdapter(
             }
         }
 
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
+        override fun areContentsTheSame(oldItem: PlayerSettingRow, newItem: PlayerSettingRow): Boolean {
+            return oldItem == newItem
         }
     }
 }

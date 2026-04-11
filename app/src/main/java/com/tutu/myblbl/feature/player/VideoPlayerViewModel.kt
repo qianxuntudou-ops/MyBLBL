@@ -353,7 +353,7 @@ class VideoPlayerViewModel(
         _interactionModel.value = null
         _videoSnapshot.value = null
         _error.value = null
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             runCatching { playInfoGateway.warmupWbiKeys() }
         }
 

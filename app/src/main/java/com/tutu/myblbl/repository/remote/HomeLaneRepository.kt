@@ -18,8 +18,6 @@ import com.tutu.myblbl.model.series.timeline.TimeLineADayModel
 import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.repository.UserRepository
 import com.tutu.myblbl.core.common.log.AppLog
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -44,22 +42,20 @@ class HomeLaneRepository(
         cursor: Long = 0,
         isRefresh: Boolean = true
     ): Result<HomeLanePage> {
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                AppLog.d(TAG, "getHomeLanes start: type=$type, cursor=$cursor, isRefresh=$isRefresh")
-                fetchReferenceAlignedHomeLanes(type = type, cursor = cursor, isRefresh = isRefresh)
-            }.onSuccess { page ->
-                AppLog.d(
-                    TAG,
-                    "getHomeLanes success: type=$type, isRefresh=$isRefresh, sections=${page.sections.size}, nextCursor=${page.nextCursor}, hasMore=${page.hasMore}"
-                )
-            }.onFailure { throwable ->
-                AppLog.e(
-                    TAG,
-                    "getHomeLanes failure: type=$type, cursor=$cursor, isRefresh=$isRefresh, message=${throwable.message}",
-                    throwable
-                )
-            }
+        return runCatching {
+            AppLog.d(TAG, "getHomeLanes start: type=$type, cursor=$cursor, isRefresh=$isRefresh")
+            fetchReferenceAlignedHomeLanes(type = type, cursor = cursor, isRefresh = isRefresh)
+        }.onSuccess { page ->
+            AppLog.d(
+                TAG,
+                "getHomeLanes success: type=$type, isRefresh=$isRefresh, sections=${page.sections.size}, nextCursor=${page.nextCursor}, hasMore=${page.hasMore}"
+            )
+        }.onFailure { throwable ->
+            AppLog.e(
+                TAG,
+                "getHomeLanes failure: type=$type, cursor=$cursor, isRefresh=$isRefresh, message=${throwable.message}",
+                throwable
+            )
         }
     }
 
@@ -117,20 +113,18 @@ class HomeLaneRepository(
     }
 
     suspend fun getAnimationTimelineSection(): Result<HomeLaneSection?> {
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val response = apiService.getSeriesTimeLine(
-                    type = SeriesType.ANIME,
-                    before = 6,
-                    after = 6
-                )
-                if (response.code != 0) {
-                    throw IllegalStateException(response.message)
-                }
-                buildTimelineSection(response.result)
-            }.onFailure { throwable ->
-                AppLog.e(TAG, "getAnimationTimelineSection failure: ${throwable.message}", throwable)
+        return runCatching {
+            val response = apiService.getSeriesTimeLine(
+                type = SeriesType.ANIME,
+                before = 6,
+                after = 6
+            )
+            if (response.code != 0) {
+                throw IllegalStateException(response.message)
             }
+            buildTimelineSection(response.result)
+        }.onFailure { throwable ->
+            AppLog.e(TAG, "getAnimationTimelineSection failure: ${throwable.message}", throwable)
         }
     }
 

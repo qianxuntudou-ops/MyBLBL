@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.util.TypedValue
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellSeriesFilterBinding
@@ -17,13 +18,22 @@ class AllSeriesFilterAdapter(
     private val onItemFocused: (() -> Unit)? = null,
     private val onTopEdgeUp: (() -> Boolean)? = null,
     private val onLeftEdge: (() -> Boolean)? = null
-) : RecyclerView.Adapter<AllSeriesFilterAdapter.FilterViewHolder>() {
+) : ListAdapter<AllSeriesFilterModel, AllSeriesFilterAdapter.FilterViewHolder>(DIFF_CALLBACK) {
 
     companion object {
         private const val TAG = "AllSeriesFocus"
+
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<AllSeriesFilterModel>() {
+            override fun areItemsTheSame(oldItem: AllSeriesFilterModel, newItem: AllSeriesFilterModel): Boolean {
+                return oldItem.key == newItem.key && oldItem.title == newItem.title
+            }
+
+            override fun areContentsTheSame(oldItem: AllSeriesFilterModel, newItem: AllSeriesFilterModel): Boolean {
+                return oldItem == newItem
+            }
+        }
     }
 
-    private val items = mutableListOf<AllSeriesFilterModel>()
     private var expanded = false
     private var focusedPosition = RecyclerView.NO_POSITION
     private var pendingFocusPosition = RecyclerView.NO_POSITION
@@ -31,12 +41,8 @@ class AllSeriesFilterAdapter(
         private set
 
     fun setData(data: List<AllSeriesFilterModel>) {
-        val oldItems = items.toList()
-        val diffResult = DiffUtil.calculateDiff(FilterDiffCallback(oldItems, data))
         focusedView = null
-        items.clear()
-        items.addAll(data)
-        diffResult.dispatchUpdatesTo(this)
+        submitList(data)
     }
 
     fun requestFocusedView(): Boolean {
@@ -94,7 +100,7 @@ class AllSeriesFilterAdapter(
     }
 
     override fun onBindViewHolder(holder: FilterViewHolder, position: Int) {
-        holder.bind(items[position], position, expanded)
+        holder.bind(getItem(position), position, expanded)
         if (pendingFocusPosition == position) {
             AppLog.d(TAG, "adapter onBind pending focus: position=$position")
             holder.itemView.post {
@@ -111,30 +117,8 @@ class AllSeriesFilterAdapter(
         }
     }
 
-    override fun getItemCount(): Int = items.size
-
     private fun holderBindingAdapterPosition(view: android.view.View): Int {
         return (view.parent as? RecyclerView)?.getChildAdapterPosition(view) ?: RecyclerView.NO_POSITION
-    }
-
-    private class FilterDiffCallback(
-        private val oldItems: List<AllSeriesFilterModel>,
-        private val newItems: List<AllSeriesFilterModel>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldItems.size
-
-        override fun getNewListSize(): Int = newItems.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            val oldItem = oldItems[oldItemPosition]
-            val newItem = newItems[newItemPosition]
-            return oldItem.key == newItem.key && oldItem.title == newItem.title
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldItems[oldItemPosition] == newItems[newItemPosition]
-        }
     }
 
     class FilterViewHolder(

@@ -5,25 +5,21 @@ import com.tutu.myblbl.model.user.ScanQrModel
 import com.tutu.myblbl.model.user.SignInResultModel
 import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.network.session.NetworkSessionGateway
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 class AuthRepository(
     private val apiService: ApiService,
     private val sessionGateway: NetworkSessionGateway
 ) {
 
-    suspend fun getQrCode(): Result<BaseResponse<ScanQrModel>> = withContext(Dispatchers.IO) {
+    suspend fun getQrCode(): Result<BaseResponse<ScanQrModel>> =
         runCatching {
             apiService.getSignInQrCode()
         }
-    }
 
-    suspend fun checkSignInResult(qrcodeKey: String): Result<BaseResponse<SignInResultModel>> = withContext(Dispatchers.IO) {
+    suspend fun checkSignInResult(qrcodeKey: String): Result<BaseResponse<SignInResultModel>> =
         runCatching {
             apiService.checkSignInResult(qrcodeKey)
         }
-    }
 
     fun getCsrfToken(): String = sessionGateway.getCsrfToken()
 

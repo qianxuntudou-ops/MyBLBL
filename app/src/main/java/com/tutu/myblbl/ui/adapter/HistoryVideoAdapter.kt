@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellVideoBinding
@@ -25,13 +26,11 @@ class HistoryVideoAdapter(
     private val onItemClick: (HistoryVideoModel) -> Unit,
     private val onTopEdgeUp: (() -> Boolean)? = null,
     private val onItemFocused: ((Int) -> Unit)? = null
-) : RecyclerView.Adapter<HistoryVideoAdapter.ViewHolder>() {
+) : ListAdapter<HistoryVideoModel, HistoryVideoAdapter.ViewHolder>(DiffCallback) {
 
-    private val items = mutableListOf<HistoryVideoModel>()
     private var focusedPosition = RecyclerView.NO_POSITION
     var focusedView: View? = null
         private set
-    private var attachedRecyclerView: RecyclerView? = null
 
     init {
         setHasStableIds(true)
@@ -39,38 +38,26 @@ class HistoryVideoAdapter(
 
     fun setData(newItems: List<HistoryVideoModel>) {
         val deduplicated = newItems.distinctBy(::itemKey)
-        val oldList = items.toList()
-        val diffResult = DiffUtil.calculateDiff(HistoryVideoDiffCallback(oldList, deduplicated))
-        items.clear()
-        items.addAll(deduplicated)
         focusedPosition = focusedPosition
-            .takeIf { it != RecyclerView.NO_POSITION && it < items.size && hasActiveFocus() }
+            .takeIf { it != RecyclerView.NO_POSITION && it < deduplicated.size && hasActiveFocus() }
             ?: RecyclerView.NO_POSITION
-        diffResult.dispatchUpdatesTo(this)
+        submitList(deduplicated)
     }
 
     fun addData(newItems: List<HistoryVideoModel>) {
         val deduplicated = newItems
             .distinctBy(::itemKey)
-            .filter { incoming -> items.none { existing -> itemKey(existing) == itemKey(incoming) } }
-        if (deduplicated.isEmpty()) {
-            return
-        }
-        val startPosition = items.size
-        items.addAll(deduplicated)
-        notifyItemRangeInserted(startPosition, deduplicated.size)
+            .filter { incoming -> currentList.none { existing -> itemKey(existing) == itemKey(incoming) } }
+        if (deduplicated.isEmpty()) return
+        submitList(currentList + deduplicated)
     }
 
     fun updateProgress(aid: Long, progress: Long, duration: Long) {
-        if (aid <= 0L) {
-            return
-        }
-        val index = items.indexOfFirst { (it.history?.oid ?: 0L) == aid }
-        if (index < 0) {
-            return
-        }
-        items[index] = items[index].copy(progress = progress, duration = duration)
-        notifyItemChangedSafely(index)
+        if (aid <= 0L) return
+        submitList(currentList.map {
+            if ((it.history?.oid ?: 0L) == aid) it.copy(progress = progress, duration = duration)
+            else it
+        })
     }
 
     fun updateProgressFromPlayer(
@@ -78,40 +65,35 @@ class HistoryVideoAdapter(
         cid: Long,
         @Suppress("UNUSED_PARAMETER") pageOrProgressMs: Long
     ) {
-        if (aid <= 0L) {
-            return
-        }
-        val index = items.indexOfFirst { (it.history?.oid ?: 0L) == aid }
-        if (index < 0) {
-            return
-        }
-        val item = items[index]
+        if (aid <= 0L) return
+        val index = currentList.indexOfFirst { (it.history?.oid ?: 0L) == aid }
+        if (index < 0) return
+        val item = currentList[index]
         val updatedItem = item.copy(
             history = item.history?.copy(cid = cid),
             progress = pageOrProgressMs.coerceAtLeast(0L) / 1000L,
             viewAt = System.currentTimeMillis() / 1000L
         )
-        items[index] = updatedItem
         if (index == 0) {
-            notifyItemChangedSafely(0)
+            submitList(currentList.mapIndexed { i, v -> if (i == 0) updatedItem else v })
             return
         }
-        items.removeAt(index)
-        items.add(0, updatedItem)
+        val newList = currentList.toMutableList()
+        newList.removeAt(index)
+        newList.add(0, updatedItem)
         if (focusedPosition == index) {
             focusedPosition = 0
         } else if (focusedPosition in 0 until index) {
             focusedPosition += 1
         }
-        notifyItemMovedSafely(index, 0)
-        notifyItemChangedSafely(0)
+        submitList(newList)
     }
 
     fun getFocusedPosition(): Int = focusedPosition
 
-    fun getItemsSnapshot(): List<HistoryVideoModel> = items.toList()
+    fun getItemsSnapshot(): List<HistoryVideoModel> = currentList.toList()
 
-    fun findPositionByKey(key: String): Int = items.indexOfFirst { itemKey(it) == key }
+    fun findPositionByKey(key: String): Int = currentList.indexOfFirst { itemKey(it) == key }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = CellVideoBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -138,40 +120,19 @@ class HistoryVideoAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(items[position], position == focusedPosition && hasActiveFocus())
+        holder.bind(getItem(position), position == focusedPosition && hasActiveFocus())
     }
 
-    override fun getItemCount(): Int = items.size
-
-    override fun getItemId(position: Int): Long = itemKey(items[position]).hashCode().toLong()
+    override fun getItemId(position: Int): Long = itemKey(getItem(position)).hashCode().toLong()
 
     private fun removeBlockedItems(blockedName: String) {
-        val oldList = items.toList()
-        val filtered = oldList.filter { !it.authorName.equals(blockedName, ignoreCase = true) }
-        if (filtered.size == oldList.size) return
-        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
-            override fun getOldListSize(): Int = oldList.size
-            override fun getNewListSize(): Int = filtered.size
-            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean =
-                itemKey(oldList[oldPos]) == itemKey(filtered[newPos])
-            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean =
-                oldList[oldPos] == filtered[newPos]
-        })
-        items.clear()
-        items.addAll(filtered)
-        diffResult.dispatchUpdatesTo(this)
+        val filtered = currentList.filter { !it.authorName.equals(blockedName, ignoreCase = true) }
+        if (filtered.size == currentList.size) return
+        submitList(filtered)
         focusedView?.requestFocus()
     }
 
-    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
-        super.onAttachedToRecyclerView(recyclerView)
-        attachedRecyclerView = recyclerView
-    }
-
     override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
-        if (attachedRecyclerView === recyclerView) {
-            attachedRecyclerView = null
-        }
         focusedView = null
         focusedPosition = RecyclerView.NO_POSITION
         super.onDetachedFromRecyclerView(recyclerView)
@@ -183,24 +144,6 @@ class HistoryVideoAdapter(
             focusedPosition = RecyclerView.NO_POSITION
         }
         super.onViewRecycled(holder)
-    }
-
-    private fun notifyItemChangedSafely(position: Int) {
-        val recyclerView = attachedRecyclerView
-        if (recyclerView != null && recyclerView.isComputingLayout) {
-            recyclerView.post { notifyItemChanged(position) }
-        } else {
-            notifyItemChanged(position)
-        }
-    }
-
-    private fun notifyItemMovedSafely(fromPosition: Int, toPosition: Int) {
-        val recyclerView = attachedRecyclerView
-        if (recyclerView != null && recyclerView.isComputingLayout) {
-            recyclerView.post { notifyItemMoved(fromPosition, toPosition) }
-        } else {
-            notifyItemMoved(fromPosition, toPosition)
-        }
     }
 
     private fun setFocusedState(view: View?, focused: Boolean) {
@@ -336,21 +279,15 @@ class HistoryVideoAdapter(
         }
     }
 
-    private class HistoryVideoDiffCallback(
-        private val oldList: List<HistoryVideoModel>,
-        private val newList: List<HistoryVideoModel>
-    ) : DiffUtil.Callback() {
+    companion object {
+        private val DiffCallback = object : DiffUtil.ItemCallback<HistoryVideoModel>() {
+            override fun areItemsTheSame(oldItem: HistoryVideoModel, newItem: HistoryVideoModel): Boolean {
+                return itemKey(oldItem) == itemKey(newItem)
+            }
 
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return itemKey(oldList[oldItemPosition]) == itemKey(newList[newItemPosition])
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
+            override fun areContentsTheSame(oldItem: HistoryVideoModel, newItem: HistoryVideoModel): Boolean {
+                return oldItem == newItem
+            }
         }
     }
 }

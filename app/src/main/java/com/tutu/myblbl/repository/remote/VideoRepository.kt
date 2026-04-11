@@ -17,8 +17,6 @@ import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.network.response.ListDataModel
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.network.cookie.CookieManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 class VideoRepository(
     private val apiService: ApiService,
@@ -34,22 +32,20 @@ class VideoRepository(
     suspend fun getRecommendList(
         freshIdx: Int,
         pageSize: Int
-    ): Result<BaseResponse<RecommendListDataModel<VideoModel>>> = withContext(Dispatchers.IO) {
+    ): Result<BaseResponse<RecommendListDataModel<VideoModel>>> =
         runCatching {
             apiService.getRecommendList(
                 freshIdx = freshIdx.coerceAtLeast(1),
                 ps = pageSize
             )
         }
-    }
 
-    suspend fun getHotList(page: Int, pageSize: Int): Result<BaseResponse<List<VideoModel>>> = withContext(Dispatchers.IO) {
+    suspend fun getHotList(page: Int, pageSize: Int): Result<BaseResponse<List<VideoModel>>> =
         runCatching {
             apiService.getHotList(page, pageSize).mapListData()
         }
-    }
 
-    suspend fun getRanking(rid: Int): Result<BaseResponse<List<VideoModel>>> = withContext(Dispatchers.IO) {
+    suspend fun getRanking(rid: Int): Result<BaseResponse<List<VideoModel>>> =
         runCatching {
             val firstResponse = apiService.getRanking(rid)
             if (firstResponse.code == -352) {
@@ -60,23 +56,21 @@ class VideoRepository(
                 firstResponse.mapListData()
             }
         }
-    }
 
     suspend fun getRegionLatestVideos(
         rid: Int,
         page: Int,
         pageSize: Int
-    ): Result<BaseResponse<RegionVideoListWrapper>> = withContext(Dispatchers.IO) {
+    ): Result<BaseResponse<RegionVideoListWrapper>> =
         runCatching {
             apiService.getRegionLatestVideos(rid = rid, page = page, pageSize = pageSize)
         }
-    }
 
     suspend fun getVideoByChannel(
         channelId: Long,
         offset: String,
         pageSize: Int = 30
-    ): Result<BaseResponse<GetVideoByChannelWrapper>> = withContext(Dispatchers.IO) {
+    ): Result<BaseResponse<GetVideoByChannelWrapper>> =
         runCatching {
             apiService.getVideoByChannel(
                 channelId = channelId,
@@ -84,75 +78,66 @@ class VideoRepository(
                 pageSize = pageSize
             )
         }
-    }
 
-    suspend fun getVideoDetail(aid: Long?, bvid: String?): Result<BaseResponse<VideoDetailModel>> = withContext(Dispatchers.IO) {
+    suspend fun getVideoDetail(aid: Long?, bvid: String?): Result<BaseResponse<VideoDetailModel>> =
         runCatching {
             apiService.getVideoDetail(aid, bvid)
         }
-    }
 
-    suspend fun getVideoPv(aid: Long?, bvid: String?): Result<BaseResponse<List<VideoPvModel>>> = withContext(Dispatchers.IO) {
+    suspend fun getVideoPv(aid: Long?, bvid: String?): Result<BaseResponse<List<VideoPvModel>>> =
         runCatching {
             apiService.getVideoPv(aid, bvid)
         }
-    }
 
-    suspend fun getVideoPlayInfo(aid: Long?, bvid: String?, cid: Long): Result<BaseResponse<PlayInfoModel>> = withContext(Dispatchers.IO) {
+    suspend fun getVideoPlayInfo(aid: Long?, bvid: String?, cid: Long): Result<BaseResponse<PlayInfoModel>> =
         runCatching {
             apiService.getVideoPlayInfo(aid, bvid, cid)
         }
-    }
 
-    suspend fun getRelated(aid: Long?, bvid: String?): Result<BaseResponse<List<VideoModel>>> = withContext(Dispatchers.IO) {
+    suspend fun getRelated(aid: Long?, bvid: String?): Result<BaseResponse<List<VideoModel>>> =
         runCatching {
             apiService.getRelated(aid, bvid)
         }
-    }
 
-    suspend fun like(avid: Long?, bvid: String?, like: Int, csrf: String): Result<BaseResponse<Int>> = withContext(Dispatchers.IO) {
+    suspend fun like(avid: Long?, bvid: String?, like: Int, csrf: String): Result<BaseResponse<Int>> =
         runCatching {
             sessionGateway.syncAuthState(
                 apiService.like(avid, bvid, like, csrf),
                 source = "video.like"
             )
         }
-    }
 
-    suspend fun hasLike(avid: Long?, bvid: String?): Result<BaseResponse<Int>> = withContext(Dispatchers.IO) {
+    suspend fun hasLike(avid: Long?, bvid: String?): Result<BaseResponse<Int>> =
         runCatching {
             sessionGateway.syncAuthState(
                 apiService.hasLike(avid, bvid),
                 source = "video.hasLike"
             )
         }
-    }
 
-    suspend fun giveCoin(avid: Long?, bvid: String?, multiply: Int, selectLike: Int, csrf: String): Result<BaseResponse<GiveCoinResultModel>> = withContext(Dispatchers.IO) {
+    suspend fun giveCoin(avid: Long?, bvid: String?, multiply: Int, selectLike: Int, csrf: String): Result<BaseResponse<GiveCoinResultModel>> =
         runCatching {
             sessionGateway.syncAuthState(
                 apiService.giveCoin(avid, bvid, multiply, selectLike, csrf),
                 source = "video.giveCoin"
             )
         }
-    }
 
-    suspend fun hasGiveCoin(avid: Long?, bvid: String?): Result<BaseResponse<CheckGiveCoinModel>> = withContext(Dispatchers.IO) {
+    suspend fun hasGiveCoin(avid: Long?, bvid: String?): Result<BaseResponse<CheckGiveCoinModel>> =
         runCatching {
             sessionGateway.syncAuthState(
                 apiService.hasGiveCoin(avid, bvid),
                 source = "video.hasGiveCoin"
             )
         }
-    }
 
-    suspend fun tripleAction(avid: Long?, bvid: String?, csrf: String): Result<BaseResponse<TripleActionResultModel>> = withContext(Dispatchers.IO) {
+    suspend fun tripleAction(avid: Long?, bvid: String?, csrf: String): Result<BaseResponse<TripleActionResultModel>> =
         runCatching {
             val hasSessdata = cookieManager.getCookieValue("SESSDATA")?.isNotBlank() ?: false
             val hasBuvid3 = cookieManager.getCookieValue("buvid3")?.isNotBlank() ?: false
             val hasBuvid4 = cookieManager.getCookieValue("buvid4")?.isNotBlank() ?: false
             AppLog.d(TAG, "tripleAction called: aid=$avid, bvid=$bvid, csrf=${if (csrf.isBlank()) "EMPTY" else "HAS_VALUE"}")
-            AppLog.d(TAG, "Cookie check: SESSDATA=${hasSessdata}, buvid3=${hasBuvid3}, buvid4=${hasBuvid4}")
+            AppLog.d(TAG, "Cookie check: SESSDATA=$hasSessdata, buvid3=$hasBuvid3, buvid4=$hasBuvid4")
             
             securityGateway.prewarmWebSession()
             val firstResponse = sessionGateway.syncAuthState(
@@ -173,7 +158,6 @@ class VideoRepository(
                 firstResponse
             }
         }
-    }
 
     private fun BaseResponse<ListDataModel<VideoModel>>.mapListData(): BaseResponse<List<VideoModel>> {
         return BaseResponse(

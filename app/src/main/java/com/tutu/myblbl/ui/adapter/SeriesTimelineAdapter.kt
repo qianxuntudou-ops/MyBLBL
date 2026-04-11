@@ -4,6 +4,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellMovieBinding
@@ -18,21 +19,33 @@ class SeriesTimelineAdapter(
     private val enableSidebarExit: Boolean = true,
     private val onTopEdgeUp: (() -> Boolean)? = null,
     private val onLeftEdge: (() -> Boolean)? = null
-) : RecyclerView.Adapter<SeriesTimelineAdapter.SeriesTimelineViewHolder>() {
+) : ListAdapter<SeriesTimeLineModel, SeriesTimelineAdapter.SeriesTimelineViewHolder>(DIFF_CALLBACK) {
 
-    private val items = mutableListOf<SeriesTimeLineModel>()
     var focusedView: View? = null
         private set
 
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<SeriesTimeLineModel>() {
+            override fun areItemsTheSame(oldItem: SeriesTimeLineModel, newItem: SeriesTimeLineModel): Boolean {
+                return when {
+                    oldItem.seasonId > 0L && newItem.seasonId > 0L -> oldItem.seasonId == newItem.seasonId
+                    oldItem.episodeId > 0L && newItem.episodeId > 0L -> oldItem.episodeId == newItem.episodeId
+                    oldItem.pubTs > 0L && newItem.pubTs > 0L -> oldItem.pubTs == newItem.pubTs
+                    else -> oldItem.title == newItem.title && oldItem.pubTime == newItem.pubTime
+                }
+            }
+
+            override fun areContentsTheSame(oldItem: SeriesTimeLineModel, newItem: SeriesTimeLineModel): Boolean {
+                return oldItem == newItem
+            }
+        }
+    }
+
     fun setData(newItems: List<SeriesTimeLineModel>) {
-        val oldList = items.toList()
-        val diffResult = DiffUtil.calculateDiff(SeriesTimelineDiffCallback(oldList, newItems))
         if (trackFocusedView) {
             focusedView = null
         }
-        items.clear()
-        items.addAll(newItems)
-        diffResult.dispatchUpdatesTo(this)
+        submitList(newItems)
     }
 
     fun requestFocusedView(): Boolean {
@@ -66,10 +79,8 @@ class SeriesTimelineAdapter(
     }
 
     override fun onBindViewHolder(holder: SeriesTimelineViewHolder, position: Int) {
-        holder.bind(items[position])
+        holder.bind(getItem(position))
     }
-
-    override fun getItemCount(): Int = items.size
 
     class SeriesTimelineViewHolder(
         private val binding: CellMovieBinding,
@@ -131,31 +142,6 @@ class SeriesTimelineAdapter(
             return listOf(dayText, item.pubTime.trim())
                 .filter { it.isNotBlank() }
                 .joinToString(" ")
-        }
-    }
-
-    private class SeriesTimelineDiffCallback(
-        private val oldList: List<SeriesTimeLineModel>,
-        private val newList: List<SeriesTimeLineModel>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            val oldItem = oldList[oldItemPosition]
-            val newItem = newList[newItemPosition]
-            return when {
-                oldItem.seasonId > 0L && newItem.seasonId > 0L -> oldItem.seasonId == newItem.seasonId
-                oldItem.episodeId > 0L && newItem.episodeId > 0L -> oldItem.episodeId == newItem.episodeId
-                oldItem.pubTs > 0L && newItem.pubTs > 0L -> oldItem.pubTs == newItem.pubTs
-                else -> oldItem.title == newItem.title && oldItem.pubTime == newItem.pubTime
-            }
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
         }
     }
 }

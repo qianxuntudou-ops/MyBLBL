@@ -4,6 +4,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.tutu.myblbl.R
@@ -14,19 +15,22 @@ import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
 class LiveAreaAdapter(
     private val onItemClick: (LiveAreaCategory) -> Unit,
     private val onTopEdgeUp: (() -> Boolean)? = null
-) : RecyclerView.Adapter<LiveAreaAdapter.ViewHolder>() {
+) : ListAdapter<LiveAreaCategory, LiveAreaAdapter.ViewHolder>(DIFF_CALLBACK) {
 
-    private val data = mutableListOf<LiveAreaCategory>()
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<LiveAreaCategory>() {
+            override fun areItemsTheSame(oldItem: LiveAreaCategory, newItem: LiveAreaCategory): Boolean {
+                return oldItem.id == newItem.id
+            }
+
+            override fun areContentsTheSame(oldItem: LiveAreaCategory, newItem: LiveAreaCategory): Boolean {
+                return oldItem == newItem
+            }
+        }
+    }
 
     fun setData(list: List<LiveAreaCategory>) {
-        val diffResult = DiffUtil.calculateDiff(
-            SimpleDiffCallback(data, list) { oldItem, newItem ->
-                oldItem.id == newItem.id
-            }
-        )
-        data.clear()
-        data.addAll(list)
-        diffResult.dispatchUpdatesTo(this)
+        submitList(list)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -39,10 +43,8 @@ class LiveAreaAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(data[position])
+        holder.bind(getItem(position))
     }
-
-    override fun getItemCount(): Int = data.size
 
     inner class ViewHolder(
         private val binding: CellUserBinding
@@ -53,7 +55,7 @@ class LiveAreaAdapter(
             binding.root.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
-                    onItemClick(data[position])
+                    onItemClick(currentList[position])
                 }
             }
             VideoCardFocusHelper.bindSidebarExit(
@@ -69,24 +71,5 @@ class LiveAreaAdapter(
                 .placeholder(R.drawable.default_avatar)
                 .into(binding.imageView)
         }
-    }
-}
-
-private class SimpleDiffCallback<T>(
-    private val oldList: List<T>,
-    private val newList: List<T>,
-    private val idResolver: (T, T) -> Boolean
-) : DiffUtil.Callback() {
-
-    override fun getOldListSize(): Int = oldList.size
-
-    override fun getNewListSize(): Int = newList.size
-
-    override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-        return idResolver(oldList[oldItemPosition], newList[newItemPosition])
-    }
-
-    override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-        return oldList[oldItemPosition] == newList[newItemPosition]
     }
 }

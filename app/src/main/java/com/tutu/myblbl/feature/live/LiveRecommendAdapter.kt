@@ -5,6 +5,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.databinding.CellLaneScrollableBinding
 import com.tutu.myblbl.model.live.LiveRecommendSection
@@ -16,16 +17,23 @@ class LiveRecommendAdapter(
     private val onRoomClick: (LiveRoomItem) -> Unit,
     private val onTopEdgeUp: () -> Boolean = { false },
     private val onLeftEdge: () -> Boolean = { false }
-) : RecyclerView.Adapter<LiveRecommendAdapter.ViewHolder>() {
+) : ListAdapter<LiveRecommendSection, LiveRecommendAdapter.ViewHolder>(DIFF_CALLBACK) {
 
-    private val data = mutableListOf<LiveRecommendSection>()
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<LiveRecommendSection>() {
+            override fun areItemsTheSame(oldItem: LiveRecommendSection, newItem: LiveRecommendSection): Boolean {
+                return oldItem.title == newItem.title
+            }
+
+            override fun areContentsTheSame(oldItem: LiveRecommendSection, newItem: LiveRecommendSection): Boolean {
+                return oldItem == newItem
+            }
+        }
+    }
 
     fun setData(list: List<LiveRecommendSection>) {
-        AppLog.d("LiveRecommendAdapter", "setData: list.size=${list.size}, old size=${data.size}")
-        val diffResult = DiffUtil.calculateDiff(LiveRecommendDiff(data, list))
-        data.clear()
-        data.addAll(list)
-        diffResult.dispatchUpdatesTo(this)
+        AppLog.d("LiveRecommendAdapter", "setData: list.size=${list.size}, old size=${currentList.size}")
+        submitList(list)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -38,10 +46,8 @@ class LiveRecommendAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(data[position])
+        holder.bind(getItem(position))
     }
-
-    override fun getItemCount(): Int = data.size
 
     class ViewHolder(
         private val binding: CellLaneScrollableBinding,
@@ -77,24 +83,6 @@ class LiveRecommendAdapter(
 
         fun requestPrimaryFocus(): Boolean {
             return binding.topTitle.requestFocus()
-        }
-    }
-
-    private class LiveRecommendDiff(
-        private val oldList: List<LiveRecommendSection>,
-        private val newList: List<LiveRecommendSection>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition].title == newList[newItemPosition].title
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
         }
     }
 }

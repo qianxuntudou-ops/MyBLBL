@@ -12,8 +12,6 @@ import com.tutu.myblbl.model.live.LiveListWrapper
 import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.core.common.log.AppLog
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 data class LiveRoomPage(
     val rooms: List<LiveRoomItem> = emptyList(),
@@ -31,96 +29,83 @@ class LiveRepository(
     }
 
     suspend fun getLivePlayInfo(roomId: Long, quality: Int = DEFAULT_LIVE_QN): Result<LivePlayUrlDataModel> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val roomInfo = resolveRoomInfo(roomId)
-                if (roomInfo == null) {
-                    return@withContext Result.failure(Exception("直播间信息获取失败"))
-                }
-                if (roomInfo.liveStatus != 1) {
-                    return@withContext Result.failure(Exception("当前直播间未开播"))
-                }
+        return runCatching {
+            val roomInfo = resolveRoomInfo(roomId)
+            if (roomInfo == null) {
+                throw IllegalStateException("直播间信息获取失败")
+            }
+            if (roomInfo.liveStatus != 1) {
+                throw IllegalStateException("当前直播间未开播")
+            }
 
-                val v2Response = apiService.getLiveRoomPlayInfoV2(
-                    mapOf(
-                        "room_id" to roomInfo.realRoomId.toString(),
-                        "protocol" to "0,1",
-                        "format" to "0,1,2",
-                        "codec" to "0,1",
-                        "qn" to quality.toString(),
-                        "platform" to "web",
-                        "ptype" to "16"
-                    )
+            val v2Response = apiService.getLiveRoomPlayInfoV2(
+                mapOf(
+                    "room_id" to roomInfo.realRoomId.toString(),
+                    "protocol" to "0,1",
+                    "format" to "0,1,2",
+                    "codec" to "0,1",
+                    "qn" to quality.toString(),
+                    "platform" to "web",
+                    "ptype" to "16"
                 )
-                if (v2Response.code == 0 && v2Response.data != null) {
-                    parseV2PlayInfo(v2Response.data)?.let { playInfo ->
-                        AppLog.d(
-                            TAG,
-                            "getLivePlayInfo v2 success: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, qn=$quality, urls=${playInfo.durl?.size ?: 0}"
-                        )
-                        return@withContext Result.success(playInfo)
-                    }
-                    AppLog.e(
-                        TAG,
-                        "getLivePlayInfo v2 parse failed: roomId=$roomId, realRoomId=${roomInfo.realRoomId}"
-                    )
-                } else {
-                    AppLog.e(
-                        TAG,
-                        "getLivePlayInfo v2 failure: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, code=${v2Response.code}, message=${v2Response.errorMessage}"
-                    )
-                }
-
-                val legacyResponse = apiService.getLivePlayInfo(roomInfo.realRoomId, quality)
-                if (legacyResponse.code == 0 && legacyResponse.data != null) {
+            )
+            if (v2Response.code == 0 && v2Response.data != null) {
+                parseV2PlayInfo(v2Response.data)?.let { playInfo ->
                     AppLog.d(
                         TAG,
-                        "getLivePlayInfo legacy success: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, qn=$quality, urls=${legacyResponse.data.durl?.size ?: 0}"
+                        "getLivePlayInfo v2 success: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, qn=$quality, urls=${playInfo.durl?.size ?: 0}"
                     )
-                    Result.success(legacyResponse.data)
-                } else {
-                    AppLog.e(
-                        TAG,
-                        "getLivePlayInfo legacy failure: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, code=${legacyResponse.code}, message=${legacyResponse.errorMessage}"
-                    )
-                    Result.failure(Exception(legacyResponse.errorMessage.ifBlank { "无法获取直播流地址" }))
+                    return@runCatching playInfo
                 }
-            } catch (e: Exception) {
-                AppLog.e(TAG, "getLivePlayInfo exception: ${e.message}", e)
-                Result.failure(e)
+                AppLog.e(
+                    TAG,
+                    "getLivePlayInfo v2 parse failed: roomId=$roomId, realRoomId=${roomInfo.realRoomId}"
+                )
+            } else {
+                AppLog.e(
+                    TAG,
+                    "getLivePlayInfo v2 failure: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, code=${v2Response.code}, message=${v2Response.errorMessage}"
+                )
+            }
+
+            val legacyResponse = apiService.getLivePlayInfo(roomInfo.realRoomId, quality)
+            if (legacyResponse.code == 0 && legacyResponse.data != null) {
+                AppLog.d(
+                    TAG,
+                    "getLivePlayInfo legacy success: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, qn=$quality, urls=${legacyResponse.data.durl?.size ?: 0}"
+                )
+                legacyResponse.data
+            } else {
+                AppLog.e(
+                    TAG,
+                    "getLivePlayInfo legacy failure: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, code=${legacyResponse.code}, message=${legacyResponse.errorMessage}"
+                )
+                throw IllegalStateException(legacyResponse.errorMessage.ifBlank { "无法获取直播流地址" })
             }
         }
     }
     
     suspend fun getRecommendLive(@Suppress("UNUSED_PARAMETER") page: Int, pageSize: Int): Result<List<LiveRoomItem>> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val response = apiService.getLiveHomeList()
-                val items = response.data?.recommendRoomList
-                    ?.takeIf { it.isNotEmpty() }
-                    ?: response.data?.roomList.orEmpty().flatMap { it.list.orEmpty() }
-                if (response.code == 0 && items.isNotEmpty()) {
-                    Result.success(items.take(pageSize))
-                } else {
-                    Result.failure(Exception(response.message))
-                }
-            } catch (e: Exception) {
-                Result.failure(e)
+        return runCatching {
+            val response = apiService.getLiveHomeList()
+            val items = response.data?.recommendRoomList
+                ?.takeIf { it.isNotEmpty() }
+                ?: response.data?.roomList.orEmpty().flatMap { it.list.orEmpty() }
+            if (response.code == 0 && items.isNotEmpty()) {
+                items.take(pageSize)
+            } else {
+                throw IllegalStateException(response.message)
             }
         }
     }
 
     suspend fun getLiveRecommend(): Result<LiveListWrapper> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val response = apiService.getLiveHomeList()
-                if (response.code == 0 && response.data != null) {
-                    Result.success(response.data)
-                } else {
-                    Result.failure(Exception(response.message))
-                }
-            } catch (e: Exception) {
-                Result.failure(e)
+        return runCatching {
+            val response = apiService.getLiveHomeList()
+            if (response.code == 0 && response.data != null) {
+                response.data
+            } else {
+                throw IllegalStateException(response.message)
             }
         }
     }
@@ -130,39 +115,31 @@ class LiveRepository(
         areaId: Long,
         page: Int
     ): Result<LiveRoomPage> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val response = apiService.getAreaRoomList(
-                    parentAreaId = parentAreaId,
-                    areaId = areaId,
-                    page = page,
-                    pageSize = 30,
-                    sortType = "online"
-                )
-                if (response.code == 0 && response.data != null) {
-                    val rooms = response.data
-                    val hasMore = rooms.size >= 30
-                    Result.success(LiveRoomPage(rooms = rooms, hasMore = hasMore))
-                } else {
-                    Result.failure(Exception(response.message))
-                }
-            } catch (e: Exception) {
-                Result.failure(e)
+        return runCatching {
+            val response = apiService.getAreaRoomList(
+                parentAreaId = parentAreaId,
+                areaId = areaId,
+                page = page,
+                pageSize = 30,
+                sortType = "online"
+            )
+            if (response.code == 0 && response.data != null) {
+                val rooms = response.data
+                val hasMore = rooms.size >= 30
+                LiveRoomPage(rooms = rooms, hasMore = hasMore)
+            } else {
+                throw IllegalStateException(response.message)
             }
         }
     }
     
     suspend fun getLiveAreas(): Result<List<LiveAreaCategoryParent>> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val response = apiService.getLiveArea()
-                if (response.code == 0 && response.data != null) {
-                    Result.success(response.data)
-                } else {
-                    Result.failure(Exception(response.message))
-                }
-            } catch (e: Exception) {
-                Result.failure(e)
+        return runCatching {
+            val response = apiService.getLiveArea()
+            if (response.code == 0 && response.data != null) {
+                response.data
+            } else {
+                throw IllegalStateException(response.message)
             }
         }
     }

@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellSeriesBinding
@@ -24,29 +25,34 @@ class SeriesAdapter(
     private val nextFocusUpId: Int? = null,
     private val rememberFocusedItem: Boolean = true,
     private val onVerticalKey: ((View, Int) -> Boolean)? = null
-) : RecyclerView.Adapter<SeriesAdapter.SeriesViewHolder>() {
+) : ListAdapter<SeriesModel, SeriesAdapter.SeriesViewHolder>(DIFF_CALLBACK) {
 
-    private val items = mutableListOf<SeriesModel>()
     var focusedView: View? = null
         private set
 
-    fun getItemsSnapshot(): List<SeriesModel> = items.toList()
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<SeriesModel>() {
+            override fun areItemsTheSame(oldItem: SeriesModel, newItem: SeriesModel): Boolean {
+                return oldItem.seasonId == newItem.seasonId
+            }
+
+            override fun areContentsTheSame(oldItem: SeriesModel, newItem: SeriesModel): Boolean {
+                return oldItem == newItem
+            }
+        }
+    }
+
+    fun getItemsSnapshot(): List<SeriesModel> = currentList.toList()
 
     fun setData(newItems: List<SeriesModel>) {
-        val oldList = items.toList()
-        val diffResult = DiffUtil.calculateDiff(SeriesDiffCallback(oldList, newItems))
         if (rememberFocusedItem) {
             focusedView = null
         }
-        items.clear()
-        items.addAll(newItems)
-        diffResult.dispatchUpdatesTo(this)
+        submitList(newItems)
     }
 
     fun addData(newItems: List<SeriesModel>) {
-        val startPosition = items.size
-        items.addAll(newItems)
-        notifyItemRangeInserted(startPosition, newItems.size)
+        submitList(currentList + newItems)
     }
 
     fun requestFocusedView(): Boolean {
@@ -77,10 +83,8 @@ class SeriesAdapter(
     }
 
     override fun onBindViewHolder(holder: SeriesViewHolder, position: Int) {
-        holder.bind(items[position])
+        holder.bind(getItem(position))
     }
-
-    override fun getItemCount(): Int = items.size
 
     class SeriesViewHolder(
         private val binding: CellSeriesBinding,
@@ -185,24 +189,6 @@ class SeriesAdapter(
             }.onFailure {
                 binding.textBadge.background = drawable
             }
-        }
-    }
-
-    private class SeriesDiffCallback(
-        private val oldList: List<SeriesModel>,
-        private val newList: List<SeriesModel>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition].seasonId == newList[newItemPosition].seasonId
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
         }
     }
 }

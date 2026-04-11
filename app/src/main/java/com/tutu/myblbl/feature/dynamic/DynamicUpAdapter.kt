@@ -5,6 +5,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellFollowingBinding
@@ -17,21 +18,31 @@ class DynamicUpAdapter(
     private val onLeftEdge: () -> Boolean = { false },
     private val onRightEdge: () -> Boolean = { false },
     private val debugTag: String? = null
-) : RecyclerView.Adapter<DynamicUpAdapter.ViewHolder>() {
+) : ListAdapter<FollowingModel, DynamicUpAdapter.ViewHolder>(DIFF_CALLBACK) {
 
-    private val data = mutableListOf<FollowingModel>()
     private var selectedPosition = 0
 
-    fun setData(list: List<FollowingModel>) {
-        val oldList = data.toList()
-        val diffResult = DiffUtil.calculateDiff(FollowingDiffCallback(oldList, list))
-        data.clear()
-        data.addAll(list)
-        selectedPosition = selectedPosition.coerceIn(0, (data.lastIndex).coerceAtLeast(0))
-        diffResult.dispatchUpdatesTo(this)
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<FollowingModel>() {
+            override fun areItemsTheSame(oldItem: FollowingModel, newItem: FollowingModel): Boolean {
+                return when {
+                    oldItem.mid > 0L && newItem.mid > 0L -> oldItem.mid == newItem.mid
+                    else -> oldItem.uname == newItem.uname
+                }
+            }
+
+            override fun areContentsTheSame(oldItem: FollowingModel, newItem: FollowingModel): Boolean {
+                return oldItem == newItem
+            }
+        }
     }
 
-    fun getData(): List<FollowingModel> = data.toList()
+    fun setData(list: List<FollowingModel>) {
+        submitList(list)
+        selectedPosition = selectedPosition.coerceIn(0, (list.lastIndex).coerceAtLeast(0))
+    }
+
+    fun getData(): List<FollowingModel> = currentList.toList()
 
     fun setSelectedPosition(position: Int) {
         val oldPosition = selectedPosition
@@ -56,10 +67,8 @@ class DynamicUpAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(data[position], position == selectedPosition)
+        holder.bind(getItem(position), position == selectedPosition)
     }
-
-    override fun getItemCount(): Int = data.size
 
     inner class ViewHolder(
         private val binding: CellFollowingBinding
@@ -69,7 +78,7 @@ class DynamicUpAdapter(
             binding.root.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
-                    onItemClick(data[position])
+                    onItemClick(currentList[position])
                 }
             }
             binding.root.setOnFocusChangeListener { _, hasFocus ->
@@ -129,29 +138,6 @@ class DynamicUpAdapter(
                 KeyEvent.KEYCODE_DPAD_RIGHT -> "RIGHT"
                 else -> keyCode.toString()
             }
-        }
-    }
-
-    private class FollowingDiffCallback(
-        private val oldList: List<FollowingModel>,
-        private val newList: List<FollowingModel>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            val oldItem = oldList[oldItemPosition]
-            val newItem = newList[newItemPosition]
-            return when {
-                oldItem.mid > 0L && newItem.mid > 0L -> oldItem.mid == newItem.mid
-                else -> oldItem.uname == newItem.uname
-            }
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
         }
     }
 }

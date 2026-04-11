@@ -1,5 +1,7 @@
 package com.tutu.myblbl.feature.settings
 
+import android.media.MediaCodecList
+import android.media.MediaCodecInfo
 import android.os.Build
 import android.content.SharedPreferences
 import android.view.LayoutInflater
@@ -161,6 +163,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         deviceSettings.add(SettingModel("SDK版本", Build.VERSION.SDK_INT.toString()))
         deviceSettings.add(SettingModel("CPU架构", Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"))
         deviceSettings.add(SettingModel("屏幕分辨率", "${resources.displayMetrics.widthPixels}x${resources.displayMetrics.heightPixels}"))
+        deviceSettings.add(SettingModel("硬解支持", buildCodecSupportText()))
 
         commonSettings[0].info = formatFileSize(getCurrentCacheSize())
         restoreSavedSettings()
@@ -651,6 +654,29 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     }
 
     private fun toggleOptions(): Array<String> = arrayOf("开", "关")
+
+    private fun buildCodecSupportText(): String {
+        val decoderTypes = setOf("video/avc", "video/hevc", "video/av01")
+        val supported = mutableSetOf<String>()
+        val mcl = MediaCodecList(MediaCodecList.REGULAR_CODECS)
+        for (info in mcl.codecInfos) {
+            if (info.isEncoder) continue
+            try {
+                for (type in info.supportedTypes) {
+                    val lower = type.lowercase()
+                    when {
+                        lower == "video/avc" && lower in decoderTypes -> supported.add("AVC")
+                        lower == "video/hevc" && lower in decoderTypes -> supported.add("HEVC")
+                        lower == "video/av01" && lower in decoderTypes -> supported.add("AV1")
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+        return listOf("AVC", "HEVC", "AV1").joinToString("  ") {
+            if (it in supported) "✓$it" else "✗$it"
+        }
+    }
 
     private fun createExtraSpaceLayoutManager(extraLayoutSpacePx: Int): LinearLayoutManager {
         return object : LinearLayoutManager(requireContext()) {

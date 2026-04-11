@@ -15,8 +15,6 @@ import com.tutu.myblbl.network.WbiGenerator
 import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.network.response.BaseBaseResponse
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 class UserRepository(
     private val apiService: ApiService,
@@ -54,23 +52,19 @@ class UserRepository(
     }
     
     suspend fun getHistory(viewAt: Long, pageSize: Int): Result<BaseResponse<HistoryListResponse>> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                sessionGateway.syncAuthState(
-                    apiService.getHistory(viewAt, pageSize),
-                    source = "getHistory"
-                )
-            }
+        runCatching {
+            sessionGateway.syncAuthState(
+                apiService.getHistory(viewAt, pageSize),
+                source = "getHistory"
+            )
         }
 
     suspend fun getLaterWatch(): Result<BaseResponse<LaterWatchWrapper>> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                sessionGateway.syncAuthState(
-                    apiService.getLaterWatch(),
-                    source = "getLaterWatch"
-                )
-            }
+        runCatching {
+            sessionGateway.syncAuthState(
+                apiService.getLaterWatch(),
+                source = "getLaterWatch"
+            )
         }
 
     suspend fun getFollowing(
@@ -78,13 +72,11 @@ class UserRepository(
         page: Int = 1,
         pageSize: Int = 50
     ): Result<BaseResponse<GetFollowUserWrapper>> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                sessionGateway.syncAuthState(
-                    apiService.getFollowing(mid, page, pageSize),
-                    source = "getFollowing"
-                )
-            }
+        runCatching {
+            sessionGateway.syncAuthState(
+                apiService.getFollowing(mid, page, pageSize),
+                source = "getFollowing"
+            )
         }
 
     suspend fun getFollower(
@@ -92,43 +84,37 @@ class UserRepository(
         page: Int = 1,
         pageSize: Int = 50
     ): Result<BaseResponse<GetFollowUserWrapper>> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                sessionGateway.syncAuthState(
-                    apiService.getFollower(mid, page, pageSize),
-                    source = "getFollower"
-                )
-            }
+        runCatching {
+            sessionGateway.syncAuthState(
+                apiService.getFollower(mid, page, pageSize),
+                source = "getFollower"
+            )
         }
 
     suspend fun checkUserRelation(
         mid: Long
     ): Result<BaseResponse<CheckRelationModel>> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                sessionGateway.syncAuthState(
-                    apiService.checkUserRelation(mid.toString()),
-                    source = "checkUserRelation"
-                )
-            }
+        runCatching {
+            sessionGateway.syncAuthState(
+                apiService.checkUserRelation(mid.toString()),
+                source = "checkUserRelation"
+            )
         }
 
     suspend fun modifyRelation(
         fid: Long,
         action: Int
     ): Result<BaseBaseResponse> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val params = mapOf(
-                    "fid" to fid.toString(),
-                    "act" to action.toString(),
-                    "csrf" to sessionGateway.getCsrfToken()
-                )
-                sessionGateway.syncAuthState(
-                    apiService.userRelationModify(params),
-                    source = "modifyRelation"
-                )
-            }
+        runCatching {
+            val params = mapOf(
+                "fid" to fid.toString(),
+                "act" to action.toString(),
+                "csrf" to sessionGateway.getCsrfToken()
+            )
+            sessionGateway.syncAuthState(
+                apiService.userRelationModify(params),
+                source = "modifyRelation"
+            )
         }
 
     suspend fun getUserDynamic(
@@ -136,50 +122,42 @@ class UserRepository(
         page: Int,
         pageSize: Int = 20
     ): Result<BaseResponse<UserDynamicResponse>> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                sessionGateway.syncAuthState(
-                    apiService.getUserDynamic(mid, page, pageSize),
-                    source = "getUserDynamic"
-                )
-            }
+        runCatching {
+            sessionGateway.syncAuthState(
+                apiService.getUserDynamic(mid, page, pageSize),
+                source = "getUserDynamic"
+            )
         }
 
     suspend fun getAllDynamic(
         page: Int,
         offset: Long? = null
     ): Result<BaseResponse<AllDynamicResponse>> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                sessionGateway.syncAuthState(
-                    apiService.getAllDynamic(page, offset),
-                    source = "getAllDynamic"
-                )
-            }
+        runCatching {
+            sessionGateway.syncAuthState(
+                apiService.getAllDynamic(page, offset),
+                source = "getAllDynamic"
+            )
         }
 
     suspend fun refreshCurrentUserInfo(): Result<UserDetailInfoModel> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val response = apiService.getUserDetailInfo()
-                val info = sessionGateway.syncUserSession(
-                    response,
-                    source = "refreshCurrentUserInfo"
+        runCatching {
+            val response = apiService.getUserDetailInfo()
+            val info = sessionGateway.syncUserSession(
+                response,
+                source = "refreshCurrentUserInfo"
+            )
+                ?: throw IllegalStateException(
+                    response.errorMessage.ifEmpty { "加载用户信息失败" }
                 )
-                    ?: throw IllegalStateException(
-                        response.errorMessage.ifEmpty { "加载用户信息失败" }
-                    )
-                info
-            }
+            info
         }
 
     suspend fun resolveCurrentUserMid(): Result<Long> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                sessionGateway.getUserInfo()?.mid
-                    ?.takeIf { it > 0L }
-                    ?: refreshCurrentUserInfo().getOrThrow().mid.takeIf { it > 0L }
-                    ?: throw IllegalStateException("未获取到当前用户信息")
-            }
+        runCatching {
+            sessionGateway.getUserInfo()?.mid
+                ?.takeIf { it > 0L }
+                ?: refreshCurrentUserInfo().getOrThrow().mid.takeIf { it > 0L }
+                ?: throw IllegalStateException("未获取到当前用户信息")
         }
 }

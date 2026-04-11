@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellEpisodeBinding
@@ -30,9 +31,9 @@ class SeriesDetailContentAdapter(
     private val onSectionEpisodeClick: (VideoModel) -> Unit,
     private val onContentFocused: () -> Unit = {},
     private val onContentVerticalKey: ((View, Int) -> Boolean)? = null
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+) : ListAdapter<SeriesDetailContentAdapter.Row, RecyclerView.ViewHolder>(RowItemCallback) {
 
-    private sealed interface Row {
+    sealed interface Row {
         data class Header(
             val detail: EpisodesDetailModel,
             val followed: Boolean
@@ -52,32 +53,29 @@ class SeriesDetailContentAdapter(
         ) : Row
     }
 
-    private val rows = mutableListOf<Row>()
     private var lastFocusedRowPosition = RecyclerView.NO_POSITION
 
     fun submit(detail: EpisodesDetailModel?, isFollowed: Boolean) {
         val newRows = buildRows(detail, isFollowed)
-        if (rows == newRows) {
+        if (currentList == newRows) {
             return
         }
-        val diffResult = DiffUtil.calculateDiff(RowDiffCallback(rows, newRows))
-        rows.clear()
-        rows.addAll(newRows)
-        lastFocusedRowPosition = rows.lastIndex
+        lastFocusedRowPosition = newRows.lastIndex
             .takeIf { it >= 0 }
             ?.let { lastFocusedRowPosition.coerceAtMost(it) }
             ?: RecyclerView.NO_POSITION
-        diffResult.dispatchUpdatesTo(this)
+        submitList(newRows)
     }
 
     fun updateHeader(detail: EpisodesDetailModel?, isFollowed: Boolean) {
-        val headerIndex = rows.indexOfFirst { it is Row.Header }
+        val headerIndex = currentList.indexOfFirst { it is Row.Header }
         if (detail == null || headerIndex == -1) {
             submit(detail, isFollowed)
             return
         }
-        rows[headerIndex] = Row.Header(detail, isFollowed)
-        notifyItemChanged(headerIndex)
+        val newList = currentList.toMutableList()
+        newList[headerIndex] = Row.Header(detail, isFollowed)
+        submitList(newList)
     }
 
     fun requestLastFocusedView(recyclerView: RecyclerView): Boolean {
@@ -93,7 +91,7 @@ class SeriesDetailContentAdapter(
     }
 
     override fun getItemViewType(position: Int): Int {
-        return when (rows[position]) {
+        return when (getItem(position)) {
             is Row.Header -> VIEW_TYPE_HEADER
             is Row.Episodes -> VIEW_TYPE_EPISODES
             is Row.Section -> VIEW_TYPE_SECTION
@@ -128,15 +126,13 @@ class SeriesDetailContentAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        when (val row = rows[position]) {
+        when (val row = getItem(position)) {
             is Row.Header -> (holder as HeaderViewHolder).bind(row.detail, row.followed)
             is Row.Episodes -> (holder as EpisodeLaneViewHolder).bind(row.items)
             is Row.Section -> (holder as SectionLaneViewHolder).bind(row.section)
             is Row.Seasons -> (holder as SeasonLaneViewHolder).bind(row.title, row.items)
         }
     }
-
-    override fun getItemCount(): Int = rows.size
 
     private class HeaderViewHolder(
         private val binding: CellSeriesHeadBinding,
@@ -403,20 +399,16 @@ class SeriesDetailContentAdapter(
         private val onItemClick: (VideoModel) -> Unit,
         private val onItemFocused: (() -> Unit)? = null,
         private val onVerticalKey: ((View, Int) -> Boolean)? = null
-    ) : RecyclerView.Adapter<SectionEpisodeAdapter.SectionEpisodeViewHolder>() {
+    ) : ListAdapter<VideoModel, SectionEpisodeAdapter.SectionEpisodeViewHolder>(VideoItemCallback) {
 
-        private val items = mutableListOf<VideoModel>()
         private var focusedView: View? = null
 
         fun setItems(data: List<VideoModel>) {
-            if (items == data) {
+            if (currentList == data) {
                 return
             }
             focusedView = null
-            val diffResult = DiffUtil.calculateDiff(VideoDiffCallback(items, data))
-            items.clear()
-            items.addAll(data)
-            diffResult.dispatchUpdatesTo(this)
+            submitList(data)
         }
 
         fun requestFocusedView(): Boolean {
@@ -441,10 +433,8 @@ class SeriesDetailContentAdapter(
         }
 
         override fun onBindViewHolder(holder: SectionEpisodeViewHolder, position: Int) {
-            holder.bind(items[position])
+            holder.bind(getItem(position))
         }
-
-        override fun getItemCount(): Int = items.size
 
         class SectionEpisodeViewHolder(
             private val binding: CellEpisodeBinding,
@@ -501,6 +491,23 @@ class SeriesDetailContentAdapter(
                 }
             }
         }
+
+        companion object {
+            private val VideoItemCallback = object : DiffUtil.ItemCallback<VideoModel>() {
+                override fun areItemsTheSame(oldItem: VideoModel, newItem: VideoModel): Boolean {
+                    return when {
+                        oldItem.aid > 0 && newItem.aid > 0 -> oldItem.aid == newItem.aid
+                        oldItem.bvid.isNotBlank() && newItem.bvid.isNotBlank() -> oldItem.bvid == newItem.bvid
+                        oldItem.cid > 0 && newItem.cid > 0 -> oldItem.cid == newItem.cid
+                        else -> oldItem == newItem
+                    }
+                }
+
+                override fun areContentsTheSame(oldItem: VideoModel, newItem: VideoModel): Boolean {
+                    return oldItem == newItem
+                }
+            }
+        }
     }
 
     companion object {
@@ -508,6 +515,25 @@ class SeriesDetailContentAdapter(
         private const val VIEW_TYPE_EPISODES = 1
         private const val VIEW_TYPE_SECTION = 2
         private const val VIEW_TYPE_SEASONS = 3
+
+        private val RowItemCallback = object : DiffUtil.ItemCallback<Row>() {
+            override fun areItemsTheSame(oldItem: Row, newItem: Row): Boolean {
+                return stableId(oldItem) == stableId(newItem)
+            }
+
+            override fun areContentsTheSame(oldItem: Row, newItem: Row): Boolean {
+                return oldItem == newItem
+            }
+
+            private fun stableId(row: Row): String {
+                return when (row) {
+                    is Row.Header -> "header"
+                    is Row.Episodes -> "episodes"
+                    is Row.Section -> "section:${row.section.id}:${row.section.type}:${row.section.title}"
+                    is Row.Seasons -> "seasons:${row.title}"
+                }
+            }
+        }
     }
 
     private fun updateFocusedRow(position: Int) {
@@ -545,58 +571,6 @@ class SeriesDetailContentAdapter(
                         )
                     )
                 }
-        }
-    }
-
-    private class RowDiffCallback(
-        private val oldRows: List<Row>,
-        private val newRows: List<Row>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldRows.size
-
-        override fun getNewListSize(): Int = newRows.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return stableId(oldRows[oldItemPosition]) == stableId(newRows[newItemPosition])
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldRows[oldItemPosition] == newRows[newItemPosition]
-        }
-
-        private fun stableId(row: Row): String {
-            return when (row) {
-                is Row.Header -> "header"
-                is Row.Episodes -> "episodes"
-                is Row.Section -> "section:${row.section.id}:${row.section.type}:${row.section.title}"
-                is Row.Seasons -> "seasons:${row.title}"
-            }
-        }
-    }
-
-    private class VideoDiffCallback(
-        private val oldItems: List<VideoModel>,
-        private val newItems: List<VideoModel>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldItems.size
-
-        override fun getNewListSize(): Int = newItems.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            val oldItem = oldItems[oldItemPosition]
-            val newItem = newItems[newItemPosition]
-            return when {
-                oldItem.aid > 0 && newItem.aid > 0 -> oldItem.aid == newItem.aid
-                oldItem.bvid.isNotBlank() && newItem.bvid.isNotBlank() -> oldItem.bvid == newItem.bvid
-                oldItem.cid > 0 && newItem.cid > 0 -> oldItem.cid == newItem.cid
-                else -> oldItem == newItem
-            }
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldItems[oldItemPosition] == newItems[newItemPosition]
         }
     }
 

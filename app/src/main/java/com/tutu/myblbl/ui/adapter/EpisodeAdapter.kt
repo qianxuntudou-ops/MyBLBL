@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellEpisodeBinding
@@ -20,11 +21,27 @@ class EpisodeAdapter(
     private val nextFocusUpId: Int? = null,
     private val rememberFocusedItem: Boolean = true,
     private val onVerticalKey: ((View, Int) -> Boolean)? = null
-) : RecyclerView.Adapter<EpisodeAdapter.EpisodeViewHolder>() {
+) : ListAdapter<EpisodeModel, EpisodeAdapter.EpisodeViewHolder>(DIFF_CALLBACK) {
 
-    private val items = mutableListOf<EpisodeModel>()
     var focusedView: View? = null
         private set
+
+    companion object {
+        private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<EpisodeModel>() {
+            override fun areItemsTheSame(oldItem: EpisodeModel, newItem: EpisodeModel): Boolean {
+                return when {
+                    oldItem.id > 0L && newItem.id > 0L -> oldItem.id == newItem.id
+                    oldItem.cid > 0L && newItem.cid > 0L -> oldItem.cid == newItem.cid
+                    oldItem.aid > 0L && newItem.aid > 0L -> oldItem.aid == newItem.aid
+                    else -> oldItem == newItem
+                }
+            }
+
+            override fun areContentsTheSame(oldItem: EpisodeModel, newItem: EpisodeModel): Boolean {
+                return oldItem == newItem
+            }
+        }
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): EpisodeViewHolder {
         val binding = CellEpisodeBinding.inflate(
@@ -46,19 +63,13 @@ class EpisodeAdapter(
         }
     }
 
-    fun submitList(list: List<EpisodeModel>?) {
+    override fun submitList(list: List<EpisodeModel>?) {
         focusedView = null
-        val newList = list ?: emptyList()
-        val oldList = items.toList()
-        val diffResult = DiffUtil.calculateDiff(EpisodeDiffCallback(oldList, newList))
-        items.clear()
-        items.addAll(newList)
-        diffResult.dispatchUpdatesTo(this)
+        super.submitList(list)
     }
 
     fun reverse() {
-        java.util.Collections.reverse(items)
-        notifyItemRangeChanged(0, items.size)
+        super.submitList(currentList.reversed())
     }
 
     fun requestFocusedView(): Boolean {
@@ -70,10 +81,8 @@ class EpisodeAdapter(
     }
 
     override fun onBindViewHolder(holder: EpisodeViewHolder, position: Int) {
-        holder.bind(items[position], onEpisodeClick)
+        holder.bind(getItem(position), onEpisodeClick)
     }
-
-    override fun getItemCount(): Int = items.size
 
     class EpisodeViewHolder(
         private val binding: CellEpisodeBinding,
@@ -155,31 +164,6 @@ class EpisodeAdapter(
                 layoutParams.width = targetWidth
                 view.layoutParams = layoutParams
             }
-        }
-    }
-
-    private class EpisodeDiffCallback(
-        private val oldList: List<EpisodeModel>,
-        private val newList: List<EpisodeModel>
-    ) : DiffUtil.Callback() {
-
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            val oldItem = oldList[oldItemPosition]
-            val newItem = newList[newItemPosition]
-            return when {
-                oldItem.id > 0L && newItem.id > 0L -> oldItem.id == newItem.id
-                oldItem.cid > 0L && newItem.cid > 0L -> oldItem.cid == newItem.cid
-                oldItem.aid > 0L && newItem.aid > 0L -> oldItem.aid == newItem.aid
-                else -> oldItem == newItem
-            }
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
         }
     }
 }

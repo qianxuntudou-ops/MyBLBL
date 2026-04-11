@@ -8,9 +8,10 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
-import androidx.recyclerview.widget.RecyclerView.NO_POSITION
 import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import androidx.recyclerview.widget.RecyclerView.NO_POSITION
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellVideoBinding
 import com.tutu.myblbl.model.video.VideoModel
@@ -26,35 +27,26 @@ class DynamicVideoAdapter(
     private val onItemFocused: (Int) -> Unit,
     private val onLeftEdge: () -> Boolean = { false },
     private val debugTag: String? = null
-) : RecyclerView.Adapter<DynamicVideoAdapter.ViewHolder>() {
+) : ListAdapter<VideoModel, DynamicVideoAdapter.ViewHolder>(DiffCallback) {
 
-    private val data = mutableListOf<VideoModel>()
     var focusedView: View? = null
         private set
 
     fun setData(list: List<VideoModel>) {
         val deduplicated = deduplicate(list)
-        val oldList = data.toList()
-        val diffResult = DiffUtil.calculateDiff(VideoDiffCallback(oldList, deduplicated))
         focusedView = null
-        data.clear()
-        data.addAll(deduplicated)
-        diffResult.dispatchUpdatesTo(this)
+        submitList(deduplicated)
     }
 
     fun addData(list: List<VideoModel>) {
         val deduplicated = deduplicate(list).filter { incoming ->
-            data.none { existing -> videoKey(existing) == videoKey(incoming) }
+            currentList.none { existing -> dynamicVideoKey(existing) == dynamicVideoKey(incoming) }
         }
-        if (deduplicated.isEmpty()) {
-            return
-        }
-        val startPosition = data.size
-        data.addAll(deduplicated)
-        notifyItemRangeInserted(startPosition, deduplicated.size)
+        if (deduplicated.isEmpty()) return
+        submitList(currentList + deduplicated)
     }
 
-    fun getItemsSnapshot(): List<VideoModel> = data.toList()
+    fun getItemsSnapshot(): List<VideoModel> = currentList.toList()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = CellVideoBinding.inflate(
@@ -66,43 +58,19 @@ class DynamicVideoAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(data[position])
+        holder.bind(getItem(position))
     }
-
-    override fun getItemCount(): Int = data.size
 
     private fun deduplicate(source: List<VideoModel>): List<VideoModel> {
-        if (source.isEmpty()) {
-            return emptyList()
-        }
+        if (source.isEmpty()) return emptyList()
         val seenKeys = LinkedHashSet<String>(source.size)
-        return source.filter { seenKeys.add(videoKey(it)) }
-    }
-
-    private fun videoKey(video: VideoModel): String {
-        return when {
-            video.bvid.isNotBlank() -> "bvid:${video.bvid}"
-            video.aid > 0 -> "aid:${video.aid}"
-            video.cid > 0 -> "cid:${video.cid}"
-            else -> "title:${video.title}|cover:${video.coverUrl}"
-        }
+        return source.filter { seenKeys.add(dynamicVideoKey(it)) }
     }
 
     private fun removeBlockedItems(blockedName: String) {
-        val oldList = data.toList()
-        val filtered = oldList.filter { !it.authorName.equals(blockedName, ignoreCase = true) }
-        if (filtered.size == oldList.size) return
-        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
-            override fun getOldListSize(): Int = oldList.size
-            override fun getNewListSize(): Int = filtered.size
-            override fun areItemsTheSame(oldPos: Int, newPos: Int): Boolean =
-                videoKey(oldList[oldPos]) == videoKey(filtered[newPos])
-            override fun areContentsTheSame(oldPos: Int, newPos: Int): Boolean =
-                oldList[oldPos] == filtered[newPos]
-        })
-        data.clear()
-        data.addAll(filtered)
-        diffResult.dispatchUpdatesTo(this)
+        val filtered = currentList.filter { !it.authorName.equals(blockedName, ignoreCase = true) }
+        if (filtered.size == currentList.size) return
+        submitList(filtered)
         focusedView?.requestFocus()
     }
 
@@ -123,7 +91,7 @@ class DynamicVideoAdapter(
                 }
                 val position = bindingAdapterPosition
                 if (position != NO_POSITION) {
-                    onItemClick(data[position])
+                    onItemClick(getItem(position))
                 }
             }
             binding.root.setOnFocusChangeListener { view, hasFocus ->
@@ -177,8 +145,8 @@ class DynamicVideoAdapter(
             longPressTriggered = false
             longPressRunnable = Runnable {
                 val position = bindingAdapterPosition
-                if (position != NO_POSITION && position < data.size) {
-                    val video = data[position]
+                if (position != NO_POSITION && position < itemCount) {
+                    val video = getItem(position)
                     val authorName = video.authorName
                     if (authorName.isNotBlank()) {
                         longPressTriggered = true
@@ -248,10 +216,11 @@ class DynamicVideoAdapter(
 
         private fun currentTitle(): String {
             val position = bindingAdapterPosition
-            if (position == NO_POSITION || position !in data.indices) {
+            if (position == NO_POSITION || position !in currentList.indices) {
                 return ""
             }
-            return data[position].bangumi?.longTitle?.takeIf { it.isNotBlank() } ?: data[position].title
+            val item = getItem(position)
+            return item.bangumi?.longTitle?.takeIf { it.isNotBlank() } ?: item.title
         }
 
         private fun keyName(keyCode: Int): String {
@@ -265,21 +234,15 @@ class DynamicVideoAdapter(
         }
     }
 
-    private class VideoDiffCallback(
-        private val oldList: List<VideoModel>,
-        private val newList: List<VideoModel>
-    ) : DiffUtil.Callback() {
+    companion object {
+        private val DiffCallback = object : DiffUtil.ItemCallback<VideoModel>() {
+            override fun areItemsTheSame(oldItem: VideoModel, newItem: VideoModel): Boolean {
+                return dynamicVideoKey(oldItem) == dynamicVideoKey(newItem)
+            }
 
-        override fun getOldListSize(): Int = oldList.size
-
-        override fun getNewListSize(): Int = newList.size
-
-        override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return dynamicVideoKey(oldList[oldItemPosition]) == dynamicVideoKey(newList[newItemPosition])
-        }
-
-        override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-            return oldList[oldItemPosition] == newList[newItemPosition]
+            override fun areContentsTheSame(oldItem: VideoModel, newItem: VideoModel): Boolean {
+                return oldItem == newItem
+            }
         }
     }
 }

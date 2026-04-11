@@ -4,7 +4,7 @@ import com.tutu.myblbl.model.series.FollowSeriesResult
 import com.tutu.myblbl.repository.remote.SeriesRepository as NetworkSeriesRepository
 
 class SeriesRepository(
-    private val delegate: NetworkSeriesRepository = NetworkSeriesRepository()
+    private val delegate: NetworkSeriesRepository
 ) {
     suspend fun getSeriesDetail(seasonId: Long, epId: Long = 0) =
         delegate.getSeriesDetail(seasonId, epId)

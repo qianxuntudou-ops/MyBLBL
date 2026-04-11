@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import org.koin.android.ext.android.inject
 
 class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
 
@@ -54,7 +55,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
     private var mid: Long = 0
     private var userSpaceInfo: UserSpaceInfo? = null
 
-    private val userRepository by lazy { UserRepository() }
+    private val userRepository: UserRepository by inject()
     private lateinit var headerAdapter: UserSpaceHeaderAdapter
     private lateinit var videoAdapter: VideoAdapter
     private lateinit var concatAdapter: ConcatAdapter

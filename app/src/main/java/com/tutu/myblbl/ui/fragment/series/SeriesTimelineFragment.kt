@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import org.koin.android.ext.android.inject
 
 class SeriesTimelineFragment : BaseFragment<FragmentSeriesTimelineBinding>() {
 
@@ -43,7 +44,7 @@ class SeriesTimelineFragment : BaseFragment<FragmentSeriesTimelineBinding>() {
         CONTENT
     }
 
-    private val repository = SeriesRepository()
+    private val repository: SeriesRepository by inject()
 
     private var seasonType: Int = SeriesType.ANIME
     private var timelineDays: List<TimeLineADayModel> = emptyList()

@@ -5,7 +5,7 @@ import com.tutu.myblbl.repository.remote.LiveRepository as NetworkLiveRepository
 typealias LiveRoomPage = com.tutu.myblbl.repository.remote.LiveRoomPage
 
 class LiveRepository(
-    private val delegate: NetworkLiveRepository = NetworkLiveRepository()
+    private val delegate: NetworkLiveRepository
 ) {
     suspend fun getLivePlayInfo(roomId: Long, quality: Int = 10000) =
         delegate.getLivePlayInfo(roomId, quality)

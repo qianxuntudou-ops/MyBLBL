@@ -16,13 +16,18 @@ import com.tutu.myblbl.model.series.SeriesType
 import com.tutu.myblbl.model.series.timeline.SeriesTimeLineModel
 import com.tutu.myblbl.model.series.timeline.TimeLineADayModel
 import com.tutu.myblbl.network.NetworkManager
+import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.repository.UserRepository
 import com.tutu.myblbl.utils.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Request
 
-class HomeLaneRepository {
+class HomeLaneRepository(
+    private val apiService: ApiService,
+    private val seriesRepository: SeriesRepository,
+    private val userRepository: UserRepository
+) {
 
     companion object {
         private const val TAG = "HomeLaneRepository"
@@ -32,10 +37,6 @@ class HomeLaneRepository {
         private const val WEB_REFERER = "https://www.bilibili.com/"
         private const val FOLLOW_SECTION_PAGE_SIZE = 12
     }
-
-    private val apiService = NetworkManager.apiService
-    private val seriesRepository = SeriesRepository()
-    private val userRepository = UserRepository()
 
     suspend fun getHomeLanes(
         type: Int,

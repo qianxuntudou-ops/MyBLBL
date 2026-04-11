@@ -29,6 +29,7 @@ import com.tutu.myblbl.ui.widget.GridSpacingItemDecoration
 import com.tutu.myblbl.ui.widget.LinearSpacingItemDecoration
 import com.tutu.myblbl.utils.AppLog
 import kotlinx.coroutines.launch
+import org.koin.android.ext.android.inject
 
 class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPressedHandler {
 
@@ -63,7 +64,7 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         }
     }
 
-    private val repository = AllSeriesRepository()
+    private val repository: AllSeriesRepository by inject()
 
     private var seasonType: Int = SeriesType.ANIME
     private var moreUrl: String = ""

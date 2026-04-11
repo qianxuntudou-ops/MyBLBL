@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import org.koin.android.ext.android.inject
 
 class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
 
@@ -43,7 +44,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
     private var folderId: Long = 0
     private var title: String = ""
 
-    private val favoriteRepository by lazy { FavoriteRepository() }
+    private val favoriteRepository: FavoriteRepository by inject()
     private lateinit var favoriteAdapter: FavoriteHistoryAdapter
 
     private var currentPage = 1

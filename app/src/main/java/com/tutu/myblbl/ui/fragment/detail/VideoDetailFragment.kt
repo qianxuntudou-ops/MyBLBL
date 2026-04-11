@@ -40,6 +40,7 @@ import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import org.koin.android.ext.android.inject
 import java.util.Locale
 
 class VideoDetailFragment : BaseFragment<FragmentVideoDetailBinding>() {
@@ -73,8 +74,8 @@ class VideoDetailFragment : BaseFragment<FragmentVideoDetailBinding>() {
     private var aid: Long? = null
     private var bvid: String? = null
 
-    private val videoRepository by lazy { VideoRepository() }
-    private val favoriteRepository by lazy { FavoriteRepository() }
+    private val videoRepository: VideoRepository by inject()
+    private val favoriteRepository: FavoriteRepository by inject()
 
     private lateinit var headBinding: CellVideoDetailHeadBinding
     private lateinit var pagesBinding: CellSeriesLaneBinding

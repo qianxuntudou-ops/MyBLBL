@@ -5,7 +5,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -20,6 +19,7 @@ import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.utils.AppLog
 import com.tutu.myblbl.utils.ViewUtils
 import kotlinx.coroutines.launch
+import org.koin.androidx.viewmodel.ext.android.viewModel
 
 @UnstableApi
 class LivePlayerFragment : Fragment() {
@@ -40,7 +40,7 @@ class LivePlayerFragment : Fragment() {
     private var _binding: FragmentLivePlayerBinding? = null
     private val binding get() = _binding!!
     
-    private val viewModel: LivePlayerViewModel by viewModels()
+    private val viewModel: LivePlayerViewModel by viewModel()
     
     private var player: ExoPlayer? = null
     private var roomId: Long = 0L

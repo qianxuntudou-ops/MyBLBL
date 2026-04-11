@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import org.koin.android.ext.android.inject
 
 class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
 
@@ -39,7 +40,7 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
         }
     }
 
-    private val repository = HomeLaneRepository()
+    private val repository: HomeLaneRepository by inject()
 
     private var type: Int = TYPE_ANIMATION
     private var cursor: Long = 0

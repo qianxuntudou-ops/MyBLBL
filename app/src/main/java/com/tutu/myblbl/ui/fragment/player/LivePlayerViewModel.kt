@@ -8,9 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class LivePlayerViewModel : ViewModel() {
-
-    private val repository = LiveRepository()
+class LivePlayerViewModel(
+    private val repository: LiveRepository
+) : ViewModel() {
     
     private val _playUrl = MutableStateFlow<String?>(null)
     val playUrl: StateFlow<String?> = _playUrl.asStateFlow()

@@ -20,6 +20,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
+import org.koin.android.ext.android.inject
 
 class SignInFragment : BaseFragment<FragmentSignInBinding>() {
 
@@ -27,8 +28,8 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
         fun newInstance() = SignInFragment()
     }
 
-    private val authRepository by lazy { AuthRepository() }
-    private val userRepository by lazy { UserRepository() }
+    private val authRepository: AuthRepository by inject()
+    private val userRepository: UserRepository by inject()
     private var qrcodeKey = ""
     private var pollingJob: Job? = null
     private val pollingInterval = 1500L

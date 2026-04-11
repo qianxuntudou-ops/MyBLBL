@@ -22,17 +22,19 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
 class PlayerActionDialog(
     context: Context,
     private val aid: Long,
     private val bvid: String,
     private val ownerMid: Long = 0L
-) : AppCompatDialog(context, R.style.DialogTheme) {
+) : AppCompatDialog(context, R.style.DialogTheme), KoinComponent {
 
     private val binding = DialogActionBinding.inflate(LayoutInflater.from(context))
-    private val videoRepository = VideoRepository()
-    private val favoriteRepository = FavoriteRepository()
+    private val videoRepository: VideoRepository by inject()
+    private val favoriteRepository: FavoriteRepository by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var isLiked = false

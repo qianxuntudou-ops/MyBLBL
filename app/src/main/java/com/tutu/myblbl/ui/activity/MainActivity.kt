@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import org.koin.android.ext.android.inject
 import java.lang.ref.WeakReference
 
 @OptIn(UnstableApi::class)
@@ -56,7 +57,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     }
 
     private val fragments = mutableListOf<Fragment>()
-    private val userRepository by lazy { UserRepository() }
+    private val userRepository: UserRepository by inject()
     private var currentFragmentIndex = -1
     private var exitTime: Long = 0
     private val exitInterval = 2000L

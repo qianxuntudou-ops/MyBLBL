@@ -32,6 +32,7 @@ import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import org.koin.android.ext.android.inject
 
 class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
     companion object {
@@ -49,8 +50,8 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
 
     private var lastRefreshTime = 0L
 
-    private val favoriteRepository by lazy { FavoriteRepository() }
-    private val userRepository by lazy { UserRepository() }
+    private val favoriteRepository: FavoriteRepository by inject()
+    private val userRepository: UserRepository by inject()
     private lateinit var adapter: FavoriteFolderAdapter
     private var swipeRefreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout? = null
     private var embedded = false

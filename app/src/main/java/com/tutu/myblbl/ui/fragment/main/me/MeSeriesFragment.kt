@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import org.koin.android.ext.android.inject
 
 class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
 
@@ -46,8 +47,8 @@ class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         }
     }
 
-    private val repository by lazy { SeriesRepository() }
-    private val userRepository by lazy { UserRepository() }
+    private val repository: SeriesRepository by inject()
+    private val userRepository: UserRepository by inject()
 
     private var type: Int = TYPE_ANIMATION
     private var currentPage = 1

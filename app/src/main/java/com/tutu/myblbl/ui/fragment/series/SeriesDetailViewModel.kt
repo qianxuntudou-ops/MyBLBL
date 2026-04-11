@@ -17,15 +17,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 
-class SeriesDetailViewModel : ViewModel() {
+class SeriesDetailViewModel(
+    private val repository: SeriesRepository
+) : ViewModel() {
 
     sealed interface UiMessage {
         data class Text(val value: String) : UiMessage
         data class Res(@StringRes val resId: Int) : UiMessage
     }
 
-    private val repository = SeriesRepository()
-    
     private val _seriesDetail = MutableStateFlow<EpisodesDetailModel?>(null)
     val seriesDetail: StateFlow<EpisodesDetailModel?> = _seriesDetail.asStateFlow()
     

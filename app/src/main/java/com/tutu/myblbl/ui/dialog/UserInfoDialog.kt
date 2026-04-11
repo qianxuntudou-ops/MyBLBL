@@ -23,11 +23,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
 
-class UserInfoDialog(context: Context) : AppCompatDialog(context, R.style.DialogTheme) {
+class UserInfoDialog(context: Context) : AppCompatDialog(context, R.style.DialogTheme), KoinComponent {
 
     private val binding = DialogUserInfoBinding.inflate(LayoutInflater.from(context))
-    private val userRepository = UserRepository()
+    private val userRepository: UserRepository by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     init {

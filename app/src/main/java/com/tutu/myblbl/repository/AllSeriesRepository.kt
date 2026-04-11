@@ -6,7 +6,7 @@ import com.tutu.myblbl.repository.remote.AllSeriesRepository as NetworkAllSeries
 typealias AllSeriesPage = com.tutu.myblbl.repository.remote.AllSeriesPage
 
 class AllSeriesRepository(
-    private val delegate: NetworkAllSeriesRepository = NetworkAllSeriesRepository()
+    private val delegate: NetworkAllSeriesRepository
 ) {
     suspend fun getAllSeries(
         type: Int,

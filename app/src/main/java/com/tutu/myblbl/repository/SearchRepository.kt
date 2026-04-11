@@ -6,7 +6,7 @@ import com.tutu.myblbl.model.search.SearchVideoOrder
 import com.tutu.myblbl.repository.remote.SearchRepository as NetworkSearchRepository
 
 class SearchRepository(
-    private val delegate: NetworkSearchRepository = NetworkSearchRepository()
+    private val delegate: NetworkSearchRepository
 ) {
     suspend fun loadHotSearchWords(): Result<List<HotWordModel>> = delegate.loadHotSearchWords()
 

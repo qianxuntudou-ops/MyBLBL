@@ -11,7 +11,7 @@ import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.repository.remote.VideoRepository as NetworkVideoRepository
 
 class VideoRepository(
-    private val delegate: NetworkVideoRepository = NetworkVideoRepository()
+    private val delegate: NetworkVideoRepository
 ) {
 
     suspend fun getRecommendList(

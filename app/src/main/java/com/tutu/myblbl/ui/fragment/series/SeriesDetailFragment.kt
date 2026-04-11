@@ -8,7 +8,6 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -27,6 +26,7 @@ import kotlinx.coroutines.launch
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
 import org.greenrobot.eventbus.ThreadMode
+import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class SeriesDetailFragment : Fragment() {
 
@@ -40,7 +40,7 @@ class SeriesDetailFragment : Fragment() {
     private var _binding: FragmentSeriesDetailBinding? = null
     private val binding get() = _binding!!
 
-    private val viewModel: SeriesDetailViewModel by viewModels()
+    private val viewModel: SeriesDetailViewModel by viewModel()
 
     private lateinit var contentAdapter: SeriesDetailContentAdapter
 

@@ -12,6 +12,13 @@ object AppLog {
         }
     }
 
+    fun i(tag: String, message: String) {
+        if (!BuildConfig.DEBUG) return
+        runCatching {
+            Log.i(tag, message)
+        }
+    }
+
     fun e(tag: String, message: String, throwable: Throwable? = null) {
         if (!BuildConfig.DEBUG) return
         runCatching {
@@ -33,3 +40,4 @@ object AppLog {
         }
     }
 }
+

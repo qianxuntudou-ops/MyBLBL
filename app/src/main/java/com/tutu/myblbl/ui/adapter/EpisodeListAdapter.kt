@@ -7,7 +7,7 @@ import com.tutu.myblbl.databinding.CellEpisodeBinding
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.core.ui.base.BaseAdapter
 import com.tutu.myblbl.core.ui.image.ImageLoader
-import com.tutu.myblbl.utils.NumberUtils
+import com.tutu.myblbl.core.common.format.NumberUtils
 import java.util.Locale
 
 class EpisodeListAdapter : BaseAdapter<VideoModel, EpisodeListAdapter.EpisodeViewHolder>() {

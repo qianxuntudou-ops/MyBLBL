@@ -18,9 +18,9 @@ import com.tutu.myblbl.model.series.SectionModel
 import com.tutu.myblbl.model.series.SeriesModel
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.core.ui.image.ImageLoader
-import com.tutu.myblbl.utils.NumberUtils
-import com.tutu.myblbl.utils.ScreenUtils
-import com.tutu.myblbl.utils.TimeUtils
+import com.tutu.myblbl.core.common.format.NumberUtils
+import com.tutu.myblbl.core.ui.system.ScreenUtils
+import com.tutu.myblbl.core.common.time.TimeUtils
 
 class SeriesDetailContentAdapter(
     private val onToggleFollow: () -> Unit,

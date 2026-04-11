@@ -1,4 +1,4 @@
-package com.tutu.myblbl.utils
+package com.tutu.myblbl.feature.player.settings
 
 import android.content.Context
 import android.content.SharedPreferences

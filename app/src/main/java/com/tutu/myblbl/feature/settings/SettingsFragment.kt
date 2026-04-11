@@ -17,10 +17,10 @@ import com.tutu.myblbl.ui.adapter.SettingSelectionDialogAdapter
 import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.core.ui.decoration.LinearSpacingItemDecoration
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.utils.FileCacheManager
+import com.tutu.myblbl.core.common.cache.FileCacheManager
 import com.tutu.myblbl.core.ui.image.ImageLoader
-import com.tutu.myblbl.utils.PlayerMediaCache
-import com.tutu.myblbl.utils.normalizeDanmakuSmartFilterValue
+import com.tutu.myblbl.feature.player.cache.PlayerMediaCache
+import com.tutu.myblbl.core.common.ext.normalizeDanmakuSmartFilterValue
 import java.util.Locale
 
 class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {

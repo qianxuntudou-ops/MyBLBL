@@ -17,7 +17,7 @@ import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
-import com.tutu.myblbl.utils.toast
+import com.tutu.myblbl.core.common.ext.toast
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel

@@ -1,7 +1,7 @@
 package com.tutu.myblbl.network.interceptor
 
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.utils.CookieManager
+import com.tutu.myblbl.network.cookie.CookieManager
 import okhttp3.Interceptor
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.Response

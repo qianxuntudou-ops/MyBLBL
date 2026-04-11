@@ -3,7 +3,7 @@ package com.tutu.myblbl.repository.cache
 import com.google.gson.reflect.TypeToken
 import com.tutu.myblbl.model.lane.HomeLaneSection
 import com.tutu.myblbl.model.video.VideoModel
-import com.tutu.myblbl.utils.FileCacheManager
+import com.tutu.myblbl.core.common.cache.FileCacheManager
 
 object HomeCacheStore {
 

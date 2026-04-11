@@ -34,10 +34,10 @@ import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.ui.dialog.OwnerDetailDialog
 import com.tutu.myblbl.ui.dialog.PlayerActionDialog
 import com.tutu.myblbl.feature.search.SearchNewFragment
-import com.tutu.myblbl.utils.serializableCompat
+import com.tutu.myblbl.core.common.ext.serializableCompat
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.ui.image.ImageLoader
-import com.tutu.myblbl.utils.TimeUtils
+import com.tutu.myblbl.core.common.time.TimeUtils
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch

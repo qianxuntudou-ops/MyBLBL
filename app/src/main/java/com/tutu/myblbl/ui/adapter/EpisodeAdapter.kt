@@ -12,7 +12,7 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellEpisodeBinding
 import com.tutu.myblbl.model.episode.EpisodeModel
 import com.tutu.myblbl.core.ui.image.ImageLoader
-import com.tutu.myblbl.utils.ScreenUtils
+import com.tutu.myblbl.core.ui.system.ScreenUtils
 
 class EpisodeAdapter(
     private val onEpisodeClick: (EpisodeModel) -> Unit,

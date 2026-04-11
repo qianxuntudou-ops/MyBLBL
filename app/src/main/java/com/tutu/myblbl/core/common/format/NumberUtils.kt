@@ -1,4 +1,4 @@
-package com.tutu.myblbl.utils
+package com.tutu.myblbl.core.common.format
 
 import java.text.DecimalFormat
 import java.util.Locale

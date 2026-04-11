@@ -9,7 +9,7 @@ import com.tutu.myblbl.ui.activity.MainActivity
 import com.tutu.myblbl.ui.activity.PlayerActivity
 import com.tutu.myblbl.feature.detail.VideoDetailFragment
 import com.tutu.myblbl.feature.series.SeriesDetailFragment
-import com.tutu.myblbl.utils.isOpenDetailFirstEnabled
+import com.tutu.myblbl.core.common.ext.isOpenDetailFirstEnabled
 import java.net.URL
 
 object VideoRouteNavigator {

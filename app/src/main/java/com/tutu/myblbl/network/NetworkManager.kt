@@ -13,7 +13,7 @@ import com.tutu.myblbl.network.security.BiliSecurityCoordinator
 import com.tutu.myblbl.network.session.NetworkSessionStore
 import com.tutu.myblbl.network.ua.DesktopUserAgentStore
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.utils.CookieManager
+import com.tutu.myblbl.network.cookie.CookieManager
 import okhttp3.OkHttpClient
 import org.json.JSONObject
 import retrofit2.Retrofit

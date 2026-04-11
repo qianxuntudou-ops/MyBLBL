@@ -14,7 +14,7 @@ import com.tutu.myblbl.core.ui.base.BaseListFragment
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
-import com.tutu.myblbl.utils.toast
+import com.tutu.myblbl.core.common.ext.toast
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch

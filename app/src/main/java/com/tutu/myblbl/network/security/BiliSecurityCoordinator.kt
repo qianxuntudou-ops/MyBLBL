@@ -7,7 +7,7 @@ import com.tutu.myblbl.model.BaseResponse
 import com.tutu.myblbl.model.user.UserDetailInfoModel
 import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.utils.CookieManager
+import com.tutu.myblbl.network.cookie.CookieManager
 import java.security.KeyFactory
 import java.security.PublicKey
 import java.security.SecureRandom

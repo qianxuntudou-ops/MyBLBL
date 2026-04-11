@@ -19,7 +19,7 @@ import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
-import com.tutu.myblbl.utils.getHomeDefaultStartPageIndex
+import com.tutu.myblbl.core.common.ext.getHomeDefaultStartPageIndex
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 

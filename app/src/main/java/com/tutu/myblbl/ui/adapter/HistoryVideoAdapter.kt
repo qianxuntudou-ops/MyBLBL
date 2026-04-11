@@ -17,9 +17,9 @@ import com.tutu.myblbl.model.video.HistoryVideoModel
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.ui.image.ImageLoader
-import com.tutu.myblbl.utils.NumberUtils
-import com.tutu.myblbl.utils.TimeUtils
-import com.tutu.myblbl.utils.VideoCardFocusHelper
+import com.tutu.myblbl.core.common.format.NumberUtils
+import com.tutu.myblbl.core.common.time.TimeUtils
+import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
 
 class HistoryVideoAdapter(
     private val onItemClick: (HistoryVideoModel) -> Unit,

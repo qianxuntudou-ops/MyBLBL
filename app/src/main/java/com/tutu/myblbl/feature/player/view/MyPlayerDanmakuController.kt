@@ -13,7 +13,7 @@ import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.DanmakuView
 import com.tutu.myblbl.model.dm.DmModel
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.utils.isVipColorfulDanmakuAllowed
+import com.tutu.myblbl.core.common.ext.isVipColorfulDanmakuAllowed
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

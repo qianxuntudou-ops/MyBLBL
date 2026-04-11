@@ -5,7 +5,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.model.video.detail.VideoDetailModel
-import com.tutu.myblbl.utils.serializableCompat
+import com.tutu.myblbl.core.common.ext.serializableCompat
 import java.util.ArrayDeque
 
 @OptIn(UnstableApi::class)

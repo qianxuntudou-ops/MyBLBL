@@ -33,7 +33,7 @@ import com.tutu.myblbl.feature.search.SearchViewModel
 import com.tutu.myblbl.feature.player.LivePlayerViewModel
 import com.tutu.myblbl.feature.player.VideoPlayerViewModel
 import com.tutu.myblbl.feature.series.SeriesDetailViewModel
-import com.tutu.myblbl.utils.CookieManager
+import com.tutu.myblbl.network.cookie.CookieManager
 import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel

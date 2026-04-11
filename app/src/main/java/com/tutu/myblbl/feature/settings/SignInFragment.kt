@@ -12,7 +12,7 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.FragmentSignInBinding
 import com.tutu.myblbl.event.AppEventHub
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.utils.CookieManager
+import com.tutu.myblbl.network.cookie.CookieManager
 import com.tutu.myblbl.repository.AuthRepository
 import com.tutu.myblbl.repository.UserRepository
 import com.tutu.myblbl.core.ui.base.BaseFragment

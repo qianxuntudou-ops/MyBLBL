@@ -12,7 +12,7 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellSeriesBinding
 import com.tutu.myblbl.model.series.SeriesModel
 import com.tutu.myblbl.core.ui.image.ImageLoader
-import com.tutu.myblbl.utils.VideoCardFocusHelper
+import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
 
 class SeriesAdapter(
     private val onItemClick: (SeriesModel) -> Unit = {},

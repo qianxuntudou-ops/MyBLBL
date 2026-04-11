@@ -23,7 +23,7 @@ import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.feature.series.SeriesDetailFragment
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.utils.FileCacheManager
+import com.tutu.myblbl.core.common.cache.FileCacheManager
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
 import kotlinx.coroutines.flow.collectLatest

@@ -7,7 +7,7 @@ import com.tutu.myblbl.model.adapter.FlexibleIntAdapter
 import com.tutu.myblbl.model.adapter.FlexibleLongAdapter
 import com.tutu.myblbl.network.interceptor.HeaderInterceptor
 import com.tutu.myblbl.network.interceptor.HttpCacheInterceptor
-import com.tutu.myblbl.utils.CookieManager
+import com.tutu.myblbl.network.cookie.CookieManager
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor

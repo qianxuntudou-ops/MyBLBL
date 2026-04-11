@@ -1,4 +1,4 @@
-package com.tutu.myblbl.utils
+package com.tutu.myblbl.core.common.ext
 
 import android.content.Context
 import android.content.Intent

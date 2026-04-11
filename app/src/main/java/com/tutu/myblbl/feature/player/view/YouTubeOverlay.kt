@@ -21,7 +21,7 @@ import com.bumptech.glide.request.transition.Transition
 import com.tutu.myblbl.R
 import com.tutu.myblbl.model.player.VideoSnapshotData
 import com.tutu.myblbl.network.NetworkManager
-import com.tutu.myblbl.utils.NumberUtils
+import com.tutu.myblbl.core.common.format.NumberUtils
 import kotlin.math.abs
 
 class YouTubeOverlay @JvmOverloads constructor(

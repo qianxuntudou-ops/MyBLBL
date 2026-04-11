@@ -10,7 +10,7 @@ import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.network.response.Base2Response
 import com.tutu.myblbl.network.response.PlayerInfoDataWrapper
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.utils.CookieManager
+import com.tutu.myblbl.network.cookie.CookieManager
 import okhttp3.OkHttpClient
 import okhttp3.Request
 

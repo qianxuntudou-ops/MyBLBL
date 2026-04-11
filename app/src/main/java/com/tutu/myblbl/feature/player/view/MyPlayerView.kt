@@ -36,8 +36,8 @@ import com.tutu.myblbl.model.subtitle.SubtitleInfoModel
 import com.tutu.myblbl.model.video.quality.AudioQuality
 import com.tutu.myblbl.model.video.quality.VideoCodecEnum
 import com.tutu.myblbl.model.video.quality.VideoQuality
-import com.tutu.myblbl.utils.isAdvancedDanmakuEnabled
-import com.tutu.myblbl.utils.getDanmakuSmartFilterLevel
+import com.tutu.myblbl.core.common.ext.isAdvancedDanmakuEnabled
+import com.tutu.myblbl.core.common.ext.getDanmakuSmartFilterLevel
 import com.tutu.myblbl.feature.player.LiveQualityInfo
 
 @OptIn(UnstableApi::class)

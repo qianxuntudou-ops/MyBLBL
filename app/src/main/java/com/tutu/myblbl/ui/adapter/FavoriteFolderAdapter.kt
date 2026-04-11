@@ -10,7 +10,7 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellFavoriteFolderBinding
 import com.tutu.myblbl.model.favorite.FavoriteFolderModel
 import com.tutu.myblbl.core.ui.image.ImageLoader
-import com.tutu.myblbl.utils.VideoCardFocusHelper
+import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
 
 class FavoriteFolderAdapter(
     private val onItemClick: ((position: Int, item: FavoriteFolderModel) -> Unit)? = null,

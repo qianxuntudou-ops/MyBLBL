@@ -16,7 +16,7 @@ import com.tutu.myblbl.network.security.NetworkSecurityGateway
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.network.response.ListDataModel
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.utils.CookieManager
+import com.tutu.myblbl.network.cookie.CookieManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

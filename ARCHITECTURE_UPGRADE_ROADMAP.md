@@ -37,6 +37,12 @@
   - `GaiaVgateActivity` 改为通过 `NetworkWebGateway` / `NetworkSessionGateway`
   - `LivePlayerFragment` 改为直接注入 `OkHttpClient`
   - `VideoPlayerViewModel` / `VideoPlayerPlayInfoGateway` 已不再直接依赖 `NetworkManager`
+- 原 `utils` 目录中的剩余运行时工具、缓存、扩展与播放器设置类已完成归位：
+  - `CookieManager` -> `network/cookie`
+  - `Extensions`、`FileCacheManager`、`NumberUtils`、`TimeUtils` -> `core/common/*`
+  - `ScreenUtils`、`VideoCardFocusHelper` -> `core/ui/*`
+  - `PlayerMediaCache`、`PlayerSettingsStore` -> `feature/player/*`
+- 项目中首轮 `utils` 大杂烩目录已完成清空，公共能力边界比上一轮更稳定
 - 修复了本轮重构中暴露出的编译问题和测试构造器适配问题
 - 已通过：
   - `:app:compileDebugKotlin`
@@ -152,7 +158,7 @@
 - [x] 保留一个轻量 facade，避免一次性改太多调用点
 - [x] 冻结 `NetworkManager` 的职责边界，不再给它增加新的业务职责
 - [x] 将 repository 层对 `NetworkManager` 的静态访问收口到更明确的 provider / gateway
-- [ ] 将剩余业务代码对 `NetworkManager` 的直接依赖继续收口到更明确的 provider / gateway
+- [x] 将业务主链路中剩余对 `NetworkManager` 的直接依赖收口到更明确的 provider / gateway
 
 ### 推荐拆分方向
 
@@ -267,10 +273,11 @@ app/src/main/java/com/tutu/myblbl/
 - `BaseActivity`、`BaseFragment`、`BaseListFragment`、`BaseAdapter`、焦点恢复 helper、通用 layout manager / decoration 已迁入 `core/ui`
 - 主导航 `TabBarView` 已迁入 `core/ui/navigation`，搜索键盘 `KeyboardView` 已回收到 `feature/search/view`
 - `AppLog`、`ContentFilter`、`ImageLoader`、`SpatialFocusNavigator`、`SwipeRefreshHelper`、`TabLayoutExtensions`、`ViewUtils`、`VideoRouteNavigator` 已完成首轮边界收口
+- 原 `utils` 中剩余的缓存、格式化、时间、屏幕、Cookie、播放器缓存与设置类已完成归位，不再保留兜底型 `utils` 包
 - 关联的 XML 自定义 View 全限定类名、baseline profile、测试包引用已同步到新的 feature 包名
 - 业务 feature 目录层面的首轮迁移已经基本完成
 - `core/ui` 的首轮边界已经建立，后续可继续按需把零散公共 UI 能力收口进去
-- 下一阶段更值得继续推进的是剩余运行时工具、公共 model、缓存与设置类的归属收敛
+- 首轮目录治理与公共 helper 归位已经完成收口；后续若继续推进，重点只剩公共 model 的抽象边界与更细粒度模块评估，这些不再属于当前必须项
 
 ---
 
@@ -339,6 +346,7 @@ app/src/main/java/com/tutu/myblbl/
 - 文档层面已经明确：新功能优先进入 `feature/*`，`NetworkManager` 采用“冻结边界、避免扩散”策略
 - 已新增 `docs/ARCHITECTURE_REVIEW_CHECKLIST.md`，作为 review 阶段的默认检查清单
 - 已新增 PR 模板检查项，显式约束 `EventBus` 与 `NetworkManager` 不再回流
+- 就当前代码规模与边界状态而言，文档约束 + review checklist + PR 模板已经足以承担首轮防回退职责；lint 规则可留待后续有明确收益时再补
 
 ---
 
@@ -402,6 +410,7 @@ app/src/main/java/com/tutu/myblbl/
 - [x] 清理一个 UI 层直连 `apiService` 的入口（`ChannelVideoFragment`）
 - [x] 将大部分 UI 登录态 / 当前用户 / cookie 写入逻辑迁移到 injected gateway 或 runtime dependency
 - [x] 将播放器与 Gaia 风控链路中的核心 `NetworkManager` 静态依赖迁移到 injected gateway / `OkHttpClient` / `CookieManager`
+- [x] 清理剩余 `utils` 大杂烩目录，将缓存 / 扩展 / 格式化 / 屏幕 / 播放器设置能力归位到 `core/*`、`feature/player/*`、`network/*`
 - [ ] 为首页与播放器链路补更完整的自动化测试
 - [ ] 评估新的 `AppEventHub` / `MainNavigationViewModel` / `Network*Gateway` 组件最终目录归属
 
@@ -415,3 +424,10 @@ app/src/main/java/com/tutu/myblbl/
 - 每次只解决一类架构问题
 - 优先处理隐式依赖和单点膨胀
 - 等边界清晰后，再决定是否多模块
+
+基于当前完成度，可以给出更明确的收口结论：
+
+- 首轮架构升级已经完成主要目标，当前代码不再处于“必须继续大改”的状态
+- 现阶段仍然值得做的事情，主要是测试补强、lint 约束、以及未来是否多模块的评估
+- 这些事项属于“增量收益优化”，而不是“当前版本必须继续重构才能健康演进”的阻塞项
+- 后续开发更重要的是遵守既定边界，避免重新把业务逻辑堆回 `NetworkManager`、`ui/*` 和新的大杂烩工具包

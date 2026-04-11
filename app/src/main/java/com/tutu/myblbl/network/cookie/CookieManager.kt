@@ -1,4 +1,4 @@
-package com.tutu.myblbl.utils
+package com.tutu.myblbl.network.cookie
 
 import android.content.Context
 import android.content.SharedPreferences

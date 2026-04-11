@@ -1,4 +1,4 @@
-package com.tutu.myblbl.utils
+package com.tutu.myblbl.core.common.time
 
 import java.text.SimpleDateFormat
 import java.util.Calendar

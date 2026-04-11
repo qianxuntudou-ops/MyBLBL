@@ -1,4 +1,4 @@
-package com.tutu.myblbl.utils
+package com.tutu.myblbl.core.common.cache
 
 import com.google.gson.Gson
 import com.tutu.myblbl.MyBLBLApplication

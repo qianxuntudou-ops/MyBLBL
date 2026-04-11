@@ -22,7 +22,7 @@ import com.tutu.myblbl.ui.adapter.HistoryVideoAdapter
 import com.tutu.myblbl.ui.adapter.VideoAdapter
 import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
-import com.tutu.myblbl.utils.FileCacheManager
+import com.tutu.myblbl.core.common.cache.FileCacheManager
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.content.ContentFilter

@@ -19,7 +19,7 @@ import com.tutu.myblbl.ui.base.BaseFragment
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.ui.dialog.UserInfoDialog
-import com.tutu.myblbl.ui.fragment.main.settings.SignInFragment
+import com.tutu.myblbl.feature.settings.SignInFragment
 import com.tutu.myblbl.utils.AppLog
 import com.tutu.myblbl.utils.ImageLoader
 import com.tutu.myblbl.utils.enableTouchNavigation

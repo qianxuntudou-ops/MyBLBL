@@ -20,8 +20,8 @@ import com.tutu.myblbl.repository.SearchRepository
 import com.tutu.myblbl.repository.SeriesRepository
 import com.tutu.myblbl.repository.UserRepository
 import com.tutu.myblbl.repository.VideoRepository
-import com.tutu.myblbl.ui.fragment.main.category.CategoryViewModel
-import com.tutu.myblbl.ui.fragment.main.dynamic.DynamicViewModel
+import com.tutu.myblbl.feature.category.CategoryViewModel
+import com.tutu.myblbl.feature.dynamic.DynamicViewModel
 import com.tutu.myblbl.feature.home.HotViewModel
 import com.tutu.myblbl.feature.home.RecommendViewModel
 import com.tutu.myblbl.feature.live.LiveListViewModel

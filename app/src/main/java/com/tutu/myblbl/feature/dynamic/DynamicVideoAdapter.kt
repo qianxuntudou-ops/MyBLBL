@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.dynamic
+package com.tutu.myblbl.feature.dynamic
 
 import android.os.Handler
 import android.os.Looper

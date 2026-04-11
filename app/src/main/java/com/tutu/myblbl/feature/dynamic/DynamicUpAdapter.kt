@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.dynamic
+package com.tutu.myblbl.feature.dynamic
 
 import android.view.LayoutInflater
 import android.view.KeyEvent

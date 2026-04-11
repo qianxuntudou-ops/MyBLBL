@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.dynamic
+package com.tutu.myblbl.feature.dynamic
 
 import android.os.Bundle
 import android.view.Gravity
@@ -21,7 +21,7 @@ import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.ui.base.BaseFragment
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
-import com.tutu.myblbl.ui.fragment.main.settings.SignInFragment
+import com.tutu.myblbl.feature.settings.SignInFragment
 import com.tutu.myblbl.ui.activity.MainActivity
 import com.tutu.myblbl.ui.view.WrapContentGridLayoutManager
 import com.tutu.myblbl.ui.base.RecyclerViewFocusRestoreHelper

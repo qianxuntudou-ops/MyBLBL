@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.category
+package com.tutu.myblbl.feature.category
 
 import android.os.Bundle
 import android.view.KeyEvent

@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.settings
+package com.tutu.myblbl.feature.settings
 
 import android.os.Build
 import android.content.SharedPreferences

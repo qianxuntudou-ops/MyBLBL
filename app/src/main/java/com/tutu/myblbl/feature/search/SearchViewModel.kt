@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.search
+package com.tutu.myblbl.feature.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

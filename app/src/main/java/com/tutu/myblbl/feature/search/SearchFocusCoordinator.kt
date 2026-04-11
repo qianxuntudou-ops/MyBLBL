@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.search
+package com.tutu.myblbl.feature.search
 
 import android.view.View
 import android.view.ViewTreeObserver

@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.me
+package com.tutu.myblbl.feature.me
 
 import com.tutu.myblbl.model.video.HistoryVideoModel
 import com.tutu.myblbl.model.video.VideoModel

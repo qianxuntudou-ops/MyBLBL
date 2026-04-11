@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.live
+package com.tutu.myblbl.feature.live
 
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager

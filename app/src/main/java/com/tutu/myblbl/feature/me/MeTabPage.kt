@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.me
+package com.tutu.myblbl.feature.me
 
 interface MeTabPage {
     fun scrollToTop()

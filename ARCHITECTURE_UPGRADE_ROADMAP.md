@@ -259,8 +259,11 @@ app/src/main/java/com/tutu/myblbl/
 
 - `home` 相关 Fragment / ViewModel / adapter 已迁入 `feature/home`
 - 播放器相关 Fragment、ViewModel、协同对象、自定义 View 已迁入 `feature/player`
+- `live` 相关 Fragment / ViewModel / adapter 已迁入 `feature/live`
+- `search` 相关 Fragment / ViewModel / adapter / focus 协调对象已迁入 `feature/search`
+- `me` 相关 Fragment / ViewModel / adapter / ui state 已迁入 `feature/me`
 - 关联的 XML 自定义 View 全限定类名、baseline profile、测试包引用已同步到新的 feature 包名
-- 从当前体量看，如果还要继续扩大迁移，优先评估 `main/live`、`main/me`、`main/search` 这几块
+- 主导航入口里剩余的 `main/category`、`main/dynamic`、`main/settings` 体量较小，可以按后续需求顺手迁移
 - `detail / favorite / user / series` 仍值得做，但更适合作为后续按需求逐步推进的批次，而不是马上全量平移
 
 ---

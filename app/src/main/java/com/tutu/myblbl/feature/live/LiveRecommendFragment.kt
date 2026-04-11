@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.live
+package com.tutu.myblbl.feature.live
 
 import android.view.LayoutInflater
 import android.view.View

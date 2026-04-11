@@ -1,4 +1,4 @@
-package com.tutu.myblbl.ui.fragment.main.search
+package com.tutu.myblbl.feature.search
 
 import android.view.KeyEvent
 import android.view.View
@@ -11,10 +11,11 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellSearchRecentlyBinding
 import com.tutu.myblbl.model.search.HotWordModel
 
-class HotSearchAdapter(
+class SearchSuggestAdapter(
     private val onItemClick: (String) -> Unit,
-    private val onLeftEdge: ((View) -> Boolean)? = null
-) : RecyclerView.Adapter<HotSearchAdapter.ViewHolder>() {
+    private val onLeftEdge: ((View) -> Boolean)? = null,
+    private val onRightEdge: ((View) -> Boolean)? = null
+) : RecyclerView.Adapter<SearchSuggestAdapter.ViewHolder>() {
 
     private val data = mutableListOf<HotWordModel>()
 
@@ -22,13 +23,13 @@ class HotSearchAdapter(
         updateData(list)
     }
 
-    fun setKeywords(keywords: List<String>) {
+    fun setKeywords(keywords: List<String>, isHistory: Boolean = false) {
         val keywordRows = keywords.mapIndexed { index, keyword ->
-            HotWordModel.createHot(
-                keyword = keyword,
-                showName = keyword,
-                pos = index + 1
-            )
+            if (isHistory) {
+                HotWordModel.createHistory(keyword, index)
+            } else {
+                HotWordModel.createSuggest(keyword)
+            }
         }
         updateData(keywordRows)
     }
@@ -72,14 +73,15 @@ class HotSearchAdapter(
                 }
                 when (keyCode) {
                     KeyEvent.KEYCODE_DPAD_LEFT -> onLeftEdge?.invoke(view) == true
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> onRightEdge?.invoke(view) == true
                     else -> false
                 }
             }
         }
 
         fun bind(model: HotWordModel) {
-            binding.clickView.tag = model.keyword
             binding.textTitle.text = model.showName
+            binding.clickView.tag = model.keyword
             updateIcon(binding.imageIcon, model)
         }
 

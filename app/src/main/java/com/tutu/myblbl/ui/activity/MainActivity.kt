@@ -26,11 +26,11 @@ import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.ui.fragment.main.category.CategoryFragment
 import com.tutu.myblbl.ui.fragment.main.dynamic.DynamicFragment
 import com.tutu.myblbl.feature.home.HomeFragment
-import com.tutu.myblbl.ui.fragment.main.live.LiveFragment
-import com.tutu.myblbl.ui.fragment.main.me.MeFragment
+import com.tutu.myblbl.feature.live.LiveFragment
+import com.tutu.myblbl.feature.me.MeFragment
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
-import com.tutu.myblbl.ui.fragment.main.search.SearchNewFragment
+import com.tutu.myblbl.feature.search.SearchNewFragment
 import com.tutu.myblbl.ui.fragment.main.settings.SettingsFragment
 import com.tutu.myblbl.ui.fragment.main.settings.SignInFragment
 import com.tutu.myblbl.ui.dialog.UserInfoDialog

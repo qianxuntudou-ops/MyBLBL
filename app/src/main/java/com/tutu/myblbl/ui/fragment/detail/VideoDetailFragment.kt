@@ -33,7 +33,7 @@ import com.tutu.myblbl.ui.adapter.VideoAdapter
 import com.tutu.myblbl.ui.base.BaseFragment
 import com.tutu.myblbl.ui.dialog.OwnerDetailDialog
 import com.tutu.myblbl.ui.dialog.PlayerActionDialog
-import com.tutu.myblbl.ui.fragment.main.search.SearchNewFragment
+import com.tutu.myblbl.feature.search.SearchNewFragment
 import com.tutu.myblbl.utils.serializableCompat
 import com.tutu.myblbl.utils.ContentFilter
 import com.tutu.myblbl.utils.ImageLoader

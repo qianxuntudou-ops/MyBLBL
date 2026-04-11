@@ -40,7 +40,7 @@
         android:id="@+id/dmk_view"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
-    <com.tutu.myblbl.ui.view.player.SpecialDanmakuOverlayView
+    <com.tutu.myblbl.feature.player.view.SpecialDanmakuOverlayView
         android:id="@+id/special_dmk_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
@@ -48,12 +48,12 @@
         android:id="@+id/exo_controller_placeholder"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
-    <com.tutu.myblbl.ui.view.player.YouTubeOverlay
+    <com.tutu.myblbl.feature.player.view.YouTubeOverlay
         android:id="@+id/view_youtube_overlay"
         android:visibility="gone"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
-    <com.tutu.myblbl.ui.view.player.MyPlayerSettingView
+    <com.tutu.myblbl.feature.player.view.MyPlayerSettingView
         android:id="@+id/setting_view"
         android:visibility="gone"
         android:layout_width="match_parent"

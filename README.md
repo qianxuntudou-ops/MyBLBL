@@ -22,6 +22,17 @@
 - **弹幕**: 快手 AkDanmaku 引擎 
 - **最低版本**: Android 5.0 (API 21)
 - **目标版本**: Android 15 (API 35)
+
+## 🧭 开发与架构约束
+
+- UI 页面 / Fragment / Activity / Dialog 默认不直接 `new Repository()`，优先通过 Koin 注入 `ViewModel` / `repository` / gateway
+- 新页面优先走 injected `ViewModel` 或显式 injected `repository`，不要继续从 UI 直接访问全局静态入口
+- 新功能优先进入 `feature/*` 目录；跨 feature 的公共能力放 `core/*`
+- `NetworkManager` 只保留 runtime facade / bootstrap 边界：允许 `Application` 初始化、DI 装配暴露、gateway 兼容委托使用
+- 新业务逻辑、新页面、新 repository、新播放器流程不再继续直接依赖或扩展 `NetworkManager`
+- 少量不走 Koin 生命周期的 helper / custom view / tool 对象暂不要求一次性清零，但不能继续扩散职责
+- 代码评审默认使用 [docs/ARCHITECTURE_REVIEW_CHECKLIST.md](docs/ARCHITECTURE_REVIEW_CHECKLIST.md)
+
 ## APP 截图
 
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b746a1dd-8243-4378-a1ea-c023460323b7" />

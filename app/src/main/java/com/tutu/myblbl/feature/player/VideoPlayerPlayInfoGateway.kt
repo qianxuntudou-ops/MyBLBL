@@ -1,0 +1,766 @@
+package com.tutu.myblbl.feature.player
+
+import com.tutu.myblbl.model.player.PlayInfoModel
+import com.tutu.myblbl.model.proto.DmProtoParser
+import com.tutu.myblbl.model.player.VideoSnapshotData
+import com.tutu.myblbl.network.WbiGenerator
+import com.tutu.myblbl.network.api.ApiService
+import com.tutu.myblbl.network.security.NetworkSecurityGateway
+import com.tutu.myblbl.network.session.NetworkSessionGateway
+import com.tutu.myblbl.network.response.Base2Response
+import com.tutu.myblbl.network.response.PlayerInfoDataWrapper
+import com.tutu.myblbl.utils.AppLog
+import com.tutu.myblbl.utils.CookieManager
+import okhttp3.OkHttpClient
+import okhttp3.Request
+
+class VideoPlayerPlayInfoGateway(
+    private val apiService: ApiService,
+    private val okHttpClient: OkHttpClient,
+    private val cookieManager: CookieManager,
+    private val sessionGateway: NetworkSessionGateway,
+    private val securityGateway: NetworkSecurityGateway,
+    private val logTag: String
+) {
+
+    private data class DanmakuSegmentProbe(
+        val bytes: ByteArray,
+        val elemCount: Int,
+        val state: Int
+    )
+
+    data class PlayInfoResult(
+        val code: Int,
+        val message: String,
+        val data: PlayInfoModel?,
+        val isTryLookBypass: Boolean = false,
+        val vVoucher: String = ""
+    ) {
+        val isSuccess: Boolean
+            get() = code == 0 && data != null
+
+        val hasVVoucher: Boolean
+            get() = vVoucher.isNotBlank()
+    }
+
+    suspend fun requestPlayInfo(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        epId: Long?,
+        qualityId: Int,
+        fnval: Int,
+        fourk: Int,
+        allowWbi: Boolean = true
+    ): PlayInfoResult? {
+        if (epId != null && epId > 0L) {
+            return requestPgcPlayInfo(
+                aid = aid,
+                bvid = bvid,
+                cid = cid,
+                epId = epId,
+                qualityId = qualityId,
+                fnval = fnval,
+                fourk = fourk
+            )
+        }
+
+        val resolvedBvid = bvid?.takeIf { it.isNotBlank() } ?: return null
+
+        securityGateway.ensureHealthyForPlay()
+
+        val primaryResult = requestPrimaryPlayInfo(
+            aid = aid,
+            bvid = resolvedBvid,
+            cid = cid,
+            qualityId = qualityId,
+            fnval = fnval,
+            fourk = fourk,
+            allowWbi = allowWbi
+        )
+
+        if (primaryResult != null && hasPlayableMedia(primaryResult.data)) {
+            return primaryResult
+        }
+
+        val primaryCode = primaryResult?.code ?: 0
+        val primaryMessage = primaryResult?.message.orEmpty()
+        val extractedVVoucher = primaryResult?.data?.vVoucher?.trim().orEmpty()
+
+        if (extractedVVoucher.isNotBlank()) {
+            AppLog.w(logTag, "requestPlayInfo v_voucher detected: cid=$cid, qn=$qualityId, vVoucherLen=${extractedVVoucher.length}")
+        }
+
+        if (isRiskControlSignal(primaryCode, primaryResult?.data, primaryMessage)) {
+            AppLog.w(logTag, "requestPlayInfo risk-control detected: code=$primaryCode, falling back to try_look, cid=$cid, qn=$qualityId")
+            val tryLookResult = requestTryLookPlayInfo(
+                aid = aid,
+                bvid = resolvedBvid,
+                cid = cid,
+                qualityId = qualityId,
+                fnval = fnval,
+                fourk = fourk,
+                allowWbi = allowWbi
+            )
+            if (tryLookResult != null && hasPlayableMedia(tryLookResult.data)) {
+                return tryLookResult.copy(isTryLookBypass = true, vVoucher = extractedVVoucher)
+            }
+            return (tryLookResult ?: primaryResult)?.copy(vVoucher = extractedVVoucher)
+        }
+
+        return primaryResult
+    }
+
+    private suspend fun requestPrimaryPlayInfo(
+        aid: Long?,
+        bvid: String,
+        cid: Long,
+        qualityId: Int,
+        fnval: Int,
+        fourk: Int,
+        allowWbi: Boolean
+    ): PlayInfoResult? {
+        val wbiResult = if (allowWbi) {
+            requestWbiPlayInfo(aid, bvid, cid, qualityId, fnval, fourk)
+        } else null
+
+        if (wbiResult != null && hasPlayableMedia(wbiResult.data)) {
+            return wbiResult
+        }
+
+        val normalResult = requestNormalPlayInfo(aid, bvid, cid, qualityId, fnval, fourk)
+
+        if (normalResult != null && hasPlayableMedia(normalResult.data)) {
+            return normalResult
+        }
+
+        if (wbiResult != null && wbiResult.code == 0 && wbiResult.data != null) {
+            return wbiResult
+        }
+
+        return normalResult ?: wbiResult
+    }
+
+    private suspend fun requestWbiPlayInfo(
+        aid: Long?,
+        bvid: String,
+        cid: Long,
+        qualityId: Int,
+        fnval: Int,
+        fourk: Int
+    ): PlayInfoResult? {
+        ensureWbiKeys()
+        if (!hasWbiKeys()) return null
+
+        val params = mutableMapOf(
+            "bvid" to bvid,
+            "cid" to cid.toString(),
+            "qn" to qualityId.toString(),
+            "fnver" to "0",
+            "fnval" to fnval.toString(),
+            "fourk" to fourk.toString(),
+            "voice_balance" to "1",
+            "gaia_source" to "pre-load",
+            "isGaiaAvoided" to "true",
+            "web_location" to "1315873"
+        )
+        aid?.takeIf { it > 0L }?.let { params["avid"] = it.toString() }
+
+        val gaiaVtoken = cookieManager.getCookieValue("x-bili-gaia-vtoken")?.trim()
+        if (!gaiaVtoken.isNullOrBlank()) {
+            params["gaia_vtoken"] = gaiaVtoken
+        }
+
+        val session = genPlayUrlSession()
+        if (session != null) {
+            params["session"] = session
+        }
+
+        val wbiResponse = runCatching {
+            apiService.getVideoPlayInfoWbi(buildWbiParams(params))
+        }.onFailure { throwable ->
+            AppLog.e(logTag, "requestPlayInfo wbi exception: ${throwable.message}", throwable)
+        }.getOrNull()
+
+        if (wbiResponse != null) {
+            AppLog.d(
+                logTag,
+                "requestPlayInfo wbi response: code=${wbiResponse.code}, success=${wbiResponse.isSuccess}"
+            )
+            return PlayInfoResult(
+                code = wbiResponse.code,
+                message = wbiResponse.message,
+                data = wbiResponse.data
+            )
+        }
+        return null
+    }
+
+    private suspend fun requestNormalPlayInfo(
+        aid: Long?,
+        bvid: String,
+        cid: Long,
+        qualityId: Int,
+        fnval: Int,
+        fourk: Int
+    ): PlayInfoResult? {
+        val normalResponse = runCatching {
+            apiService.getVideoPlayInfo(
+                avid = aid,
+                bvid = bvid,
+                cid = cid,
+                qn = qualityId,
+                fnval = fnval,
+                fourk = fourk,
+                fnver = 0
+            )
+        }.onFailure { throwable ->
+            AppLog.e(logTag, "requestPlayInfo normal exception: ${throwable.message}", throwable)
+        }.getOrNull()
+
+        if (normalResponse != null) {
+            AppLog.d(
+                logTag,
+                "requestPlayInfo normal response: code=${normalResponse.code}, success=${normalResponse.isSuccess}"
+            )
+            return PlayInfoResult(
+                code = normalResponse.code,
+                message = normalResponse.message,
+                data = normalResponse.data
+            )
+        }
+        return null
+    }
+
+    private suspend fun requestTryLookPlayInfo(
+        aid: Long?,
+        bvid: String,
+        cid: Long,
+        qualityId: Int,
+        fnval: Int,
+        fourk: Int,
+        allowWbi: Boolean
+    ): PlayInfoResult? {
+        val wbiTryLook = if (allowWbi) {
+            requestWbiTryLookPlayInfo(aid, bvid, cid, qualityId, fnval, fourk)
+        } else null
+
+        if (wbiTryLook != null && hasPlayableMedia(wbiTryLook.data)) {
+            return wbiTryLook
+        }
+
+        val normalTryLook = requestNormalTryLookPlayInfo(aid, bvid, cid, qualityId, fnval, fourk)
+
+        if (normalTryLook != null && hasPlayableMedia(normalTryLook.data)) {
+            return normalTryLook
+        }
+
+        return wbiTryLook ?: normalTryLook
+    }
+
+    private suspend fun requestWbiTryLookPlayInfo(
+        aid: Long?,
+        bvid: String,
+        cid: Long,
+        qualityId: Int,
+        fnval: Int,
+        fourk: Int
+    ): PlayInfoResult? {
+        ensureWbiKeys()
+        if (!hasWbiKeys()) return null
+
+        val params = mutableMapOf(
+            "bvid" to bvid,
+            "cid" to cid.toString(),
+            "qn" to qualityId.toString(),
+            "fnver" to "0",
+            "fnval" to fnval.toString(),
+            "fourk" to fourk.toString(),
+            "try_look" to "1",
+            "voice_balance" to "1",
+            "gaia_source" to "pre-load",
+            "isGaiaAvoided" to "true",
+            "web_location" to "1315873"
+        )
+        aid?.takeIf { it > 0L }?.let { params["avid"] = it.toString() }
+
+        val session = genPlayUrlSession()
+        if (session != null) {
+            params["session"] = session
+        }
+
+        val wbiResponse = runCatching {
+            apiService.getVideoPlayInfoWbiTryLook(buildWbiParams(params))
+        }.onFailure { throwable ->
+            AppLog.e(logTag, "requestPlayInfo wbi try_look exception: ${throwable.message}", throwable)
+        }.getOrNull()
+
+        if (wbiResponse != null) {
+            AppLog.d(
+                logTag,
+                "requestPlayInfo wbi try_look response: code=${wbiResponse.code}, success=${wbiResponse.isSuccess}"
+            )
+            return PlayInfoResult(
+                code = wbiResponse.code,
+                message = wbiResponse.message,
+                data = wbiResponse.data
+            )
+        }
+        return null
+    }
+
+    private suspend fun requestNormalTryLookPlayInfo(
+        aid: Long?,
+        bvid: String,
+        cid: Long,
+        qualityId: Int,
+        fnval: Int,
+        fourk: Int
+    ): PlayInfoResult? {
+        val response = runCatching {
+            apiService.getVideoPlayInfoTryLook(
+                avid = aid,
+                bvid = bvid,
+                cid = cid,
+                qn = qualityId,
+                fnval = fnval,
+                fourk = fourk,
+                fnver = 0
+            )
+        }.onFailure { throwable ->
+            AppLog.e(logTag, "requestPlayInfo normal try_look exception: ${throwable.message}", throwable)
+        }.getOrNull()
+
+        if (response != null) {
+            AppLog.d(
+                logTag,
+                "requestPlayInfo normal try_look response: code=${response.code}, success=${response.isSuccess}"
+            )
+            return PlayInfoResult(
+                code = response.code,
+                message = response.message,
+                data = response.data
+            )
+        }
+        return null
+    }
+
+    private fun isRiskControlSignal(code: Int, data: PlayInfoModel?, message: String): Boolean {
+        if (code == -351 || code == -412 || code == -352) return true
+        if (code == 0 && data != null && !hasPlayableMedia(data)) return true
+        val riskKeywords = listOf("风控", "风险", "拦截", "神秘力量", "risk", "blocked")
+        return riskKeywords.any { message.contains(it, ignoreCase = true) }
+    }
+
+    suspend fun requestPlayerInfoData(
+        aid: Long?,
+        bvid: String?,
+        cid: Long
+    ): PlayerInfoDataWrapper? {
+        val normalResponse = runCatching {
+            apiService.getPlayerInfo(
+                aid = aid,
+                bvid = bvid,
+                cid = cid
+            )
+        }.onFailure { throwable ->
+            AppLog.e(logTag, "loadPlayerInfoData normal exception: ${throwable.message}", throwable)
+        }.getOrNull()
+        if (normalResponse != null) {
+            AppLog.d(
+                logTag,
+                "loadPlayerInfoData normal response: code=${normalResponse.code}, success=${normalResponse.isSuccess}"
+            )
+        }
+        normalResponse?.data?.takeIf { normalResponse.isSuccess }?.let { return it }
+
+        ensureWbiKeys()
+        if (!hasWbiKeys()) {
+            return null
+        }
+        val params = mutableMapOf("cid" to cid.toString())
+        aid?.let { params["avid"] = it.toString() }
+        bvid?.takeIf { it.isNotBlank() }?.let { params["bvid"] = it }
+        val wbiResponse = runCatching {
+            apiService.getPlayerInfoWbi(buildWbiParams(params))
+        }.onFailure { throwable ->
+            AppLog.e(logTag, "loadPlayerInfoData wbi exception: ${throwable.message}", throwable)
+        }.getOrNull()
+        if (wbiResponse != null) {
+            AppLog.d(
+                logTag,
+                "loadPlayerInfoData wbi response: code=${wbiResponse.code}, success=${wbiResponse.isSuccess}"
+            )
+        }
+        return wbiResponse?.takeIf { it.isSuccess }?.data
+    }
+
+    suspend fun requestVideoSnapshot(
+        aid: Long?,
+        bvid: String?,
+        cid: Long
+    ): VideoSnapshotData? {
+        if ((aid == null || aid <= 0L) && bvid.isNullOrBlank()) {
+            return null
+        }
+        if (cid <= 0L) {
+            return null
+        }
+
+        val response = runCatching {
+            apiService.getVideoSnapshot(
+                aid = aid,
+                bvid = bvid,
+                cid = cid
+            )
+        }.onFailure { throwable ->
+            AppLog.e(logTag, "requestVideoSnapshot exception: ${throwable.message}", throwable)
+        }.getOrNull()
+
+        if (response != null) {
+            AppLog.d(
+                logTag,
+                "requestVideoSnapshot response: code=${response.code}, success=${response.isSuccess}, images=${response.data?.images?.size ?: 0}, indexSize=${response.data?.index?.size ?: 0}, cid=$cid"
+            )
+        }
+
+        return response?.data?.takeIf { response.isSuccess }
+    }
+
+    suspend fun requestDanmakuSegmentBytes(
+        cid: Long,
+        aid: Long,
+        segmentIndex: Int
+    ): ByteArray? {
+        val normalBytes = runCatching {
+            apiService.getVideoComment(
+                oid = cid,
+                pid = aid,
+                segmentIndex = segmentIndex
+            ).use { responseBody ->
+                responseBody.bytes()
+            }
+        }.getOrNull()
+        val normalProbe = probeDanmakuSegment(normalBytes)
+        logDanmakuSegmentProbe(
+            source = "normal",
+            cid = cid,
+            aid = aid,
+            segmentIndex = segmentIndex,
+            probe = normalProbe
+        )
+        if (normalProbe != null && !isSuspiciousDanmakuSegment(normalProbe)) {
+            return normalProbe.bytes
+        }
+
+        if (normalProbe != null) {
+            AppLog.w(
+                logTag,
+                "requestDanmakuSegment suspicious normal payload: cid=$cid, aid=$aid, segment=$segmentIndex, bytes=${normalProbe.bytes.size}, elems=${normalProbe.elemCount}, state=${normalProbe.state}"
+            )
+        }
+
+        securityGateway.prewarmWebSession(forceUaRefresh = normalProbe != null)
+        ensureWbiKeys()
+
+        if (!hasWbiKeys()) {
+            return normalProbe?.bytes
+        }
+
+        val params = buildWbiParams(
+            mapOf(
+                "type" to "1",
+                "oid" to cid.toString(),
+                "pid" to aid.toString(),
+                "segment_index" to segmentIndex.toString()
+            )
+        )
+        val wbiBytes = runCatching {
+            apiService.getVideoCommentWbi(params).use { responseBody ->
+                responseBody.bytes()
+            }
+        }.getOrNull()
+        val wbiProbe = probeDanmakuSegment(wbiBytes)
+        logDanmakuSegmentProbe(
+            source = "wbi",
+            cid = cid,
+            aid = aid,
+            segmentIndex = segmentIndex,
+            probe = wbiProbe
+        )
+        if (wbiProbe != null) {
+            if (!isSuspiciousDanmakuSegment(wbiProbe)) {
+                return wbiProbe.bytes
+            }
+            if (normalProbe == null || wbiProbe.elemCount > normalProbe.elemCount || wbiProbe.bytes.size > normalProbe.bytes.size) {
+                return wbiProbe.bytes
+            }
+        }
+        return normalProbe?.bytes
+    }
+
+    private fun probeDanmakuSegment(bytes: ByteArray?): DanmakuSegmentProbe? {
+        if (bytes == null) {
+            return null
+        }
+        val segment = runCatching { DmProtoParser.parseSegment(bytes) }.getOrNull()
+        return DanmakuSegmentProbe(
+            bytes = bytes,
+            elemCount = segment?.elems?.size ?: -1,
+            state = segment?.state ?: -1
+        )
+    }
+
+    private fun isSuspiciousDanmakuSegment(probe: DanmakuSegmentProbe): Boolean {
+        return probe.bytes.size in 1..64 && probe.elemCount == 0
+    }
+
+    private fun logDanmakuSegmentProbe(
+        source: String,
+        cid: Long,
+        aid: Long,
+        segmentIndex: Int,
+        probe: DanmakuSegmentProbe?
+    ) {
+        AppLog.d(
+            logTag,
+            "requestDanmakuSegment[$source]: cid=$cid, aid=$aid, segment=$segmentIndex, bytes=${probe?.bytes?.size ?: 0}, elems=${probe?.elemCount ?: -1}, state=${probe?.state ?: -1}"
+        )
+    }
+
+    suspend fun requestDanmakuViewBytes(
+        cid: Long,
+        aid: Long
+    ): ByteArray? {
+        return runCatching {
+            apiService.getVideoCommentView(
+                oid = cid,
+                pid = aid
+            ).use { responseBody ->
+                responseBody.bytes()
+            }
+        }.getOrNull()
+    }
+
+    suspend fun requestAbsoluteBytes(url: String): ByteArray? {
+        val normalizedUrl = when {
+            url.startsWith("http://") -> "https://${url.removePrefix("http://")}"
+            url.startsWith("//") -> "https:$url"
+            else -> url
+        }
+        return runCatching {
+            val request = Request.Builder()
+                .url(normalizedUrl)
+                .build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return null
+                }
+                response.body?.bytes()
+            }
+        }.getOrNull()
+    }
+
+    fun hasWbiKeys(): Boolean {
+        val (imgKey, subKey) = sessionGateway.getWbiKeys()
+        return imgKey.isNotBlank() && subKey.isNotBlank()
+    }
+
+    suspend fun warmupWbiKeys() {
+        ensureWbiKeys()
+    }
+
+    private suspend fun requestPgcPlayInfo(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        epId: Long,
+        qualityId: Int,
+        fnval: Int,
+        fourk: Int
+    ): PlayInfoResult? {
+        securityGateway.prewarmWebSession()
+
+        val attempts = listOf(
+            "primary-drm2" to buildPgcPlayParams(
+                aid = aid,
+                bvid = bvid,
+                cid = cid,
+                epId = epId,
+                qualityId = qualityId,
+                fnval = fnval,
+                fourk = fourk,
+                includeCid = true,
+                includeVideoIds = true,
+                drmTechType = 2
+            ),
+            "primary-drm0" to buildPgcPlayParams(
+                aid = aid,
+                bvid = bvid,
+                cid = cid,
+                epId = epId,
+                qualityId = qualityId,
+                fnval = fnval,
+                fourk = fourk,
+                includeCid = true,
+                includeVideoIds = true,
+                drmTechType = 0
+            ),
+            "ep-only-drm2" to buildPgcPlayParams(
+                aid = aid,
+                bvid = bvid,
+                cid = cid,
+                epId = epId,
+                qualityId = qualityId,
+                fnval = fnval,
+                fourk = fourk,
+                includeCid = false,
+                includeVideoIds = false,
+                drmTechType = 2
+            ),
+            "ep-only-drm0" to buildPgcPlayParams(
+                aid = aid,
+                bvid = bvid,
+                cid = cid,
+                epId = epId,
+                qualityId = qualityId,
+                fnval = fnval,
+                fourk = fourk,
+                includeCid = false,
+                includeVideoIds = false,
+                drmTechType = 0
+            )
+        )
+
+        var lastResponse: Base2Response<PlayInfoModel>? = null
+        attempts.forEachIndexed { index, (label, params) ->
+            if (index > 0) {
+                securityGateway.prewarmWebSession(forceUaRefresh = true)
+            }
+            val response = runCatching {
+                apiService.getVideoPlayPgcInfo(params)
+            }.onFailure { throwable ->
+                AppLog.e(
+                    logTag,
+                    "requestPgcPlayInfo[$label] exception: ${throwable.message}",
+                    throwable
+                )
+            }.getOrNull()
+            lastResponse = response
+            if (response != null) {
+                AppLog.d(
+                    logTag,
+                    "requestPgcPlayInfo[$label] response: code=${response.code}, success=${response.isSuccess}, message=${response.message}, epId=$epId, cid=$cid, hasResult=${response.result != null}"
+                )
+                if (response.isSuccess && response.result != null) {
+                    return response.toPlayInfoResult()
+                }
+                if (!shouldRetryPgcPlayInfo(response)) {
+                    return response.toPlayInfoResult()
+                }
+            }
+        }
+
+        if (lastResponse != null) {
+            AppLog.d(
+                logTag,
+                "requestPgcPlayInfo final failure: code=${lastResponse?.code}, message=${lastResponse?.message}, epId=$epId, cid=$cid"
+            )
+        }
+        return lastResponse?.toPlayInfoResult()
+    }
+
+    private fun buildPgcPlayParams(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        epId: Long,
+        qualityId: Int,
+        fnval: Int,
+        fourk: Int,
+        includeCid: Boolean,
+        includeVideoIds: Boolean,
+        drmTechType: Int
+    ): Map<String, String> {
+        val params = linkedMapOf(
+            "ep_id" to epId.toString(),
+            "qn" to qualityId.toString(),
+            "fnver" to "0",
+            "fnval" to fnval.toString(),
+            "fourk" to fourk.toString(),
+            "from_client" to "BROWSER",
+            "drm_tech_type" to drmTechType.toString()
+        )
+        if (includeCid && cid > 0L) {
+            params["cid"] = cid.toString()
+        }
+        if (includeVideoIds) {
+            aid?.takeIf { it > 0L }?.let { params["avid"] = it.toString() }
+            bvid?.takeIf { it.isNotBlank() }?.let { params["bvid"] = it }
+        }
+        return params
+    }
+
+    private fun shouldRetryPgcPlayInfo(response: Base2Response<PlayInfoModel>): Boolean {
+        if (response.isSuccess && response.result != null) {
+            return false
+        }
+        val message = response.message.trim()
+        return response.code != 0 ||
+            response.result == null ||
+            message.contains("啥都没有") ||
+            message.contains("nothing", ignoreCase = true)
+    }
+
+    private suspend fun ensureWbiKeys() {
+        if (hasWbiKeys()) {
+            return
+        }
+        if (!sessionGateway.isLoggedIn()) {
+            AppLog.d(logTag, "ensureWbiKeys skipped: user not logged in")
+            return
+        }
+        val response = runCatching {
+            apiService.getUserDetailInfo()
+        }.onFailure { throwable ->
+            AppLog.e(logTag, "ensureWbiKeys exception: ${throwable.message}", throwable)
+        }.getOrNull() ?: return
+        if (sessionGateway.syncUserSession(response, source = "ensureWbiKeys") != null) {
+            AppLog.d(logTag, "ensureWbiKeys success")
+        } else {
+            AppLog.e(logTag, "ensureWbiKeys failed: code=${response.code}, message=${response.errorMessage}")
+        }
+    }
+
+    private fun buildWbiParams(params: Map<String, String>): Map<String, String> {
+        val (imgKey, subKey) = sessionGateway.getWbiKeys()
+        return WbiGenerator.generateWbiParams(params, imgKey, subKey)
+    }
+
+    private fun Base2Response<PlayInfoModel>.toPlayInfoResult(): PlayInfoResult {
+        return PlayInfoResult(
+            code = code,
+            message = message,
+            data = result
+        )
+    }
+
+    private fun hasPlayableMedia(playInfo: PlayInfoModel?): Boolean {
+        if (playInfo == null) {
+            return false
+        }
+        val hasDashVideo = playInfo.dash?.video.orEmpty().isNotEmpty()
+        val hasDurl = playInfo.durl.orEmpty().any { it.url.isNotBlank() }
+        return hasDashVideo || hasDurl
+    }
+
+    private fun genPlayUrlSession(): String? {
+        val buvid3 = cookieManager.getCookieValue("buvid3")?.trim()
+        if (buvid3.isNullOrBlank()) return null
+        val nowMs = System.currentTimeMillis()
+        val raw = "$buvid3$nowMs"
+        val md = java.security.MessageDigest.getInstance("MD5")
+        val digest = md.digest(raw.toByteArray())
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+}

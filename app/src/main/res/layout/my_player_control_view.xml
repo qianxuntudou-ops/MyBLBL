@@ -69,7 +69,7 @@
                 android:shadowRadius="1.6"
                 app:layout_constraintTop_toBottomOf="@+id/text_title"/>
         </androidx.appcompat.widget.LinearLayoutCompat>
-        <com.tutu.myblbl.ui.view.player.DefaultTimeBar
+        <com.tutu.myblbl.feature.player.view.DefaultTimeBar
             android:id="@+id/exo_progress"
             android:nextFocusDown="@+id/button_play"
             android:nextFocusUp="@id/exo_progress"
@@ -92,7 +92,7 @@
                 android:layout_gravity="start|center_vertical"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_play"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px28"
@@ -104,8 +104,8 @@
                     android:src="@drawable/ic_play"
                     android:contentDescription="@string/play_pause">
                     <requestFocus/>
-                </com.tutu.myblbl.ui.view.player.PlayerControlButton>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                </com.tutu.myblbl.feature.player.view.PlayerControlButton>
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_previous"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px27"
@@ -116,7 +116,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_previous"
                     android:contentDescription="@string/previous_ep"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_next"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px27"
@@ -127,7 +127,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_next"
                     android:contentDescription="@string/next_ep"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_rewind"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px10"
@@ -138,7 +138,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_rewind"
                     android:contentDescription="@string/rewind"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_fast_forward"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px10"
@@ -149,7 +149,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_fast_forward"
                     android:contentDescription="@string/fast_forward"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_dm_switch"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px15"
@@ -161,7 +161,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_dm_enable"
                     android:contentDescription="@string/dm_switch"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/exo_settings"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px20"
@@ -172,7 +172,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_player_setting"
                     android:contentDescription="@string/setting"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_choose_episode"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px29"
@@ -183,7 +183,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_list"
                     android:contentDescription="@string/choose_episode"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_more"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px20"
@@ -194,7 +194,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_more"
                     android:contentDescription="@string/more"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_up_info"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px25"
@@ -205,7 +205,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_user"
                     android:contentDescription="@string/up_info"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_subtitle"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px22"
@@ -217,7 +217,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_subtitles"
                     android:contentDescription="@string/subtitle"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_related"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px20"
@@ -228,7 +228,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/arrow_down"
                     android:contentDescription="@string/related_video"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_repeat"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px22"
@@ -240,7 +240,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_order_all_play"
                     android:contentDescription="@string/play_order"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_live_settings"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px22"
@@ -252,7 +252,7 @@
                     android:layout_height="@dimen/px100"
                     android:src="@drawable/ic_setting"
                     android:contentDescription="@string/live_quality"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_close"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px22"
@@ -264,7 +264,7 @@
                     android:src="@drawable/ic_close"
                     android:contentDescription="@string/close"
                     android:visibility="gone"/>
-                <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/exo_overflow_show"
                     android:background="@drawable/cell_background"
                     android:padding="@dimen/px20"
@@ -294,7 +294,7 @@
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
-                    <com.tutu.myblbl.ui.view.player.PlayerControlButton
+                    <com.tutu.myblbl.feature.player.view.PlayerControlButton
                         android:id="@+id/exo_overflow_hide"
                         android:background="@drawable/cell_background"
                         android:padding="@dimen/px22"

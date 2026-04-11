@@ -39,7 +39,7 @@ import com.kuaishou.akdanmaku.data.DanmakuItem
 import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.ui.DanmakuDisplayer
 import com.kuaishou.akdanmaku.utils.Size
-import com.tutu.myblbl.ui.view.player.VipDanmakuTextureCache
+import com.tutu.myblbl.feature.player.view.VipDanmakuTextureCache
 import java.util.HashMap
 import kotlin.math.roundToInt
 

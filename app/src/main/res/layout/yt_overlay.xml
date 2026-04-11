@@ -3,13 +3,13 @@
     android:id="@+id/root_constraint_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
-    <com.tutu.myblbl.ui.view.player.CircleClipTapView
+    <com.tutu.myblbl.feature.player.view.CircleClipTapView
         android:id="@+id/circle_clip_tap_view"
         android:focusable="false"
         android:clickable="false"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
-    <com.tutu.myblbl.ui.view.player.SecondsView
+    <com.tutu.myblbl.feature.player.view.SecondsView
         android:id="@+id/seconds_view"
         android:focusable="false"
         android:visibility="invisible"

@@ -4,7 +4,7 @@
     android:descendantFocusability="afterDescendants"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
-    <com.tutu.myblbl.ui.view.player.MyPlayerView
+    <com.tutu.myblbl.feature.player.view.MyPlayerView
         android:id="@+id/playerView"
         android:focusable="true"
         android:descendantFocusability="afterDescendants"
@@ -178,7 +178,7 @@
         android:layout_marginBottom="@dimen/px60"
         android:paddingStart="@dimen/px30"
         android:paddingEnd="@dimen/px30"/>
-    <com.tutu.myblbl.ui.view.player.InteractionVideoHandleView
+    <com.tutu.myblbl.feature.player.view.InteractionVideoHandleView
         android:id="@+id/interaction_view"
         android:visibility="gone"
         android:layout_width="match_parent"

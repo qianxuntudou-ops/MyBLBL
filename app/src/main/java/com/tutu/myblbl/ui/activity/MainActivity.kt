@@ -25,7 +25,7 @@ import com.tutu.myblbl.ui.base.OnBackPressedHandler
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.ui.fragment.main.category.CategoryFragment
 import com.tutu.myblbl.ui.fragment.main.dynamic.DynamicFragment
-import com.tutu.myblbl.ui.fragment.main.home.HomeFragment
+import com.tutu.myblbl.feature.home.HomeFragment
 import com.tutu.myblbl.ui.fragment.main.live.LiveFragment
 import com.tutu.myblbl.ui.fragment.main.me.MeFragment
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
@@ -34,8 +34,8 @@ import com.tutu.myblbl.ui.fragment.main.search.SearchNewFragment
 import com.tutu.myblbl.ui.fragment.main.settings.SettingsFragment
 import com.tutu.myblbl.ui.fragment.main.settings.SignInFragment
 import com.tutu.myblbl.ui.dialog.UserInfoDialog
-import com.tutu.myblbl.ui.fragment.player.PlayerLaunchContext
-import com.tutu.myblbl.ui.fragment.player.VideoPlayerFragment
+import com.tutu.myblbl.feature.player.PlayerLaunchContext
+import com.tutu.myblbl.feature.player.VideoPlayerFragment
 import com.tutu.myblbl.ui.view.TabBarView
 import com.tutu.myblbl.utils.AppLog
 import kotlinx.coroutines.delay

@@ -13,8 +13,8 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.ui.base.BaseActivity
 import com.tutu.myblbl.databinding.ActivityPlayerBinding
 import com.tutu.myblbl.model.video.VideoModel
-import com.tutu.myblbl.ui.fragment.player.PlayerLaunchContext
-import com.tutu.myblbl.ui.fragment.player.VideoPlayerFragment
+import com.tutu.myblbl.feature.player.PlayerLaunchContext
+import com.tutu.myblbl.feature.player.VideoPlayerFragment
 import com.tutu.myblbl.utils.AppLog
 import java.io.Serializable
 

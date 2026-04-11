@@ -150,9 +150,9 @@
 - [x] 拆出 `BiliSecurityService` 或等价命名组件
 - [x] 拆出 `NetworkClientFactory`
 - [x] 保留一个轻量 facade，避免一次性改太多调用点
-- [ ] 新代码禁止继续直接往 `NetworkManager` 塞新职责
+- [x] 冻结 `NetworkManager` 的职责边界，不再给它增加新的业务职责
 - [x] 将 repository 层对 `NetworkManager` 的静态访问收口到更明确的 provider / gateway
-- [ ] 将 player / dialog / activity 层对 `NetworkManager` 的静态访问继续收口到更明确的 provider / gateway
+- [ ] 将剩余业务代码对 `NetworkManager` 的直接依赖继续收口到更明确的 provider / gateway
 
 ### 推荐拆分方向
 
@@ -183,6 +183,26 @@
 - repository 层已经不再直接依赖 `NetworkManager` 的登录态 / WBI / 预热等静态入口，而是通过显式注入的 gateway 协作
 - UI 与播放器主链路已经开始消费同一套 gateway / runtime 依赖
 - 剩余 `NetworkManager` 静态访问已主要收缩到应用启动根节点、gateway 实现本身，以及少量不走 Koin 生命周期的 helper / view 工具
+
+### 当前判断
+
+这里的“限制 `NetworkManager`”不是指把它从项目里彻底消灭，而是指冻结它的职责边界，防止它重新膨胀成新的全局大类。
+
+当前建议执行口径：
+
+- 允许保留的入口：
+  - 应用启动根节点，例如 `Application` 初始化
+  - DI 装配层暴露 `ApiService` / `OkHttpClient` / `CookieManager`
+  - `Network*Gateway` 的兼容实现内部委托给 `NetworkManager`
+- 需要继续避免的用法：
+  - 新业务逻辑直接往 `NetworkManager` 增加方法
+  - 新页面 / 新仓库 / 新播放器流程直接依赖 `NetworkManager`
+  - 为了图省事把临时逻辑堆进 `NetworkManager`
+- 暂不要求立刻清零的区域：
+  - 少量不走 Koin 生命周期的 helper / custom view / 工具对象
+  - 这些区域应保持收敛，等真正膨胀时再专项治理
+
+也就是说，后续限制的重点不是“禁用 `NetworkManager`”，而是“禁止它继续扩散职责和继续向业务代码渗透”。
 
 ---
 
@@ -216,9 +236,9 @@ app/src/main/java/com/tutu/myblbl/
 
 ### 需要做的事
 
-- [ ] 新代码优先放到 `feature/*` 下
-- [ ] 将 `ui/fragment/main/home` 相关逻辑逐步迁到 `feature/home`
-- [ ] 将播放器相关逻辑收拢到 `feature/player`
+- [x] 新代码优先放到 `feature/*` 下
+- [x] 将 `ui/fragment/main/home` 相关逻辑逐步迁到 `feature/home`
+- [x] 将播放器相关逻辑收拢到 `feature/player`
 - [ ] 将详情、追番、收藏、用户空间等按 feature 收拢
 - [ ] 将 `ui/base`、通用焦点恢复、通用视图能力放入 `core/ui`
 - [ ] 将共用 model 中真正跨 feature 的部分保留在 `core/common` 或 `core/model`
@@ -234,6 +254,14 @@ app/src/main/java/com/tutu/myblbl/
 - 新增功能不再往“巨型 ui 包”里继续堆
 - 首页、播放器、详情页的代码归属更清晰
 - feature 的入口、状态、数据依赖更容易追踪
+
+### 当前进展
+
+- `home` 相关 Fragment / ViewModel / adapter 已迁入 `feature/home`
+- 播放器相关 Fragment、ViewModel、协同对象、自定义 View 已迁入 `feature/player`
+- 关联的 XML 自定义 View 全限定类名、baseline profile、测试包引用已同步到新的 feature 包名
+- 从当前体量看，如果还要继续扩大迁移，优先评估 `main/live`、`main/me`、`main/search` 这几块
+- `detail / favorite / user / series` 仍值得做，但更适合作为后续按需求逐步推进的批次，而不是马上全量平移
 
 ---
 
@@ -277,12 +305,13 @@ app/src/main/java/com/tutu/myblbl/
 
 ### 需要做的事
 
-- [ ] 在 README 或独立开发文档中新增架构约束说明
-- [ ] 明确禁止 UI 直接 new repository
-- [ ] 明确新页面优先使用 injected ViewModel / repository
-- [ ] 明确新功能优先进入 feature 目录
-- [ ] 新增 lint / review checklist
-- [ ] PR 模板中增加“是否新增 EventBus 依赖”的检查项
+- [x] 在 README 或独立开发文档中新增架构约束说明
+- [x] 明确禁止 UI 直接 new repository
+- [x] 明确新页面优先使用 injected ViewModel / repository
+- [x] 明确新功能优先进入 feature 目录
+- [x] 新增 review checklist
+- [ ] 评估并补充 lint 规则
+- [x] PR 模板中增加“是否新增 EventBus 依赖”的检查项
 
 ### 建议规则
 
@@ -290,6 +319,17 @@ app/src/main/java/com/tutu/myblbl/
 - 非必要不新增全局单例
 - 事件通信优先使用显式 flow / callback
 - 大于一定规模的逻辑不直接堆在 Fragment / Activity 中
+- `NetworkManager` 只作为 runtime facade / bootstrap 边界存在，不再承接新的业务职责
+- 业务代码默认通过 injected `ViewModel` / `repository` / gateway / `ApiService` / `OkHttpClient` 协作
+- 启动层、DI 层、gateway 实现可以作为 `NetworkManager` 的保留例外
+
+### 当前进展
+
+- `README.md` 已补充长期架构约束，作为后续开发默认遵循的入口说明
+- 文档层面已经明确：UI 不直接 `new Repository()`，新页面优先走 injected `ViewModel` / `repository`
+- 文档层面已经明确：新功能优先进入 `feature/*`，`NetworkManager` 采用“冻结边界、避免扩散”策略
+- 已新增 `docs/ARCHITECTURE_REVIEW_CHECKLIST.md`，作为 review 阶段的默认检查清单
+- 已新增 PR 模板检查项，显式约束 `EventBus` 与 `NetworkManager` 不再回流
 
 ---
 

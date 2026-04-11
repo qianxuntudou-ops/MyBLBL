@@ -51,12 +51,14 @@ object ViewUtils {
         controller.show(WindowInsetsCompat.Type.systemBars())
     }
     
-    @Suppress("DEPRECATION")
     fun setFullscreen(activity: Activity, fullscreen: Boolean) {
+        val window = activity.window
+        val controller = WindowCompat.getInsetsController(window, window.decorView)
         if (fullscreen) {
-            activity.window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
-            activity.window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+            controller.show(WindowInsetsCompat.Type.systemBars())
         }
     }
     

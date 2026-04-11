@@ -101,3 +101,6 @@ app/src/main/res/values-watch/styles.xml
 *.pid
 *.seed
 API_MODERNIZATION_TODO.md
+PLAN_DATASTORE_MIGRATION.md
+PLAN_LISTADAPTER_MIGRATION.md
+PLAN_WITHCONTEXT_CLEANUP.md

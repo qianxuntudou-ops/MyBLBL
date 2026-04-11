@@ -1,10 +1,10 @@
 package com.tutu.myblbl.feature.player.view
 
-internal sealed class PlayerSettingRow {
+internal sealed interface PlayerSettingRow {
     data class Header(
         val title: String,
         val subTitle: String? = null
-    ) : PlayerSettingRow()
+    ) : PlayerSettingRow
 
     data class Item(
         val id: Int,
@@ -13,5 +13,5 @@ internal sealed class PlayerSettingRow {
         val iconRes: Int? = null,
         val checked: Boolean = false,
         val showArrow: Boolean = true
-    ) : PlayerSettingRow()
+    ) : PlayerSettingRow
 }

@@ -242,7 +242,7 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             binding.viewInfo.visibility = View.GONE
         }
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             repository.getAllSeries(seasonType, currentPage, filters)
                 .onSuccess { page ->
                     isLoading = false

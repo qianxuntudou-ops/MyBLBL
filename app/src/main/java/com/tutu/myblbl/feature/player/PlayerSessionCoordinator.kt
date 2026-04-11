@@ -11,22 +11,22 @@ import java.util.ArrayDeque
 @OptIn(UnstableApi::class)
 class PlayerSessionCoordinator {
 
-    sealed class ContinuationPlan {
+    sealed interface ContinuationPlan {
         data class PlayNextEpisode(
             val title: String,
             val coverUrl: String,
             val perform: () -> Unit
-        ) : ContinuationPlan()
+        ) : ContinuationPlan
 
         data class PlayVideo(
             val title: String,
             val coverUrl: String,
             val perform: () -> Unit
-        ) : ContinuationPlan()
+        ) : ContinuationPlan
 
-        object ExitPlayer : ContinuationPlan()
+        object ExitPlayer : ContinuationPlan
 
-        object ShowController : ContinuationPlan()
+        object ShowController : ContinuationPlan
     }
 
     private var launchContext: PlayerLaunchContext? = null

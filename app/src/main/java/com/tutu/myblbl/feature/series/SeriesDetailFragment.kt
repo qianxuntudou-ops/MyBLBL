@@ -143,28 +143,34 @@ class SeriesDetailFragment : Fragment() {
 
     private fun setupObservers() {
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.seriesDetail.collect { detail ->
-                currentDetail = detail
-                renderContent()
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.seriesDetail.collect { detail ->
+                    currentDetail = detail
+                    renderContent()
+                }
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.isFollowed.collect { followed ->
-                currentFollowed = followed
-                renderContent()
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.isFollowed.collect { followed ->
+                    currentFollowed = followed
+                    renderContent()
+                }
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.messages.collect { message ->
-                when (message) {
-                    is SeriesDetailViewModel.UiMessage.Res -> {
-                        Toast.makeText(requireContext(), message.resId, Toast.LENGTH_SHORT).show()
-                    }
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.messages.collect { message ->
+                    when (message) {
+                        is SeriesDetailViewModel.UiMessage.Res -> {
+                            Toast.makeText(requireContext(), message.resId, Toast.LENGTH_SHORT).show()
+                        }
 
-                    is SeriesDetailViewModel.UiMessage.Text -> {
-                        Toast.makeText(requireContext(), message.value, Toast.LENGTH_SHORT).show()
+                        is SeriesDetailViewModel.UiMessage.Text -> {
+                            Toast.makeText(requireContext(), message.value, Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             }

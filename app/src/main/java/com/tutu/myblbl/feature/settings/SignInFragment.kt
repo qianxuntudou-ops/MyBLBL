@@ -49,7 +49,7 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
     private fun loadQrCode() {
         binding.progressBar.visibility = android.view.View.VISIBLE
         
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val result = authRepository.getQrCode()
             binding.progressBar.visibility = android.view.View.GONE
             
@@ -118,7 +118,7 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
 
     private fun startPolling() {
         pollingJob?.cancel()
-        pollingJob = lifecycleScope.launch {
+        pollingJob = viewLifecycleOwner.lifecycleScope.launch {
             while (isActive && qrcodeKey.isNotEmpty()) {
                 delay(pollingInterval)
                 checkSignInResultInternal()
@@ -169,7 +169,7 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
     }
 
     private fun onLoginSuccess() {
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             userRepository.refreshCurrentUserInfo()
             parentFragmentManager.popBackStackImmediate()
             appEventHub.dispatch(AppEventHub.Event.UserSessionChanged)

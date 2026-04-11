@@ -10,6 +10,7 @@ import androidx.activity.viewModels
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentTransaction
+import androidx.fragment.app.commit
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -202,21 +203,21 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         val currentFragment = supportFragmentManager.findFragmentByTag("fragment_$previousIndex")
         val targetFragment = supportFragmentManager.findFragmentByTag(fragmentTag) ?: fragments[index]
 
-        val transaction = supportFragmentManager.beginTransaction()
-            .setReorderingAllowed(true)
+        supportFragmentManager.commit {
+            setReorderingAllowed(true)
 
-        if (currentFragment != null) {
-            transaction.hide(currentFragment)
-        }
+            if (currentFragment != null) {
+                hide(currentFragment)
+            }
 
-        if (!targetFragment.isAdded) {
-            transaction.add(R.id.container, targetFragment, fragmentTag)
-        } else {
-            transaction.show(targetFragment)
+            if (!targetFragment.isAdded) {
+                add(R.id.container, targetFragment, fragmentTag)
+            } else {
+                show(targetFragment)
+            }
         }
 
         currentFragmentIndex = index
-        transaction.commit()
     }
 
     override fun onTabSelected(index: Int) {
@@ -468,7 +469,14 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             }
         }
         val isSettingsOverlay = isSettingsOverlay(fragment = fragment, tag = tag)
-        val transaction = supportFragmentManager.beginTransaction().apply {
+
+        supportFragmentManager.fragments
+            .asReversed()
+            .firstOrNull { it.isVisible }
+            ?.view
+            ?.clearFocus()
+
+        supportFragmentManager.commit {
             if (isSettingsOverlay) {
                 setCustomAnimations(
                     R.anim.m3_side_sheet_enter_from_right,
@@ -479,25 +487,18 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             } else {
                 setTransition(FragmentTransaction.TRANSIT_FRAGMENT_OPEN)
             }
-        }
 
-        supportFragmentManager.fragments
-            .asReversed()
-            .firstOrNull { it.isVisible }
-            ?.view
-            ?.clearFocus()
+            supportFragmentManager.fragments
+                .filter { it.isAdded && it.isVisible }
+                .forEach { visibleFragment ->
+                    hide(visibleFragment)
+                }
 
-        supportFragmentManager.fragments
-            .filter { it.isAdded && it.isVisible }
-            .forEach { visibleFragment ->
-                transaction.hide(visibleFragment)
+            add(R.id.container, fragment, tag)
+            if (addToBackStack) {
+                addToBackStack(tag)
             }
-
-        transaction.add(R.id.container, fragment, tag)
-        if (addToBackStack) {
-            transaction.addToBackStack(tag)
         }
-        transaction.commit()
         showTabBar(false)
     }
 

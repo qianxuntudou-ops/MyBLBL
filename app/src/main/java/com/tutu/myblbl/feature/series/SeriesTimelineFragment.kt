@@ -197,7 +197,7 @@ class SeriesTimelineFragment : BaseFragment<FragmentSeriesTimelineBinding>() {
     private fun loadTimeline() {
         binding.progressBar.visibility = View.VISIBLE
         binding.textInfo.visibility = View.GONE
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             repository.getSeriesTimeline(seasonType)
                 .onSuccess { days ->
                     binding.progressBar.visibility = View.GONE

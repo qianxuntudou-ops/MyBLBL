@@ -9,8 +9,8 @@ import android.widget.TextView
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
-import com.bumptech.glide.Glide
 import com.tutu.myblbl.R
+import com.tutu.myblbl.core.ui.image.ImageLoader
 
 class VideoPlayerAutoPlayController(
     private val fragment: Fragment,
@@ -51,13 +51,7 @@ class VideoPlayerAutoPlayController(
 
     private fun showNextPreview(title: String, coverUrl: String) {
         textNext.text = title
-        if (coverUrl.isNotBlank()) {
-            Glide.with(fragment)
-                .load(coverUrl)
-                .into(imageNext)
-        } else {
-            imageNext.setImageResource(R.drawable.default_video)
-        }
+        ImageLoader.loadVideoCover(imageNext, coverUrl)
         if (viewNext.isVisible) {
             return
         }

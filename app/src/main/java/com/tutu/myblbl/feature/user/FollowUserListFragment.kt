@@ -145,7 +145,7 @@ class FollowUserListFragment : BaseFragment<FragmentFollowUserListBinding>() {
             binding.progressBar.visibility = View.VISIBLE
         }
 
-        lifecycleScope.launch {
+        viewLifecycleOwner.lifecycleScope.launch {
             val result = if (type == TYPE_FOLLOWER) {
                 userRepository.getFollower(userId, currentPage, pageSize)
             } else {

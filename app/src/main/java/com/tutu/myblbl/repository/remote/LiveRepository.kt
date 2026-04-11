@@ -132,8 +132,6 @@ class LiveRepository(
     ): Result<LiveRoomPage> {
         return withContext(Dispatchers.IO) {
             try {
-                AppLog.e("[BLBL_DIAG]", "getAreaLive: parentAreaId=$parentAreaId, areaId=$areaId, page=$page")
-
                 val response = apiService.getAreaRoomList(
                     parentAreaId = parentAreaId,
                     areaId = areaId,
@@ -141,17 +139,14 @@ class LiveRepository(
                     pageSize = 30,
                     sortType = "online"
                 )
-                AppLog.e("[BLBL_DIAG]", "getAreaRoomList response: code=${response.code}, data=${response.data != null}, data.size=${response.data?.size ?: "null"}")
                 if (response.code == 0 && response.data != null) {
                     val rooms = response.data
                     val hasMore = rooms.size >= 30
                     Result.success(LiveRoomPage(rooms = rooms, hasMore = hasMore))
                 } else {
-                    AppLog.e("[BLBL_DIAG]", "getAreaRoomList error: code=${response.code}, message=${response.message}")
                     Result.failure(Exception(response.message))
                 }
             } catch (e: Exception) {
-                AppLog.e("[BLBL_DIAG]", "getAreaLive exception: ${e.javaClass.simpleName}: ${e.message}", e)
                 Result.failure(e)
             }
         }
@@ -160,25 +155,13 @@ class LiveRepository(
     suspend fun getLiveAreas(): Result<List<LiveAreaCategoryParent>> {
         return withContext(Dispatchers.IO) {
             try {
-                AppLog.e("[BLBL_DIAG]", "getLiveAreas: START")
                 val response = apiService.getLiveArea()
-                AppLog.e("[BLBL_DIAG]", "getLiveAreas: code=${response.code}, data=${response.data != null}, data.size=${response.data?.size ?: "null"}")
                 if (response.code == 0 && response.data != null) {
-                    response.data.forEachIndexed { index, parent ->
-                        AppLog.e("[BLBL_DIAG]", "getLiveAreas [$index] id=${parent.id} name=${parent.name} areaList=${parent.areaList?.size ?: "null"}")
-                        parent.areaList?.takeIf { it.isNotEmpty() }?.forEachIndexed { ci, child ->
-                            if (ci < 3) {
-                                AppLog.e("[BLBL_DIAG]", "  child[$ci] id=${child.id} parentId=${child.parentId} name=${child.name} title=${child.title} pic=${child.pic.take(30)}")
-                            }
-                        }
-                    }
                     Result.success(response.data)
                 } else {
-                    AppLog.e("[BLBL_DIAG]", "getLiveAreas FAIL: code=${response.code}, msg=${response.message}")
                     Result.failure(Exception(response.message))
                 }
             } catch (e: Exception) {
-                AppLog.e("[BLBL_DIAG]", "getLiveAreas EXCEPTION: ${e.javaClass.simpleName}: ${e.message}", e)
                 Result.failure(e)
             }
         }

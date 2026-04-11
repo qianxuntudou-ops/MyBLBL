@@ -33,7 +33,6 @@ class LiveAreaFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveTabPag
 
     override fun initArguments() {
         category = arguments?.serializableCompat(ARG_CATEGORY)
-        AppLog.e("[BLBL_DIAG]", "AreaFrag.initArguments: category=${category?.name ?: "null"}, areaList=${category?.areaList?.size ?: "null"}")
     }
 
     override fun getViewBinding(
@@ -55,12 +54,6 @@ class LiveAreaFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveTabPag
 
     override fun initData() {
         val areaList = category?.areaList.orEmpty()
-        AppLog.e("[BLBL_DIAG]", "AreaFrag.initData: category=${category?.name ?: "null"}, areaList=${areaList.size}")
-        if (areaList.isNotEmpty()) {
-            AppLog.e("[BLBL_DIAG]", "AreaFrag: firstArea id=${areaList[0].id} name=${areaList[0].name} title=${areaList[0].title} pic=${areaList[0].pic.take(30)}")
-        } else {
-            AppLog.e("[BLBL_DIAG]", "AreaFrag: areaList is EMPTY! category=${category?.name}, category.id=${category?.id}, areaList field=${category?.areaList}")
-        }
         adapter.setData(areaList)
     }
 

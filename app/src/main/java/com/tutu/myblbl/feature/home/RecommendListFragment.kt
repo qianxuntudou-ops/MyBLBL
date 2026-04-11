@@ -56,7 +56,6 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
     }
 
     private fun onVideoClick(video: VideoModel) {
-        AppLog.d(TAG, "onVideoClick: title=${video.title}, bvid=${video.bvid}, aid=${video.aid}, cid=${video.cid}")
         VideoRouteNavigator.openVideo(
             context = requireContext(),
             video = video,
@@ -107,7 +106,6 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.videos.collectLatest { rawVideos ->
                     val videos = ContentFilter.filterVideos(requireContext(), rawVideos)
-                    AppLog.d(TAG, "videos observer update: count=${videos.size}, loadingPage=$loadingPage")
                     if (waitingForFirstLoad && videos.isEmpty()) {
                         return@collectLatest
                     }
@@ -146,7 +144,6 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.loading.collectLatest { loading ->
-                    AppLog.d(TAG, "loading observer update: loading=$loading")
                     if (loading && adapter?.contentCount() == 0) {
                         showLoading(true)
                     }
@@ -239,7 +236,6 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
         viewLifecycleOwner.lifecycleScope.launch {
             runCatching {
                 HomeCacheStore.writeVideos(CACHE_KEY, videos)
-                AppLog.d(TAG, "cacheVideos success: count=${videos.size}")
             }.onFailure { throwable ->
                 AppLog.e(TAG, "cacheVideos failure: ${throwable.message}", throwable)
             }
@@ -257,7 +253,6 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
             onMiss?.invoke()
             return false
         }
-        AppLog.d(TAG, "restoreCachedVideos success: count=${cachedVideos.size}")
         adapter?.setData(ContentFilter.filterVideos(requireContext(), cachedVideos))
         adapter?.setShowLoadMore(true)
         showContent()

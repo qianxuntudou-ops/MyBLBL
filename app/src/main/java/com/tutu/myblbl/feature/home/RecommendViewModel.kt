@@ -38,10 +38,6 @@ class RecommendViewModel(
     fun loadRecommendList(page: Int, pageSize: Int) {
         viewModelScope.launch {
             val freshIdx = freshIndexTracker.resolve(page)
-            AppLog.d(
-                TAG,
-                "loadRecommendList start: page=$page, freshIdx=$freshIdx, pageSize=$pageSize, cached=${_videos.value.size}"
-            )
             _loading.value = true
             runCatching {
                 videoRepository.getRecommendList(freshIdx, pageSize)
@@ -57,10 +53,6 @@ class RecommendViewModel(
                     }
                     _videos.value = validItems
                     _hasMore.value = items.size >= pageSize
-                    AppLog.d(
-                        TAG,
-                        "loadRecommendList success: page=$page, freshIdx=$freshIdx, responseItems=${items.size}, validItems=${validItems.size}, total=${_videos.value.size}, hasMore=${_hasMore.value}"
-                    )
                 } else {
                     AppLog.e(
                         TAG,

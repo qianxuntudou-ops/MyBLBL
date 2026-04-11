@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tutu.myblbl.model.live.LiveAreaCategoryParent
 import com.tutu.myblbl.repository.LiveRepository
-import com.tutu.myblbl.core.common.log.AppLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,20 +38,14 @@ class LiveViewModel(
             
             result.fold(
                 onSuccess = { areaList ->
-                    AppLog.e("[BLBL_DIAG]", "ViewModel: loadLiveAreas SUCCESS, areaList.size=${areaList.size}")
-                    areaList.forEachIndexed { index, parent ->
-                        AppLog.e("[BLBL_DIAG]", "ViewModel: [$index] id=${parent.id} name=${parent.name} areaList=${parent.areaList?.size ?: "null"}")
-                    }
                     val recommendCategory = LiveAreaCategoryParent(
                         id = 0,
                         name = "推荐"
                     )
                     _categories.value = listOf(recommendCategory) + areaList
-                    AppLog.e("[BLBL_DIAG]", "ViewModel: categories.value set, total=${_categories.value.size}")
                     lastLoadedAt = System.currentTimeMillis()
                 },
                 onFailure = { exception ->
-                    AppLog.e("[BLBL_DIAG]", "ViewModel: loadLiveAreas FAILED: ${exception.message}", exception)
                     _error.value = exception.message
                 }
             )

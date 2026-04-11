@@ -6,7 +6,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.recyclerview.widget.DiffUtil
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.tutu.myblbl.model.live.LiveAreaCategoryParent
-import com.tutu.myblbl.core.common.log.AppLog
 
 class LiveFragmentAdapter(
     fragmentManager: FragmentManager,
@@ -17,16 +16,11 @@ class LiveFragmentAdapter(
     private val fragments = mutableMapOf<Int, LiveTabPage>()
 
     fun setCategories(list: List<LiveAreaCategoryParent>) {
-        AppLog.e(
-            "[BLBL_DIAG]",
-            "Adapter.setCategories: list.size=${list.size}, old size=${categories.size}"
-        )
         val diffResult = DiffUtil.calculateDiff(LiveFragmentDiff(categories, list))
         categories.clear()
         categories.addAll(list)
         fragments.clear()
         diffResult.dispatchUpdatesTo(this)
-        AppLog.e("[BLBL_DIAG]", "Adapter.setCategories done: itemCount=${categories.size}")
     }
 
     override fun getItemCount(): Int = categories.size
@@ -48,7 +42,6 @@ class LiveFragmentAdapter(
 
     override fun createFragment(position: Int): Fragment {
         val category = categories[position]
-        AppLog.e("[BLBL_DIAG]", "Adapter.createFragment: pos=$position, name=${category.name}, areaList=${category.areaList?.size ?: "null"}")
         val fragment: Fragment = if (position == 0) {
             LiveRecommendFragment.newInstance()
         } else {

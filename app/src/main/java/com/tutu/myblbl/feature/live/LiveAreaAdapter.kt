@@ -9,7 +9,6 @@ import com.bumptech.glide.Glide
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellUserBinding
 import com.tutu.myblbl.model.live.LiveAreaCategory
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
 
 class LiveAreaAdapter(
@@ -20,7 +19,6 @@ class LiveAreaAdapter(
     private val data = mutableListOf<LiveAreaCategory>()
 
     fun setData(list: List<LiveAreaCategory>) {
-        AppLog.e("[BLBL_DIAG]", "AreaAdapter.setData: list.size=${list.size}")
         val diffResult = DiffUtil.calculateDiff(
             SimpleDiffCallback(data, list) { oldItem, newItem ->
                 oldItem.id == newItem.id
@@ -32,7 +30,6 @@ class LiveAreaAdapter(
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
-        AppLog.e("[BLBL_DIAG]", "AreaAdapter.onCreateViewHolder")
         val binding = CellUserBinding.inflate(
             LayoutInflater.from(parent.context),
             parent,
@@ -42,9 +39,6 @@ class LiveAreaAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        if (position < 3 || position == data.size - 1) {
-            AppLog.e("[BLBL_DIAG]", "AreaAdapter.onBind: pos=$position/${data.size}, name=${data[position].name}")
-        }
         holder.bind(data[position])
     }
 

@@ -49,7 +49,6 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
     }
 
     override fun initView() {
-        AppLog.d(TAG, "[Live] initView start")
         tabLayout = binding.tabLayout
         viewPager = binding.viewPager
 
@@ -62,7 +61,6 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
             tab.text = adapter.getPageTitle(position)
         }.attach()
-        AppLog.e("[BLBL_DIAG]", "[Live] initView done, adapter.itemCount=${adapter.itemCount}")
         tabLayout.enableTouchNavigation(
             viewPager = viewPager,
             matchLegacyViewPagerAnimation = true,
@@ -85,7 +83,6 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
     }
 
     override fun initData() {
-        AppLog.e("[BLBL_DIAG]", "[Live] initData: calling loadLiveAreas")
         viewModel.loadLiveAreas()
     }
 
@@ -93,13 +90,11 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.categories.collectLatest { list ->
-                    AppLog.e("[BLBL_DIAG]", "[Live] categories collected: size=${list.size}")
                     if (list.isNotEmpty()) {
                         val previousItem = viewPager.currentItem
                         categories.clear()
                         categories.addAll(list)
                         adapter.setCategories(categories)
-                        AppLog.e("[BLBL_DIAG]", "[Live] setCategories done: tabCount=${categories.size}, adapter.itemCount=${adapter.itemCount}")
                         tabLayout.enableTouchNavigation(
                             viewPager = viewPager,
                             matchLegacyViewPagerAnimation = true,

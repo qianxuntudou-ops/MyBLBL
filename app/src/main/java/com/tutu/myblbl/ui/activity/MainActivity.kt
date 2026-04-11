@@ -145,10 +145,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (resolvedTabIndex in fragments.indices) {
             currentFragmentIndex = resolvedTabIndex
             binding.myTabView.restoreTabHighlight(resolvedTabIndex)
-            AppLog.d(
-                TAG,
-                "restoreUiStateAfterRecreation: restoredTabIndex=$resolvedTabIndex, backStack=${supportFragmentManager.backStackEntryCount}"
-            )
         } else {
             binding.myTabView.selectTab(0)
         }
@@ -241,15 +237,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             return false
         }
         val anchorView = currentFocus
-        AppLog.d(
-            TAG,
-            "onTabNavigateRight: index=$index currentFragmentIndex=$currentFragmentIndex currentFocus=${describeView(anchorView)}"
-        )
         binding.root.post {
-            AppLog.d(
-                TAG,
-                "post focusCurrentMainContent: index=$index currentFragmentIndex=$currentFragmentIndex currentFocus=${describeView(anchorView)}"
-            )
             focusCurrentMainContent(anchorView, preferSpatialEntry = true)
         }
         return true
@@ -344,7 +332,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (binding.myTabView.visibility != View.VISIBLE) {
             return false
         }
-        AppLog.d(TAG, "focusLeftFunctionArea: source=${describeView(sourceView)}")
         return binding.myTabView.focusNearestButtonTo(sourceView)
     }
 
@@ -471,7 +458,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     ) {
         if (addToBackStack) {
             currentFocus?.let { focusedView ->
-                AppLog.d("FocusDebug", "saveFocus: saving focus for view=$focusedView, class=${focusedView.javaClass.simpleName}, id=${focusedView.id}")
                 focusRestoreAnchors.addLast(
                     FocusRestoreAnchor(
                         viewRef = WeakReference(focusedView)
@@ -532,13 +518,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         val anchor = focusRestoreAnchors.removeLastOrNull()
         val delayMs = pendingFocusRestoreDelayMs
         pendingFocusRestoreDelayMs = 0L
-        AppLog.d("FocusDebug", "restoreFocusAfterOverlayPop: anchor=${anchor?.viewRef?.get()}, delayMs=$delayMs, stackSize=${focusRestoreAnchors.size}")
         binding.root.postDelayed({
             val target = anchor?.viewRef?.get()
-            AppLog.d("FocusDebug", "restoreFocus delayed: target=$target, attached=${target?.isAttachedToWindow}, shown=${target?.isShown}, focusable=${target?.isFocusable}")
             if (target?.isAttachedToWindow == true && target.isShown && target.isFocusable) {
                 val result = target.requestFocus()
-                AppLog.d("FocusDebug", "restoreFocus: requestFocus on target=$target, result=$result")
                 if (result) {
                     return@postDelayed
                 }
@@ -547,12 +530,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
                 anchorView = target,
                 preferSpatialEntry = false
             )
-            AppLog.d("FocusDebug", "restoreFocus content fallback: handled=$handledByContent")
             if (handledByContent) {
                 return@postDelayed
             }
             val handledByTabBar = binding.myTabView.focusCurrentTab()
-            AppLog.d("FocusDebug", "restoreFocus tab fallback: handled=$handledByTabBar")
             if (handledByTabBar) {
                 return@postDelayed
             }
@@ -562,7 +543,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
                 ?.view
                 ?.let { visibleRoot ->
                     val currentFocus = visibleRoot.findFocus()
-                    AppLog.d("FocusDebug", "restoreFocus fallback: visibleRoot=$visibleRoot, currentFocus=$currentFocus")
                     currentFocus?.requestFocus()
                 }
         }, delayMs)
@@ -571,7 +551,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     fun skipNextFocusRestore() {
         if (focusRestoreAnchors.isNotEmpty()) {
             focusRestoreAnchors.removeLastOrNull()
-            AppLog.d("FocusDebug", "skipNextFocusRestore: removed last anchor, stackSize=${focusRestoreAnchors.size}")
         }
     }
 
@@ -614,25 +593,8 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         preferSpatialEntry: Boolean = false
     ): Boolean {
         val currentFragment = supportFragmentManager.findFragmentByTag("fragment_$currentFragmentIndex")
-        val handled = (currentFragment as? MainTabFocusTarget)
+        return (currentFragment as? MainTabFocusTarget)
             ?.focusEntryFromMainTab(anchorView, preferSpatialEntry) == true
-        AppLog.d(
-            TAG,
-            "focusCurrentMainContent: fragment=${currentFragment?.javaClass?.simpleName} handled=$handled preferSpatialEntry=$preferSpatialEntry anchor=${describeView(anchorView)} currentFocusAfter=${describeView(currentFocus)}"
-        )
-        return handled
-    }
-
-    private fun describeView(view: View?): String {
-        if (view == null) {
-            return "null"
-        }
-        val idName = if (view.id != View.NO_ID) {
-            runCatching { resources.getResourceEntryName(view.id) }.getOrNull()
-        } else {
-            null
-        }
-        return "${view.javaClass.simpleName}(id=${idName ?: view.id},hash=${System.identityHashCode(view)})"
     }
 
     private fun shouldFinishDuplicateLauncherLaunch(): Boolean {

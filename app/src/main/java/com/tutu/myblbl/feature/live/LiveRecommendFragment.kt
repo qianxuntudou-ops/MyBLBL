@@ -19,6 +19,7 @@ import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
+import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
 import com.tutu.myblbl.core.common.ext.toast
 import kotlinx.coroutines.flow.collectLatest
@@ -111,22 +112,18 @@ class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveT
             AppLog.d(TAG, "LiveRecommendFragment.focusPrimaryContent failed: itemCount=${adapter.itemCount}")
             return false
         }
-        val lm = binding.recyclerView.layoutManager as? LinearLayoutManager ?: return false
-        val firstVisible = lm.findFirstVisibleItemPosition()
-        if (firstVisible != RecyclerView.NO_POSITION) {
-            (binding.recyclerView.findViewHolderForAdapterPosition(firstVisible) as? LiveRecommendAdapter.ViewHolder)?.let {
-                val handled = it.requestPrimaryFocus()
-                AppLog.d(TAG, "LiveRecommendFragment.focusPrimaryContent firstVisible=$firstVisible handled=$handled")
-                return handled
+        val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
+            recyclerView = binding.recyclerView,
+            itemCount = adapter.itemCount,
+            focusRequester = { holder ->
+                (holder as? LiveRecommendAdapter.ViewHolder)?.requestPrimaryFocus() == true
             }
-        }
-        binding.recyclerView.scrollToPosition(0)
-        binding.recyclerView.post {
-            (binding.recyclerView.findViewHolderForAdapterPosition(0) as? LiveRecommendAdapter.ViewHolder)
-                ?.requestPrimaryFocus()
-        }
-        AppLog.d(TAG, "LiveRecommendFragment.focusPrimaryContent deferred to position 0")
-        return true
+        )
+        AppLog.d(
+            TAG,
+            "LiveRecommendFragment.focusPrimaryContent recycler: handled=${result.handled} deferred=${result.deferred} pos=${result.position} source=${result.source}"
+        )
+        return result.resolved
     }
 
     override fun focusPrimaryContent(anchorView: View?, preferSpatialEntry: Boolean): Boolean {

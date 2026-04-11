@@ -73,7 +73,6 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
         }.attach()
         tabLayout.enableTouchNavigation(
             viewPager = viewPager,
-            matchLegacyViewPagerAnimation = true,
             onNavigateDown = ::focusCurrentPagePrimaryContent
         )
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
@@ -88,7 +87,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
 
         pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
-                notifyCurrentTab { it.onTabSelected() }
+                notifyCurrentTabWithRetry({ page -> page.onTabSelected() })
             }
         }.also { viewPager.registerOnPageChangeCallback(it) }
 
@@ -238,7 +237,8 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
             )
             return handled
         }
-        val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry)
+        val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
+            focusCurrentTab(anchorView)
         AppLog.d(
             TAG,
             "MeFragment.focusEntryFromMainTab: currentItem=${viewPager.currentItem} handled=$handled preferSpatialEntry=$preferSpatialEntry anchor=${anchorView?.javaClass?.simpleName ?: "null"} focus=${view?.findFocus()?.javaClass?.simpleName ?: "null"}"
@@ -256,6 +256,15 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
 
     private fun notifyCurrentTab(action: (MeTabPage) -> Unit) {
         getCurrentTabPage()?.let(action)
+    }
+
+    private fun notifyCurrentTabWithRetry(action: (MeTabPage) -> Unit, retries: Int = 5) {
+        val page = getCurrentTabPage()
+        if (page != null) {
+            action(page)
+        } else if (retries > 0) {
+            viewPager.post { notifyCurrentTabWithRetry(action, retries - 1) }
+        }
     }
 
     private fun dispatchHostEvent(event: MeTabPage.HostEvent, fallback: (() -> Unit)? = null) {

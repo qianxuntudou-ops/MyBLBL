@@ -63,7 +63,6 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
         }.attach()
         tabLayout.enableTouchNavigation(
             viewPager = viewPager,
-            matchLegacyViewPagerAnimation = true,
             onNavigateDown = ::focusCurrentPagePrimaryContent
         )
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
@@ -97,7 +96,6 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
                         adapter.setCategories(categories)
                         tabLayout.enableTouchNavigation(
                             viewPager = viewPager,
-                            matchLegacyViewPagerAnimation = true,
                             onNavigateDown = ::focusCurrentPagePrimaryContent
                         )
                         viewPager.currentItem = previousItem.coerceIn(0, categories.lastIndex)
@@ -160,7 +158,8 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
     }
 
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
-        val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry)
+        val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
+            focusCurrentTab(anchorView)
         AppLog.d(
             TAG,
             "LiveFragment.focusEntryFromMainTab: currentItem=${viewPager.currentItem} handled=$handled preferSpatialEntry=$preferSpatialEntry anchor=${anchorView?.javaClass?.simpleName ?: "null"} focus=${view?.findFocus()?.javaClass?.simpleName ?: "null"}"

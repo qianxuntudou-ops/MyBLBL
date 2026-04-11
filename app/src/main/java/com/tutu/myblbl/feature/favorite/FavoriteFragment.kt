@@ -28,6 +28,7 @@ import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.cache.FileCacheManager
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
+import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.Job
@@ -299,24 +300,15 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
             return false
         }
         if (binding.recyclerViewFavorite.visibility == View.VISIBLE && adapter.itemCount > 0) {
-            val lm = binding.recyclerViewFavorite.layoutManager as? WrapContentGridLayoutManager ?: return false
-            val firstVisible = lm.findFirstVisibleItemPosition()
-            if (firstVisible != RecyclerView.NO_POSITION) {
-                binding.recyclerViewFavorite.findViewHolderForAdapterPosition(firstVisible)?.itemView?.let {
-                    val handled = it.requestFocus()
-                    AppLog.d(TAG, "FavoriteFragment.focusPrimaryContent firstVisible=$firstVisible handled=$handled")
-                    return handled
-                }
-            }
-            val result = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
+            val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
                 recyclerView = binding.recyclerViewFavorite,
-                position = 0
+                itemCount = adapter.itemCount
             )
             AppLog.d(
                 TAG,
-                "FavoriteFragment.focusPrimaryContent deferred: handled=${result.handled} deferred=${result.deferred}"
+                "FavoriteFragment.focusPrimaryContent recycler: handled=${result.handled} deferred=${result.deferred} pos=${result.position} source=${result.source}"
             )
-            return true
+            return result.resolved
         }
         if (binding.tvEmpty.visibility == View.VISIBLE) {
             return requestEmptyStateFocus()

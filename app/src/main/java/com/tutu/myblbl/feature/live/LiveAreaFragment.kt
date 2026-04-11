@@ -12,6 +12,7 @@ import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
+import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.common.ext.serializableCompat
 import androidx.recyclerview.widget.RecyclerView
 
@@ -66,24 +67,15 @@ class LiveAreaFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveTabPag
             AppLog.d(TAG, "LiveAreaFragment.focusPrimaryContent failed: itemCount=${adapter.itemCount}")
             return false
         }
-        val lm = binding.recyclerView.layoutManager as? WrapContentGridLayoutManager ?: return false
-        val firstVisible = lm.findFirstVisibleItemPosition()
-        if (firstVisible != RecyclerView.NO_POSITION) {
-            binding.recyclerView.findViewHolderForAdapterPosition(firstVisible)?.itemView?.let {
-                val handled = it.requestFocus()
-                AppLog.d(TAG, "LiveAreaFragment.focusPrimaryContent firstVisible=$firstVisible handled=$handled")
-                return handled
-            }
-        }
-        val result = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
+        val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
             recyclerView = binding.recyclerView,
-            position = 0
+            itemCount = adapter.itemCount
         )
         AppLog.d(
             TAG,
-            "LiveAreaFragment.focusPrimaryContent deferred: handled=${result.handled} deferred=${result.deferred}"
+            "LiveAreaFragment.focusPrimaryContent recycler: handled=${result.handled} deferred=${result.deferred} pos=${result.position} source=${result.source}"
         )
-        return true
+        return result.resolved
     }
 
     override fun focusPrimaryContent(anchorView: View?, preferSpatialEntry: Boolean): Boolean {

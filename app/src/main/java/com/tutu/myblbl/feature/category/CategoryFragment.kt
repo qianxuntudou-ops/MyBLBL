@@ -61,17 +61,20 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
         }.attach()
         tabLayout.enableTouchNavigation(
             viewPager = viewPager,
-            matchLegacyViewPagerAnimation = true,
             onNavigateDown = ::focusCurrentPagePrimaryContent
         )
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-            override fun onTabSelected(tab: TabLayout.Tab) {
-                adapter.getCurrentFragment(tab.position)?.onTabSelected()
-            }
+            override fun onTabSelected(tab: TabLayout.Tab) = Unit
 
             override fun onTabUnselected(tab: TabLayout.Tab) = Unit
 
             override fun onTabReselected(tab: TabLayout.Tab) = Unit
+        })
+
+        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                notifyTabSelected(position)
+            }
         })
 
         initCategories()
@@ -147,6 +150,15 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
         adapter.getCurrentFragment(viewPager.currentItem)?.scrollToTop()
     }
 
+    private fun notifyTabSelected(position: Int, retries: Int = 5) {
+        val fragment = adapter.getCurrentFragment(position)
+        if (fragment != null) {
+            fragment.onTabSelected()
+        } else if (retries > 0) {
+            viewPager.post { notifyTabSelected(position, retries - 1) }
+        }
+    }
+
     override fun onDestroyView() {
         binding.viewPager.adapter = null
         super.onDestroyView()
@@ -161,7 +173,8 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
     }
 
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
-        val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry)
+        val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
+            focusCurrentTab(anchorView)
         AppLog.d(
             TAG,
             "CategoryFragment.focusEntryFromMainTab: currentItem=${viewPager.currentItem} handled=$handled preferSpatialEntry=$preferSpatialEntry anchor=${anchorView?.javaClass?.simpleName ?: "null"} focus=${view?.findFocus()?.javaClass?.simpleName ?: "null"}"

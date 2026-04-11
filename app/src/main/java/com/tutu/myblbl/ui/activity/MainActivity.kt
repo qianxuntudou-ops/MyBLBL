@@ -237,9 +237,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             return false
         }
         val anchorView = currentFocus
-        binding.root.post {
-            focusCurrentMainContent(anchorView, preferSpatialEntry = true)
-        }
+        val handled = focusCurrentMainContent(anchorView, preferSpatialEntry = true)
+        AppLog.d(
+            TAG,
+            "leftNav navigate RIGHT: index=$index handled=$handled anchor=${anchorView?.javaClass?.simpleName ?: "null"}"
+        )
         return true
     }
 

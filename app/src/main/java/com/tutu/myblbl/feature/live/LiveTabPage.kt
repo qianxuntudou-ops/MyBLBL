@@ -1,12 +1,9 @@
 package com.tutu.myblbl.feature.live
 
-interface LiveTabPage {
-    fun scrollToTop()
-    fun focusPrimaryContent(): Boolean = false
+import com.tutu.myblbl.core.ui.focus.TabContentFocusTarget
 
-    fun focusPrimaryContent(anchorView: android.view.View?, preferSpatialEntry: Boolean): Boolean {
-        return focusPrimaryContent()
-    }
+interface LiveTabPage : TabContentFocusTarget {
+    fun scrollToTop()
 
     fun onTabSelected() {}
 

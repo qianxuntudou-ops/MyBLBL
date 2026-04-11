@@ -27,6 +27,7 @@ import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
+import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import kotlinx.coroutines.flow.collectLatest
@@ -353,33 +354,24 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             return false
         }
         if (binding.emptyContainer.isVisible && binding.btnRetry.isShown) {
-            val handled = binding.btnRetry.requestFocus()
+            val handled = TabContentFocusHelper.requestVisibleFocus(binding.btnRetry)
             AppLog.d(TAG, "MeListFragment.focusPrimaryContent retry: type=$type handled=$handled")
             return handled
-        }
-        val lm = binding.recyclerView.layoutManager as? WrapContentGridLayoutManager ?: return false
-        val firstVisible = lm.findFirstVisibleItemPosition()
-        if (firstVisible != RecyclerView.NO_POSITION) {
-            binding.recyclerView.findViewHolderForAdapterPosition(firstVisible)?.itemView?.let {
-                val handled = it.requestFocus()
-                AppLog.d(TAG, "MeListFragment.focusPrimaryContent firstVisible=$firstVisible type=$type handled=$handled")
-                return handled
-            }
         }
         val itemCount = binding.recyclerView.adapter?.itemCount ?: 0
         if (itemCount == 0) {
             AppLog.d(TAG, "MeListFragment.focusPrimaryContent failed: type=$type itemCount=0")
             return false
         }
-        val result = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
+        val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
             recyclerView = binding.recyclerView,
-            position = 0
+            itemCount = itemCount
         )
         AppLog.d(
             TAG,
-            "MeListFragment.focusPrimaryContent deferred: type=$type handled=${result.handled} deferred=${result.deferred}"
+            "MeListFragment.focusPrimaryContent recycler: type=$type handled=${result.handled} deferred=${result.deferred} pos=${result.position} source=${result.source}"
         )
-        return true
+        return result.resolved
     }
 
     override fun focusPrimaryContent(anchorView: View?, preferSpatialEntry: Boolean): Boolean {

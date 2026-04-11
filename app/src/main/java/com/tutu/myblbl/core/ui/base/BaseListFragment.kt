@@ -12,6 +12,7 @@ import com.tutu.myblbl.databinding.FragmentBaseListBinding
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
+import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 
 abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>() {
 
@@ -127,6 +128,10 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
 
     open fun focusPrimaryContent(): Boolean {
         if (!isAdded || view == null) return false
+        if (TabContentFocusHelper.requestVisibleFocus(buttonRetry, viewError)) {
+            AppLog.d(TAG, "${javaClass.simpleName}.focusPrimaryContent stateTarget: handled=true")
+            return true
+        }
         val rv = recyclerView ?: return false
         val adp = adapter ?: return false
 
@@ -143,41 +148,21 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
             }
         }
 
-        val lm = layoutManager ?: return false
-        val firstVisiblePosition = lm.findFirstVisibleItemPosition()
-        if (firstVisiblePosition != RecyclerView.NO_POSITION) {
-            val result = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
-                recyclerView = rv,
-                position = firstVisiblePosition,
-                scrollIfMissing = false
+        val focusResult = TabContentFocusHelper.requestRecyclerPrimaryFocus(
+            recyclerView = rv,
+            itemCount = adp.contentCount()
+        )
+        if (focusResult.resolved) {
+            AppLog.d(
+                TAG,
+                "${javaClass.simpleName}.focusPrimaryContent recycler: handled=${focusResult.handled} deferred=${focusResult.deferred} pos=${focusResult.position} source=${focusResult.source}"
             )
-            if (result.handled || result.deferred) {
-                AppLog.d(
-                    TAG,
-                    "${javaClass.simpleName}.focusPrimaryContent firstVisible: handled=${result.handled} deferred=${result.deferred} pos=$firstVisiblePosition"
-                )
-                return true
-            }
-        }
-
-        if (rv.isLaidOut && rv.childCount > 0) {
-            for (i in 0 until rv.childCount) {
-                val child = rv.getChildAt(i)
-                if (child.isFocusable && child.visibility == View.VISIBLE) {
-                    if (child.requestFocus()) {
-                        AppLog.d(
-                            TAG,
-                            "${javaClass.simpleName}.focusPrimaryContent firstChild: handled=true pos=${rv.getChildAdapterPosition(child)} view=${describeView(child)}"
-                        )
-                        return true
-                    }
-                }
-            }
+            return true
         }
 
         AppLog.d(
             TAG,
-            "${javaClass.simpleName}.focusPrimaryContent failed: childCount=${rv.childCount} itemCount=${adp.itemCount} focusedView=${describeView(adp.focusedView)}"
+            "${javaClass.simpleName}.focusPrimaryContent failed: childCount=${rv.childCount} itemCount=${adp.contentCount()} focusedView=${describeView(adp.focusedView)}"
         )
         return false
     }

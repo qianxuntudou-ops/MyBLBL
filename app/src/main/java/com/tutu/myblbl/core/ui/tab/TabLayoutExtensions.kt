@@ -14,15 +14,13 @@ import com.google.android.material.tabs.TabLayout
 private const val TAB_SWITCH_BASE_DURATION_MS = 60
 private const val TAB_SWITCH_STEP_DURATION_MS = 20
 private const val TAB_SWITCH_MAX_DURATION_MS = 60
-private const val TAB_DIRECT_SWITCH_OUT_DURATION_MS = 70L
-private const val TAB_DIRECT_SWITCH_IN_DURATION_MS = 90L
-private const val TAB_DIRECT_SWITCH_OFFSET_RATIO = 0.08f
+private const val TAB_DIRECT_SWITCH_OUT_DURATION_MS = 120L
+private const val TAB_DIRECT_SWITCH_IN_DURATION_MS = 150L
 
 fun TabLayout.enableTouchNavigation(
     viewPager: ViewPager2,
     tabFocusable: Boolean = true,
     smoothScrollOnSelection: Boolean = true,
-    matchLegacyViewPagerAnimation: Boolean = false,
     onNavigateDown: (() -> Boolean)? = null,
     onNavigateLeft: (() -> Boolean)? = null,
     onNavigateRight: (() -> Boolean)? = null
@@ -42,8 +40,7 @@ fun TabLayout.enableTouchNavigation(
                                 if (viewPager.currentItem != index) {
                                     viewPager.setCurrentItemFromTab(
                                         item = index,
-                                        smoothScroll = smoothScrollOnSelection,
-                                        matchLegacyViewPagerAnimation = matchLegacyViewPagerAnimation
+                                        smoothScroll = smoothScrollOnSelection
                                     )
                                 } else {
                                     getTabAt(index)?.select()
@@ -51,7 +48,12 @@ fun TabLayout.enableTouchNavigation(
                                 true
                             }
                             KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                onNavigateDown?.invoke() == true || focusViewPagerContent(viewPager)
+                                if (onNavigateDown != null) {
+                                    onNavigateDown.invoke()
+                                    true
+                                } else {
+                                    focusViewPagerContent(viewPager)
+                                }
                             }
                             KeyEvent.KEYCODE_DPAD_LEFT -> {
                                 if (index == 0) {
@@ -78,8 +80,7 @@ fun TabLayout.enableTouchNavigation(
                 if (viewPager.currentItem != index) {
                     viewPager.setCurrentItemFromTab(
                         item = index,
-                        smoothScroll = smoothScrollOnSelection,
-                        matchLegacyViewPagerAnimation = matchLegacyViewPagerAnimation
+                        smoothScroll = smoothScrollOnSelection
                     )
                 } else {
                     getTabAt(index)?.select()
@@ -116,7 +117,12 @@ fun TabLayout.enableTouchNavigation(
                                 true
                             }
                             KeyEvent.KEYCODE_DPAD_DOWN -> {
-                                onNavigateDown?.invoke() == true || focusViewPagerContent(viewPager)
+                                if (onNavigateDown != null) {
+                                    onNavigateDown.invoke()
+                                    true
+                                } else {
+                                    focusViewPagerContent(viewPager)
+                                }
                             }
                             KeyEvent.KEYCODE_DPAD_LEFT -> {
                                 if (index == 0) {
@@ -223,8 +229,7 @@ private fun tryFocusFirstFocusableDescendant(view: View): Boolean {
 
 private fun ViewPager2.setCurrentItemFromTab(
     item: Int,
-    smoothScroll: Boolean,
-    matchLegacyViewPagerAnimation: Boolean
+    smoothScroll: Boolean
 ) {
     val recyclerView = getChildAt(0) as? RecyclerView
     val adapter = adapter
@@ -239,10 +244,6 @@ private fun ViewPager2.setCurrentItemFromTab(
     val targetItem = item.coerceIn(0, adapter.itemCount - 1)
     val pageDelta = targetItem - currentItem
     if (pageDelta == 0) {
-        return
-    }
-    if (matchLegacyViewPagerAnimation) {
-        setCurrentItem(targetItem, true)
         return
     }
     if (kotlin.math.abs(pageDelta) > 1) {
@@ -294,25 +295,19 @@ private fun ViewPager2.animateDirectTabSwitch(targetItem: Int, pageDelta: Int) {
 
     animate().cancel()
     val direction = pageDelta.signForPager(this)
-    val offset = pageSize * TAB_DIRECT_SWITCH_OFFSET_RATIO * direction
+    val slideDistance = pageSize.toFloat()
+
+    setCurrentItem(targetItem, false)
+
+    val startTranslationX = if (orientation == ViewPager2.ORIENTATION_HORIZONTAL) slideDistance * direction else 0f
+    val startTranslationY = if (orientation == ViewPager2.ORIENTATION_VERTICAL) slideDistance * direction else 0f
+    translationX = startTranslationX
+    translationY = startTranslationY
 
     animate()
-        .setDuration(TAB_DIRECT_SWITCH_OUT_DURATION_MS)
-        .translationX(if (orientation == ViewPager2.ORIENTATION_HORIZONTAL) -offset else 0f)
-        .translationY(if (orientation == ViewPager2.ORIENTATION_VERTICAL) -offset else 0f)
-        .alpha(0.35f)
-        .withEndAction {
-            setCurrentItem(targetItem, false)
-            translationX = if (orientation == ViewPager2.ORIENTATION_HORIZONTAL) offset else 0f
-            translationY = if (orientation == ViewPager2.ORIENTATION_VERTICAL) offset else 0f
-            alpha = 0.35f
-            animate()
-                .setDuration(TAB_DIRECT_SWITCH_IN_DURATION_MS)
-                .translationX(0f)
-                .translationY(0f)
-                .alpha(1f)
-                .start()
-        }
+        .setDuration(TAB_DIRECT_SWITCH_OUT_DURATION_MS + TAB_DIRECT_SWITCH_IN_DURATION_MS)
+        .translationX(0f)
+        .translationY(0f)
         .start()
 }
 

@@ -1,12 +1,10 @@
 package com.tutu.myblbl.feature.me
 
-interface MeTabPage {
+import com.tutu.myblbl.core.ui.focus.TabContentFocusTarget
+
+interface MeTabPage : TabContentFocusTarget {
     fun scrollToTop()
     fun refresh()
-    fun focusPrimaryContent(): Boolean = false
-    fun focusPrimaryContent(anchorView: android.view.View?, preferSpatialEntry: Boolean): Boolean {
-        return focusPrimaryContent()
-    }
     fun onTabSelected() {}
     fun onTabReselected() {}
 

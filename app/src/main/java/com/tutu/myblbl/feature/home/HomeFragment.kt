@@ -59,7 +59,6 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
         }.also { it.attach() }
         binding.tabLayout.enableTouchNavigation(
             viewPager = binding.viewPager,
-            matchLegacyViewPagerAnimation = true,
             onNavigateDown = ::focusCurrentPagePrimaryContent,
             onNavigateLeft = ::focusLeftFunctionArea
         )
@@ -75,7 +74,7 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
         })
         pageChangeCallback = object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
-                (adapter.getCurrentFragment(position) as? HomeTabPage)?.onTabSelected()
+                notifyTabSelected(position)
             }
         }.also { callback ->
             binding.viewPager.registerOnPageChangeCallback(callback)
@@ -135,7 +134,8 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
     }
 
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
-        val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry)
+        val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
+            focusCurrentTab(anchorView)
         AppLog.d(
             TAG,
             "HomeFragment.focusEntryFromMainTab: currentItem=${binding.viewPager.currentItem} handled=$handled preferSpatialEntry=$preferSpatialEntry anchor=${anchorView?.javaClass?.simpleName ?: "null"} focus=${view?.findFocus()?.javaClass?.simpleName ?: "null"}"
@@ -155,5 +155,14 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
         val currentItem = binding.viewPager.currentItem
         val fragmentTag = "f${adapter.getItemId(currentItem)}"
         return childFragmentManager.findFragmentByTag(fragmentTag) as? HomeTabPage
+    }
+
+    private fun notifyTabSelected(position: Int, retries: Int = 5) {
+        val page = adapter.getCurrentFragment(position) as? HomeTabPage
+        if (page != null) {
+            page.onTabSelected()
+        } else if (retries > 0) {
+            binding.viewPager.post { notifyTabSelected(position, retries - 1) }
+        }
     }
 }

@@ -100,3 +100,4 @@ app/src/main/res/values-watch/styles.xml
 .claude/
 *.pid
 *.seed
+API_MODERNIZATION_TODO.md

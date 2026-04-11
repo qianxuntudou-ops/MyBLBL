@@ -29,6 +29,7 @@ import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
+import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import kotlinx.coroutines.flow.collectLatest
@@ -417,14 +418,9 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     }
 
     private fun focusRightContent(): Boolean {
-        if (viewError?.visibility == View.VISIBLE) {
-            val handled = if (buttonRetry?.isShown == true) {
-                buttonRetry?.requestFocus() == true
-            } else {
-                viewError?.requestFocus() == true
-            }
-            AppLog.d(TAG, "DynamicFragment.focusRightContent stateOverlay: handled=$handled")
-            return handled
+        if (TabContentFocusHelper.requestVisibleFocus(buttonRetry, viewError)) {
+            AppLog.d(TAG, "DynamicFragment.focusRightContent stateOverlay: handled=true")
+            return true
         }
         if (videoAdapter.itemCount == 0) {
             AppLog.d(TAG, "DynamicFragment.focusRightContent failed: itemCount=0")
@@ -440,27 +436,16 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
             return handled
         }
         val targetPosition = lastFocusedVideoPosition.coerceIn(0, videoAdapter.itemCount - 1)
-        binding.recyclerViewRight.findViewHolderForAdapterPosition(targetPosition)?.itemView?.let { itemView ->
-            val handled = itemView.requestFocus()
-            AppLog.d(
-                TAG,
-                "DynamicFragment.focusRightContent targetPosition=$targetPosition handled=$handled source=visibleHolder"
-            )
-            return handled
-        }
-        val result = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
+        val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
             recyclerView = binding.recyclerViewRight,
-            position = targetPosition
+            itemCount = videoAdapter.itemCount,
+            fallbackPosition = targetPosition
         )
         AppLog.d(
             TAG,
-            "DynamicFragment.focusRightContent deferred: targetPosition=$targetPosition handled=${result.handled} deferred=${result.deferred} lastFocused=$lastFocusedVideoPosition"
+            "DynamicFragment.focusRightContent recycler: targetPosition=$targetPosition handled=${result.handled} deferred=${result.deferred} pos=${result.position} source=${result.source} lastFocused=$lastFocusedVideoPosition"
         )
-        AppLog.d(
-            TAG,
-            "DynamicFragment.focusRightContent deferred: targetPosition=$targetPosition lastFocusedVideoPosition=$lastFocusedVideoPosition"
-        )
-        return true
+        return result.resolved
     }
 
     private fun focusPrimaryContent(): Boolean {

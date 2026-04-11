@@ -1,12 +1,13 @@
 package com.tutu.myblbl.network.cookie
 
 import android.content.Context
-import android.content.SharedPreferences
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import java.util.concurrent.ConcurrentHashMap
+import org.koin.core.context.GlobalContext
 
 class CookieManager : CookieJar {
 
@@ -16,7 +17,7 @@ class CookieManager : CookieJar {
         }
     }
     
-    private var sharedPreferences: SharedPreferences? = null
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
     private val cookieCache = ConcurrentHashMap<String, MutableList<Cookie>>()
     
     companion object {
@@ -25,14 +26,13 @@ class CookieManager : CookieJar {
     }
     
     fun init(context: Context) {
-        sharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         loadCookiesFromPrefs()
         syncFromWebView()
     }
 
     private fun loadCookiesFromPrefs() {
         cookieCache.clear()
-        val cookieStrings = sharedPreferences?.getStringSet(KEY_COOKIES, emptySet()) ?: emptySet()
+        val cookieStrings = appSettings.getCachedStringSet(KEY_COOKIES)
         cookieStrings.forEach { cookieString ->
             parseCookie(cookieString)?.let(::upsertCookie)
         }
@@ -89,7 +89,7 @@ class CookieManager : CookieJar {
 
     fun clearCookies() {
         cookieCache.clear()
-        sharedPreferences?.edit()?.clear()?.apply()
+        appSettings.putStringSetAsync(KEY_COOKIES, emptySet())
         runCatching {
             webCookieManager.removeAllCookies(null)
             webCookieManager.flush()
@@ -259,7 +259,7 @@ class CookieManager : CookieJar {
             .filter(::isCookieActive)
             .map(::encodeCookie)
             .toSet()
-        sharedPreferences?.edit()?.putStringSet(KEY_COOKIES, cookieStrings)?.apply()
+        appSettings.putStringSetAsync(KEY_COOKIES, cookieStrings)
     }
 
     private fun removeExpiredCookies() {

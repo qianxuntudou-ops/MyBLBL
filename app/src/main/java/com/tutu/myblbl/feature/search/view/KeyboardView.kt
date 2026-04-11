@@ -13,6 +13,8 @@ import androidx.appcompat.widget.AppCompatTextView
 import androidx.appcompat.widget.LinearLayoutCompat
 import androidx.core.content.ContextCompat
 import com.tutu.myblbl.R
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
+import org.koin.core.context.GlobalContext
 
 class KeyboardView @JvmOverloads constructor(
     context: Context,
@@ -62,12 +64,12 @@ class KeyboardView @JvmOverloads constructor(
         T9CandidateSet(center = "9", top = "X", left = "W", right = "Y", bottom = "Z")
     )
 
-    private val prefs by lazy { context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE) }
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
     private val focusInterpolator = OvershootInterpolator()
     private var keySelectListener: KeySelectListener? = null
     private var dispatchKeyDel = true
     private var squareKey = false
-    private var isT9Keyboard = prefs.getBoolean(KEY_IS_T9_KEYBOARD, true)
+    private var isT9Keyboard = appSettings.getCachedBoolean(KEY_IS_T9_KEYBOARD, true)
     private var keyboardContainer: LinearLayoutCompat? = null
     private var activeOverlay: View? = null
     private var activePrimaryKey: View? = null
@@ -184,7 +186,7 @@ class KeyboardView @JvmOverloads constructor(
             setOnClickListener {
                 if (!isT9Keyboard) {
                     isT9Keyboard = true
-                    prefs.edit().putBoolean(KEY_IS_T9_KEYBOARD, true).apply()
+                    appSettings.putBooleanAsync(KEY_IS_T9_KEYBOARD, true)
                     renderKeyboard()
                 }
             }
@@ -194,7 +196,7 @@ class KeyboardView @JvmOverloads constructor(
             setOnClickListener {
                 if (isT9Keyboard) {
                     isT9Keyboard = false
-                    prefs.edit().putBoolean(KEY_IS_T9_KEYBOARD, false).apply()
+                    appSettings.putBooleanAsync(KEY_IS_T9_KEYBOARD, false)
                     renderKeyboard()
                 }
             }
@@ -419,7 +421,6 @@ class KeyboardView @JvmOverloads constructor(
     }
 
     companion object {
-        private const val PREF_NAME = "app_settings"
         private const val KEY_IS_T9_KEYBOARD = "isT9Keyboard"
     }
 }

@@ -7,18 +7,18 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.tutu.myblbl.R
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import androidx.viewbinding.ViewBinding
+import org.koin.core.context.GlobalContext
 
 abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
-
-    companion object {
-        private const val PREFS_NAME = "app_settings"
-        private const val KEY_FULLSCREEN_APP = "fullscreen_app"
-    }
 
     protected lateinit var binding: VB
 
     abstract fun getViewBinding(): VB
+
+    private val appSettings: AppSettingsDataStore
+        get() = GlobalContext.get().get()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyTheme()
@@ -48,13 +48,7 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
     open fun initObserver() {}
 
     open fun applyTheme() {
-        val prefs = getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
-        val themeIndex = try {
-            prefs.getInt("theme", 1)
-        } catch (_: ClassCastException) {
-            val strVal = prefs.getString("theme", "1") ?: "1"
-            strVal.toIntOrNull() ?: 1
-        }
+        val themeIndex = appSettings.getCachedInt("theme", 1)
         setTheme(themeIndex.toThemeResId())
     }
 
@@ -104,8 +98,7 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
     }
 
     private fun isFullscreenEnabled(): Boolean {
-        val prefs = getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
-        return prefs.getString(KEY_FULLSCREEN_APP, "开") != "关"
+        return appSettings.getCachedString("fullscreen_app") != "关"
     }
 
     private fun enterImmersiveFullscreen() {

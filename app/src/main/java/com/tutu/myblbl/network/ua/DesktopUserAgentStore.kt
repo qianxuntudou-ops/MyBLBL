@@ -1,7 +1,8 @@
 package com.tutu.myblbl.network.ua
 
 import android.content.Context
-import androidx.core.content.edit
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
+import org.koin.core.context.GlobalContext
 import java.util.Locale
 import kotlin.random.Random
 
@@ -10,6 +11,8 @@ class DesktopUserAgentStore(
     private val preferenceName: String,
     private val preferenceKey: String
 ) {
+
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
 
     private var currentUserAgent: String = defaultUserAgent
 
@@ -31,22 +34,17 @@ class DesktopUserAgentStore(
     fun refreshUserAgent(context: Context?): String {
         val newUserAgent = generateDesktopUserAgent()
         currentUserAgent = newUserAgent
-        context?.getSharedPreferences(preferenceName, Context.MODE_PRIVATE)?.edit {
-            putString(preferenceKey, newUserAgent)
-        }
+        appSettings.putStringAsync(preferenceKey, newUserAgent)
         return newUserAgent
     }
 
     private fun loadOrCreateCurrentUserAgent(context: Context): String {
-        val prefs = context.getSharedPreferences(preferenceName, Context.MODE_PRIVATE)
-        val stored = prefs.getString(preferenceKey, "").orEmpty().trim()
+        val stored = appSettings.getCachedString(preferenceKey).orEmpty().trim()
         if (stored.isNotBlank()) {
             return stored
         }
         val generated = generateDesktopUserAgent()
-        prefs.edit {
-            putString(preferenceKey, generated)
-        }
+        appSettings.putStringAsync(preferenceKey, generated)
         return generated
     }
 

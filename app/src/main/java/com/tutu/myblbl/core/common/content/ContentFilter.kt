@@ -1,16 +1,18 @@
 package com.tutu.myblbl.core.common.content
 
 import android.content.Context
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.model.live.LiveRoomItem
 import com.tutu.myblbl.model.search.SearchItemModel
 import com.tutu.myblbl.model.video.VideoModel
+import org.koin.core.context.GlobalContext
 
 object ContentFilter {
 
-    private const val PREFS_NAME = "app_settings"
     private const val KEY_MINOR_PROTECTION = "minor_protection"
-    private const val BLOCKED_UP_PREFS_NAME = "blocked_up_list"
     private const val KEY_BLOCKED_UP_NAMES = "blocked_up_names"
+
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
 
     private val VIDEO_BLOCKED_TYPE_NAMES = setOf(
         "ASMR",
@@ -253,28 +255,23 @@ object ContentFilter {
     )
 
     fun isMinorProtectionEnabled(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val value = prefs.getString(KEY_MINOR_PROTECTION, null)
-        return value != "关"
+        return appSettings.getCachedString(KEY_MINOR_PROTECTION) != "关"
     }
 
     fun addBlockedUpName(context: Context, name: String) {
-        val prefs = context.getSharedPreferences(BLOCKED_UP_PREFS_NAME, Context.MODE_PRIVATE)
-        val existing = prefs.getStringSet(KEY_BLOCKED_UP_NAMES, emptySet())?.toMutableSet() ?: mutableSetOf()
+        val existing = appSettings.getCachedStringSet(KEY_BLOCKED_UP_NAMES).toMutableSet()
         existing.add(name)
-        prefs.edit().putStringSet(KEY_BLOCKED_UP_NAMES, existing).apply()
+        appSettings.putStringSetAsync(KEY_BLOCKED_UP_NAMES, existing)
     }
 
     fun removeBlockedUpName(context: Context, name: String) {
-        val prefs = context.getSharedPreferences(BLOCKED_UP_PREFS_NAME, Context.MODE_PRIVATE)
-        val existing = prefs.getStringSet(KEY_BLOCKED_UP_NAMES, emptySet())?.toMutableSet() ?: mutableSetOf()
+        val existing = appSettings.getCachedStringSet(KEY_BLOCKED_UP_NAMES).toMutableSet()
         existing.remove(name)
-        prefs.edit().putStringSet(KEY_BLOCKED_UP_NAMES, existing).apply()
+        appSettings.putStringSetAsync(KEY_BLOCKED_UP_NAMES, existing)
     }
 
     fun getBlockedUpNames(context: Context): Set<String> {
-        val prefs = context.getSharedPreferences(BLOCKED_UP_PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getStringSet(KEY_BLOCKED_UP_NAMES, emptySet()) ?: emptySet()
+        return appSettings.getCachedStringSet(KEY_BLOCKED_UP_NAMES)
     }
 
     private fun isUpNameBlocked(context: Context, name: String): Boolean {

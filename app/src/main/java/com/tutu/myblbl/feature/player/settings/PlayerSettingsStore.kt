@@ -1,9 +1,10 @@
 package com.tutu.myblbl.feature.player.settings
 
 import android.content.Context
-import android.content.SharedPreferences
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.model.video.quality.AudioQuality
 import com.tutu.myblbl.model.video.quality.VideoCodecEnum
+import org.koin.core.context.GlobalContext
 
 data class PlayerSettings(
     val defaultVideoQualityId: Int? = VideoQualityDefaults.DEFAULT_VIDEO_QUALITY_ID,
@@ -30,7 +31,7 @@ private object VideoQualityDefaults {
 
 object PlayerSettingsStore {
 
-    private const val PREFS_NAME = "app_settings"
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
 
     private const val KEY_DEFAULT_VIDEO_QUALITY = "default_video_quality"
     private const val KEY_DEFAULT_AUDIO_TRACK = "default_audio_track"
@@ -49,9 +50,7 @@ object PlayerSettingsStore {
     private const val KEY_FF_SEEK_SECOND = "ff_seek_second"
 
     fun load(context: Context): PlayerSettings {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
-        fun readSetting(key: String): String? = prefs.getStringSafely(key)
+        fun readSetting(key: String): String? = appSettings.getCachedString(key)
 
         return PlayerSettings(
             defaultVideoQualityId = parseVideoQualityId(
@@ -167,9 +166,5 @@ object PlayerSettingsStore {
             "关", "OFF", "false", "FALSE", "0" -> false
             else -> defaultValue
         }
-    }
-
-    private fun SharedPreferences.getStringSafely(key: String): String? {
-        return runCatching { getString(key, null) }.getOrNull()
     }
 }

@@ -3,22 +3,25 @@ package com.tutu.myblbl.core.common.cache
 import com.google.gson.Gson
 import com.tutu.myblbl.MyBLBLApplication
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import java.io.File
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.koin.core.context.GlobalContext
 
 object FileCacheManager {
 
-    private const val PREFS_NAME = "app_settings"
     private const val KEY_CACHE_LIMIT = "cache_limit"
     private const val DEFAULT_CACHE_SIZE: Long = 50L * 1024L * 1024L
     private const val CACHE_SIZE_200_MB: Long = 200L * 1024L * 1024L
     private const val CACHE_SIZE_500_MB: Long = 500L * 1024L * 1024L
     private const val CACHE_SIZE_1_GB: Long = 1024L * 1024L * 1024L
     private const val MAX_FILE_COUNT = Int.MAX_VALUE
+
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
 
     private val cacheDir: File by lazy {
         File(MyBLBLApplication.instance.cacheDir, "BBLLCache").also {
@@ -191,8 +194,7 @@ object FileCacheManager {
     }
 
     private fun resolveMaxCacheSize(): Long {
-        val prefs = MyBLBLApplication.instance.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
-        return when (prefs.getString(KEY_CACHE_LIMIT, null)?.trim()) {
+        return when (appSettings.getCachedString(KEY_CACHE_LIMIT)?.trim()) {
             "不限制" -> Long.MAX_VALUE
             "200 MB" -> CACHE_SIZE_200_MB
             "500 MB" -> CACHE_SIZE_500_MB

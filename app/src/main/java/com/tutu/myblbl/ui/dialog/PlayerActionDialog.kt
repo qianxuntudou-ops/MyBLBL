@@ -1,7 +1,6 @@
 package com.tutu.myblbl.ui.dialog
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.Window
@@ -17,6 +16,7 @@ import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.repository.FavoriteRepository
 import com.tutu.myblbl.repository.VideoRepository
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,6 +24,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import org.koin.core.context.GlobalContext
 
 class PlayerActionDialog(
     context: Context,
@@ -33,6 +34,7 @@ class PlayerActionDialog(
 ) : AppCompatDialog(context, R.style.DialogTheme), KoinComponent {
 
     private val binding = DialogActionBinding.inflate(LayoutInflater.from(context))
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
     private val videoRepository: VideoRepository by inject()
     private val favoriteRepository: FavoriteRepository by inject()
     private val sessionGateway: NetworkSessionGateway by inject()
@@ -325,16 +327,12 @@ class PlayerActionDialog(
     }
 
     private fun loadCoinMultiply(): Int {
-        val prefs = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-        return prefs.getStringSafely(KEY_GIVE_COIN_NUMBER_SETTINGS)?.toIntOrNull()?.coerceAtLeast(1) ?: 2
+        return appSettings.getCachedString(KEY_GIVE_COIN_NUMBER_SETTINGS)?.toIntOrNull()?.coerceAtLeast(1) ?: 2
     }
 
     private fun persistCoinMultiply(value: Int) {
         val normalized = value.coerceAtLeast(1)
-        context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_GIVE_COIN_NUMBER_SETTINGS, normalized.toString())
-            .apply()
+        appSettings.putStringAsync(KEY_GIVE_COIN_NUMBER_SETTINGS, normalized.toString())
     }
 
     private fun checkLogin(): Boolean {
@@ -376,10 +374,6 @@ class PlayerActionDialog(
             }
         }
         return super.onKeyLongPress(keyCode, event)
-    }
-
-    private fun SharedPreferences.getStringSafely(key: String): String? {
-        return runCatching { getString(key, null) }.getOrNull()
     }
 
     private companion object {

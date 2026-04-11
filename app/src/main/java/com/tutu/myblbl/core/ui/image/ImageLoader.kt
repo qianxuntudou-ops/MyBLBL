@@ -1,14 +1,12 @@
 package com.tutu.myblbl.core.ui.image
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.graphics.Outline
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.ImageView
-import android.content.Context.MODE_PRIVATE
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.DiskCacheStrategy
@@ -22,18 +20,26 @@ import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.RequestOptions
 import com.bumptech.glide.request.target.Target
 import com.tutu.myblbl.R
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.network.NetworkManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.launch
+import org.koin.core.context.GlobalContext
 
 object ImageLoader {
 
-    private const val PREFS_APP_SETTINGS = "app_settings"
     private const val KEY_IMAGE_QUALITY = "image_quality"
     private const val KEY_IMAGE_QUALITY_LEVEL = "imageQualityLevel"
 
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+
     @Volatile
     private var cachedImageQualityLevel: Int? = null
-    private var cachedPrefs: SharedPreferences? = null
-    private var appSettingsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+    private var imageQualityFlowStarted = false
+    private val imageQualityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
     fun load(
         imageView: ImageView,
@@ -273,15 +279,14 @@ object ImageLoader {
     private fun resolveImageQualityLevel(imageView: ImageView): Int {
         cachedImageQualityLevel?.let { return it }
 
-        val context = imageView.context.applicationContext
-        registerImageQualityListenersIfNeeded(context)
-        val prefs = context.getSharedPreferences(PREFS_APP_SETTINGS, MODE_PRIVATE)
+        ensureImageQualityFlowCollection()
 
-        prefs.getStringSafely(KEY_IMAGE_QUALITY)?.let { label ->
+        appSettings.getCachedString(KEY_IMAGE_QUALITY)?.let { label ->
             return qualityLabelToLevel(label).also { cachedImageQualityLevel = it }
         }
 
-        prefs.getIntSafely(KEY_IMAGE_QUALITY_LEVEL)?.let { level ->
+        val level = appSettings.getCachedInt(KEY_IMAGE_QUALITY_LEVEL, -1)
+        if (level >= 0) {
             return level.coerceIn(0, 2).also { cachedImageQualityLevel = it }
         }
 
@@ -293,25 +298,17 @@ object ImageLoader {
     }
 
     @Synchronized
-    private fun registerImageQualityListenersIfNeeded(context: Context) {
-        val appContext = context.applicationContext
-        val prefs = appContext.getSharedPreferences(PREFS_APP_SETTINGS, MODE_PRIVATE)
-        if (cachedPrefs === prefs) {
-            return
-        }
-
-        appSettingsListener?.let { listener ->
-            cachedPrefs?.unregisterOnSharedPreferenceChangeListener(listener)
-        }
-
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
-            if (changedKey == KEY_IMAGE_QUALITY || changedKey == KEY_IMAGE_QUALITY_LEVEL) {
-                invalidateImageQualityCache()
+    private fun ensureImageQualityFlowCollection() {
+        if (imageQualityFlowStarted) return
+        imageQualityFlowStarted = true
+        imageQualityScope.launch {
+            combine(
+                appSettings.getStringFlow(KEY_IMAGE_QUALITY),
+                appSettings.getIntFlow(KEY_IMAGE_QUALITY_LEVEL, -1)
+            ) { _, _ -> }.collect {
+                cachedImageQualityLevel = null
             }
         }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        appSettingsListener = listener
-        cachedPrefs = prefs
     }
 
     private fun qualityLabelToLevel(label: String): Int {
@@ -373,13 +370,4 @@ object ImageLoader {
         )
     }
 
-    private fun SharedPreferences.getStringSafely(key: String): String? {
-        return runCatching { getString(key, null) }.getOrNull()
-    }
-
-    private fun SharedPreferences.getIntSafely(key: String): Int? {
-        return runCatching { getInt(key, Int.MIN_VALUE) }
-            .getOrNull()
-            ?.takeIf { it != Int.MIN_VALUE }
-    }
 }

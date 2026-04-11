@@ -1,6 +1,7 @@
 package com.tutu.myblbl
 
 import android.app.Application
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.di.appModules
 import com.tutu.myblbl.network.NetworkManager
 import java.util.concurrent.atomic.AtomicBoolean
@@ -29,7 +30,12 @@ class MyBLBLApplication : Application() {
         instance = this
         
         initKoin()
+        initSettings()
         initNetwork()
+    }
+
+    private fun initSettings() {
+        org.koin.core.context.GlobalContext.get().get<AppSettingsDataStore>().initCache()
     }
     
     private fun initKoin() {

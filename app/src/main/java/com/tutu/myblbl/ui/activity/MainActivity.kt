@@ -39,13 +39,17 @@ import com.tutu.myblbl.feature.player.PlayerLaunchContext
 import com.tutu.myblbl.feature.player.VideoPlayerFragment
 import com.tutu.myblbl.core.ui.navigation.TabBarView
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
+import org.koin.core.context.GlobalContext
 import java.lang.ref.WeakReference
 
 @OptIn(UnstableApi::class)
 class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickListener {
+
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
 
     private data class FocusRestoreAnchor(
         val viewRef: WeakReference<View>
@@ -164,18 +168,12 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     }
 
     private fun applyBackgroundImage() {
-        val prefs = getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
-        val themeIndex = try {
-            prefs.getInt("theme", 1)
-        } catch (_: ClassCastException) {
-            prefs.getString("theme", "1")?.toIntOrNull() ?: 1
-        }
+        val themeIndex = appSettings.getCachedInt("theme", 1)
         binding.mainBackgroundImage.visibility = if (themeIndex == 3) View.VISIBLE else View.GONE
     }
 
     fun applyLiveEntryVisibility() {
-        val liveEntry = getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
-            .getString("live_entry", "关") ?: "关"
+        val liveEntry = appSettings.getCachedString("live_entry", "关") ?: "关"
         val show = liveEntry == "开"
         binding.myTabView.setLiveButtonVisible(show)
         if (!show && currentFragmentIndex == 3) {

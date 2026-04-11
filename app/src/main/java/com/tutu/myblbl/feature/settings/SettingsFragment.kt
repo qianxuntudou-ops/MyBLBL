@@ -3,7 +3,6 @@ package com.tutu.myblbl.feature.settings
 import android.media.MediaCodecList
 import android.media.MediaCodecInfo
 import android.os.Build
-import android.content.SharedPreferences
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -20,9 +19,11 @@ import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.core.ui.decoration.LinearSpacingItemDecoration
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.cache.FileCacheManager
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.feature.player.cache.PlayerMediaCache
 import com.tutu.myblbl.core.common.ext.normalizeDanmakuSmartFilterValue
+import org.koin.core.context.GlobalContext
 import java.util.Locale
 
 class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
@@ -34,7 +35,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         const val CATEGORY_DM = 2
         const val CATEGORY_DEVICE = 3
 
-        private const val PREFS_NAME = "app_settings"
         private const val KEY_CACHE_LIMIT = "cache_limit"
         private const val KEY_DEFAULT_START_PAGE = "default_start_page"
         private const val KEY_IMAGE_QUALITY = "image_quality"
@@ -79,7 +79,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     private lateinit var playerSettings: MutableList<SettingModel>
     private lateinit var dmSettings: MutableList<SettingModel>
     private val deviceSettings = mutableListOf<SettingModel>()
-    private lateinit var prefs: SharedPreferences
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
 
     private lateinit var adapter: SettingAdapter
     private var currentCategory = -1
@@ -91,7 +91,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     }
 
     override fun initView() {
-        prefs = requireContext().getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
         binding.tvTitle.text = getString(R.string.setting)
         binding.buttonBack.setOnClickListener {
             requireActivity().onBackPressedDispatcher.onBackPressed()
@@ -317,7 +316,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             options = arrayOf("不限制", "200 MB", "500 MB", "1 GB")
         ) { value ->
             updateSetting(commonSettings, 1, value)
-            prefs.edit().putString(KEY_CACHE_LIMIT, value).apply()
+            appSettings.putStringAsync(KEY_CACHE_LIMIT, value)
             FileCacheManager.trimToLimit()
             commonSettings[0].info = formatFileSize(getCurrentCacheSize())
             adapter.notifyItemChanged(0)
@@ -363,7 +362,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
 
     private fun restoreSavedSettings() {
         applySavedValue(commonSettings, 1, KEY_CACHE_LIMIT)
-        val defaultStartPage = prefs.getInt("defaultStartPage", -1)
+        val defaultStartPage = appSettings.getCachedInt("defaultStartPage", -1)
         if (defaultStartPage >= 0) {
             commonSettings[2].info = HOME_START_PAGE_OPTIONS
                 .getOrNull(defaultStartPage)
@@ -375,7 +374,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             commonSettings[2].info = HOME_START_PAGE_OPTIONS.first()
         }
         applySavedValue(commonSettings, 3, KEY_IMAGE_QUALITY)
-        val theme = try { prefs.getInt("theme", 1) } catch (_: ClassCastException) { prefs.getString("theme", "1")?.toIntOrNull() ?: 1 }
+        val theme = appSettings.getCachedInt("theme", 1)
         commonSettings[4].info = theme.toThemeName()
         applySavedValue(commonSettings, 5, KEY_FULLSCREEN_APP)
         applySavedValue(commonSettings, 6, KEY_LIVE_ENTRY)
@@ -407,7 +406,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         applySavedValue(dmSettings, 5, KEY_DM_ALLOW_TOP)
         applySavedValue(dmSettings, 6, KEY_DM_ALLOW_BOTTOM)
         dmSettings[7].info = normalizeDanmakuSmartFilterValue(
-            prefs.getString(KEY_DM_FILTER_WEIGHT, dmSettings[7].info)
+            appSettings.getCachedString(KEY_DM_FILTER_WEIGHT) ?: dmSettings[7].info
         )
         applySavedValue(dmSettings, 8, KEY_DM_ALLOW_VIP_COLORFUL_DM)
         applySavedValue(dmSettings, 9, KEY_DM_SHOW_ADVANCED)
@@ -415,7 +414,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     }
 
     private fun applySavedValue(target: MutableList<SettingModel>, index: Int, key: String) {
-        prefs.getString(key, null)?.let { saved ->
+        appSettings.getCachedString(key)?.let { saved ->
             target.getOrNull(index)?.info = saved
         }
     }
@@ -436,25 +435,19 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     private fun showCommonChoiceDialog(position: Int, key: String, options: Array<String>) {
         showChoiceDialog(commonSettings[position].title, commonSettings[position].info, options) { value ->
             updateSetting(commonSettings, position, value)
-            prefs.edit().putString(key, value).apply()
+            appSettings.putStringAsync(key, value)
             if (key == KEY_DEFAULT_START_PAGE) {
-                prefs.edit()
-                    .putInt("defaultStartPage", HOME_START_PAGE_OPTIONS.indexOf(value).coerceAtLeast(0))
-                    .apply()
+                appSettings.putIntAsync("defaultStartPage", HOME_START_PAGE_OPTIONS.indexOf(value).coerceAtLeast(0))
             } else if (key == KEY_IMAGE_QUALITY) {
                 val qualityLevel = when (value) {
                     "低尺寸" -> 0
                     "高尺寸" -> 2
                     else -> 1
                 }
-                prefs.edit()
-                    .putInt("imageQualityLevel", qualityLevel)
-                    .apply()
+                appSettings.putIntAsync("imageQualityLevel", qualityLevel)
                 ImageLoader.invalidateImageQualityCache()
             } else if (key == KEY_THEME) {
-                prefs.edit()
-                    .putInt("theme", value.toLegacyTheme())
-                    .apply()
+                appSettings.putIntAsync("theme", value.toLegacyTheme())
                 activity?.recreate()
             }
         }
@@ -485,7 +478,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             options = toggleOptions()
         ) { value ->
             updateSetting(commonSettings, position, value)
-            prefs.edit().putString(KEY_LIVE_ENTRY, value).apply()
+            appSettings.putStringAsync(KEY_LIVE_ENTRY, value)
             val activity = activity as? com.tutu.myblbl.ui.activity.MainActivity
             activity?.applyLiveEntryVisibility()
         }
@@ -494,7 +487,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     private fun showPlayerChoiceDialog(position: Int, key: String, options: Array<String>) {
         showChoiceDialog(playerSettings[position].title, playerSettings[position].info, options) { value ->
             updateSetting(playerSettings, position, value)
-            prefs.edit().putString(key, value).apply()
+            appSettings.putStringAsync(key, value)
         }
     }
 
@@ -637,7 +630,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         } else {
             value
         }
-        prefs.edit().putString(key, persistedValue).apply()
+        appSettings.putStringAsync(key, persistedValue)
     }
 
     private fun requestInitialCategoryFocus() {

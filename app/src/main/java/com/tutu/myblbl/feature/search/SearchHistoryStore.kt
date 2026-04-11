@@ -1,23 +1,24 @@
 package com.tutu.myblbl.feature.search
 
 import android.content.Context
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import org.json.JSONArray
+import org.koin.core.context.GlobalContext
 
 class SearchHistoryStore(
     context: Context
 ) {
 
     companion object {
-        private const val PREF_NAME = "app_settings"
         private const val KEY_RECENT_SEARCH = "recentSearch"
         private const val MAX_RECENT_SEARCHES = 10
         private const val MAX_RECENT_CHARS = 90
     }
 
-    private val preferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
 
     fun load(): List<String> {
-        val value = preferences.getString(KEY_RECENT_SEARCH, null)
+        val value = appSettings.getCachedString(KEY_RECENT_SEARCH)
         if (value.isNullOrBlank()) {
             return emptyList()
         }
@@ -66,8 +67,6 @@ class SearchHistoryStore(
     private fun persist(items: List<String>) {
         val array = JSONArray()
         items.forEach(array::put)
-        preferences.edit()
-            .putString(KEY_RECENT_SEARCH, array.toString())
-            .apply()
+        appSettings.putStringAsync(KEY_RECENT_SEARCH, array.toString())
     }
 }

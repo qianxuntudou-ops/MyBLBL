@@ -22,11 +22,13 @@ import com.tutu.myblbl.ui.dialog.UserInfoDialog
 import com.tutu.myblbl.feature.settings.SignInFragment
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.image.ImageLoader
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
+import org.koin.core.context.GlobalContext
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
@@ -37,6 +39,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
         fun newInstance(): MeFragment = MeFragment()
     }
 
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
     private val appEventHub: AppEventHub by inject()
     private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private val sessionGateway: NetworkSessionGateway by inject()
@@ -207,9 +210,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
     }
 
     private fun getDefaultTabIndex(): Int {
-        val startPage = requireContext()
-            .getSharedPreferences("app_settings", android.content.Context.MODE_PRIVATE)
-            .getInt("defaultStartPage", 1)
+        val startPage = appSettings.getCachedInt("defaultStartPage", 1)
         return (startPage - 4).coerceIn(0, adapter.itemCount - 1)
     }
 

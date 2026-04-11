@@ -27,6 +27,7 @@ import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
 import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.cache.FileCacheManager
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
@@ -35,13 +36,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
+import org.koin.core.context.GlobalContext
 
 class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
     companion object {
         private const val TAG = "MainEntryFocus"
         private const val ARG_EMBEDDED = "embedded"
         private const val COLLECTION_CACHE_KEY = "collectionCacheList"
-        private const val FAVORITE_COVER_PREFS = "app_settings"
 
         fun newInstance() = FavoriteFragment()
 
@@ -64,6 +65,7 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
     private var hasRequestedInitialFocus = false
     private var coverHydrationJob: Job? = null
     private var isLoadingFolders = false
+    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
 
     override fun initArguments() {
         embedded = arguments?.getBoolean(ARG_EMBEDDED, false) == true
@@ -438,10 +440,7 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
         if (folder.id <= 0L || folder.displayImageUrl.isNotBlank()) {
             return folder
         }
-        val cachedCover = requireContext()
-            .getSharedPreferences(FAVORITE_COVER_PREFS, 0)
-            .getString("fav${folder.id}", "")
-            .orEmpty()
+        val cachedCover = appSettings.getCachedString("fav${folder.id}").orEmpty()
         return if (cachedCover.isBlank()) {
             folder
         } else {
@@ -453,10 +452,6 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
         if (folderId <= 0L || coverUrl.isBlank()) {
             return
         }
-        requireContext()
-            .getSharedPreferences(FAVORITE_COVER_PREFS, 0)
-            .edit()
-            .putString("fav$folderId", coverUrl)
-            .apply()
+        appSettings.putStringAsync("fav$folderId", coverUrl)
     }
 }

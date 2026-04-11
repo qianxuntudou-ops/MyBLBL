@@ -3,6 +3,7 @@ package com.tutu.myblbl.ui.fragment.main.live
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -14,6 +15,7 @@ import com.tutu.myblbl.model.live.LiveListWrapper
 import com.tutu.myblbl.model.live.LiveRecommendSection
 import com.tutu.myblbl.ui.activity.LivePlayerActivity
 import com.tutu.myblbl.ui.base.BaseFragment
+import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.utils.AppLog
 import com.tutu.myblbl.utils.ContentFilter
 import com.tutu.myblbl.utils.SpatialFocusNavigator
@@ -21,9 +23,6 @@ import com.tutu.myblbl.utils.SwipeRefreshHelper
 import com.tutu.myblbl.utils.toast
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import org.greenrobot.eventbus.EventBus
-import org.greenrobot.eventbus.Subscribe
-import org.greenrobot.eventbus.ThreadMode
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveTabPage {
@@ -35,6 +34,7 @@ class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveT
     }
 
     private val viewModel: LiveRecommendViewModel by viewModel()
+    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private lateinit var adapter: LiveRecommendAdapter
     private var swipeRefreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout? = null
 
@@ -57,16 +57,6 @@ class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveT
             onExplicitRefresh()
         }
         binding.recyclerView.setHasFixedSize(true)
-    }
-
-    override fun onResume() {
-        super.onResume()
-        EventBus.getDefault().register(this)
-    }
-
-    override fun onPause() {
-        super.onPause()
-        EventBus.getDefault().unregister(this)
     }
 
     override fun initData() {
@@ -93,6 +83,23 @@ class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveT
                 viewModel.error.collectLatest { error ->
                     if (!error.isNullOrBlank()) {
                         requireContext().toast(error)
+                    }
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collectLatest { event ->
+                    if (isHidden || !isVisible) {
+                        return@collectLatest
+                    }
+                    if (event is MainNavigationViewModel.Event.SecondaryTabReselected &&
+                        event.host == MainNavigationViewModel.SecondaryTabHost.LIVE &&
+                        event.position == 0 &&
+                        !viewModel.loading.value
+                    ) {
+                        onExplicitRefresh()
                     }
                 }
             }
@@ -200,13 +207,4 @@ class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveT
         return sections
     }
 
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    fun onMessageEvent(event: String) {
-        if (isHidden || !isVisible) {
-            return
-        }
-        if (event == "clickLiveTopTab0") {
-            onExplicitRefresh()
-        }
-    }
 }

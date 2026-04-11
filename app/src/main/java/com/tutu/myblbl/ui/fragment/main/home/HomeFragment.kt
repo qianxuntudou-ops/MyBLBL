@@ -4,20 +4,24 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import androidx.viewpager2.widget.ViewPager2
 import com.tutu.myblbl.databinding.FragmentHomeBinding
 import com.tutu.myblbl.ui.activity.MainActivity
+import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.utils.AppLog
 import com.tutu.myblbl.utils.enableTouchNavigation
 import com.tutu.myblbl.utils.focusNearestTabTo
 import com.tutu.myblbl.utils.getHomeDefaultStartPageIndex
-import org.greenrobot.eventbus.EventBus
-import org.greenrobot.eventbus.Subscribe
-import org.greenrobot.eventbus.ThreadMode
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class HomeFragment : Fragment(), MainTabFocusTarget {
 
@@ -31,6 +35,7 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
 
     private var _binding: FragmentHomeBinding? = null
     private val binding get() = _binding!!
+    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private lateinit var adapter: HomeFragmentStateAdapter
     private var tabMediator: TabLayoutMediator? = null
     private var pageChangeCallback: ViewPager2.OnPageChangeCallback? = null
@@ -76,17 +81,22 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
             binding.viewPager.registerOnPageChangeCallback(callback)
         }
 
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collectLatest { event ->
+                    val currentBinding = _binding ?: return@collectLatest
+                    if (isHidden) {
+                        return@collectLatest
+                    }
+                    if (event is MainNavigationViewModel.Event.MainTabSelected && event.index == 0) {
+                        (adapter.getCurrentFragment(currentBinding.viewPager.currentItem) as? HomeTabPage)
+                            ?.onTabSelected()
+                    }
+                }
+            }
+        }
+
         binding.viewPager.currentItem = getDefaultTabIndex()
-    }
-
-    override fun onResume() {
-        super.onResume()
-        EventBus.getDefault().register(this)
-    }
-
-    override fun onPause() {
-        super.onPause()
-        EventBus.getDefault().unregister(this)
     }
 
     override fun onDestroyView() {
@@ -99,18 +109,6 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
         _binding = null
     }
 
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    fun onMessageEvent(event: String) {
-        if (isHidden || view == null) {
-            return
-        }
-        when (event) {
-            "selectTab0" -> {
-                (adapter.getCurrentFragment(binding.viewPager.currentItem) as? HomeTabPage)?.onTabSelected()
-            }
-        }
-    }
-
     private fun getDefaultTabIndex(): Int {
         return requireContext().getHomeDefaultStartPageIndex(
             maxIndex = adapter.itemCount - 1,
@@ -119,7 +117,12 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
     }
 
     private fun postTopTabEvent(position: Int) {
-        EventBus.getDefault().post("clickTopTab$position")
+        mainNavigationViewModel.dispatch(
+            MainNavigationViewModel.Event.SecondaryTabReselected(
+                host = MainNavigationViewModel.SecondaryTabHost.HOME,
+                position = position
+            )
+        )
     }
 
     fun focusCurrentTab(anchorView: View? = view?.findFocus() ?: activity?.currentFocus): Boolean {

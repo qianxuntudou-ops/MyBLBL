@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -14,6 +15,7 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.FragmentLiveBinding
 import com.tutu.myblbl.model.live.LiveAreaCategoryParent
 import com.tutu.myblbl.ui.base.BaseFragment
+import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.utils.AppLog
 import com.tutu.myblbl.utils.enableTouchNavigation
@@ -22,9 +24,6 @@ import com.tutu.myblbl.utils.focusSelectedTab
 import com.tutu.myblbl.utils.toast
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import org.greenrobot.eventbus.EventBus
-import org.greenrobot.eventbus.Subscribe
-import org.greenrobot.eventbus.ThreadMode
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
@@ -36,15 +35,11 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
     }
 
     private val viewModel: LiveViewModel by viewModel()
+    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private lateinit var tabLayout: TabLayout
     private lateinit var viewPager: ViewPager2
     private lateinit var adapter: LiveFragmentAdapter
     private val categories = mutableListOf<LiveAreaCategoryParent>()
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        EventBus.getDefault().register(this)
-    }
 
     override fun getViewBinding(
         inflater: LayoutInflater,
@@ -79,7 +74,12 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
             override fun onTabUnselected(tab: TabLayout.Tab) = Unit
 
             override fun onTabReselected(tab: TabLayout.Tab) {
-                postTopTabEvent(tab.position)
+                mainNavigationViewModel.dispatch(
+                    MainNavigationViewModel.Event.SecondaryTabReselected(
+                        host = MainNavigationViewModel.SecondaryTabHost.LIVE,
+                        position = tab.position
+                    )
+                )
             }
         })
     }
@@ -120,36 +120,40 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
                 }
             }
         }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collectLatest { event ->
+                    if (isHidden) {
+                        return@collectLatest
+                    }
+                    when (event) {
+                        is MainNavigationViewModel.Event.MainTabSelected ->
+                            if (event.index == 3) {
+                                if (viewModel.shouldRefresh(CATEGORY_CACHE_TTL_MS)) {
+                                    viewModel.loadLiveAreas()
+                                }
+                                adapter.getCurrentFragment(viewPager.currentItem)?.onTabSelected()
+                            }
+
+                        is MainNavigationViewModel.Event.MainTabReselected ->
+                            if (event.index == 3) {
+                                adapter.getCurrentFragment(viewPager.currentItem)?.onExplicitRefresh()
+                            }
+
+                        MainNavigationViewModel.Event.MenuPressed ->
+                            adapter.getCurrentFragment(viewPager.currentItem)?.onExplicitRefresh()
+
+                        MainNavigationViewModel.Event.BackPressed -> scrollToTop()
+                        else -> Unit
+                    }
+                }
+            }
+        }
     }
 
     fun scrollToTop() {
         adapter.getCurrentFragment(viewPager.currentItem)?.scrollToTop()
-    }
-
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    fun onMessageEvent(event: String) {
-        if (isHidden) {
-            return
-        }
-        when (event) {
-            "selectTab3" -> {
-                if (viewModel.shouldRefresh(CATEGORY_CACHE_TTL_MS)) {
-                    viewModel.loadLiveAreas()
-                }
-                adapter.getCurrentFragment(viewPager.currentItem)?.onTabSelected()
-            }
-            "clickTab3" -> {
-                adapter.getCurrentFragment(viewPager.currentItem)?.onExplicitRefresh()
-            }
-            "keyMenuPress" -> {
-                adapter.getCurrentFragment(viewPager.currentItem)?.onExplicitRefresh()
-            }
-            "backPressed" -> scrollToTop()
-        }
-    }
-
-    private fun postTopTabEvent(position: Int) {
-        EventBus.getDefault().post("clickLiveTopTab$position")
     }
 
     fun focusCurrentTab(anchorView: View? = view?.findFocus() ?: activity?.currentFocus): Boolean {
@@ -176,10 +180,5 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
     override fun onDestroyView() {
         binding.viewPager.adapter = null
         super.onDestroyView()
-    }
-
-    override fun onDestroy() {
-        EventBus.getDefault().unregister(this)
-        super.onDestroy()
     }
 }

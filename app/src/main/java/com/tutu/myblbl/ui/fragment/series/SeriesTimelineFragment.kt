@@ -6,7 +6,10 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.os.bundleOf
+import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.FragmentSeriesTimelineBinding
 import com.tutu.myblbl.model.series.SeriesType
@@ -16,13 +19,12 @@ import com.tutu.myblbl.repository.SeriesRepository
 import com.tutu.myblbl.ui.adapter.SeriesTimelineAdapter
 import com.tutu.myblbl.ui.base.BaseFragment
 import com.tutu.myblbl.ui.base.RecyclerViewFocusRestoreHelper
+import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.view.WrapContentGridLayoutManager
 import com.tutu.myblbl.ui.widget.GridSpacingItemDecoration
 import com.tutu.myblbl.utils.AppLog
 import kotlinx.coroutines.launch
-import org.greenrobot.eventbus.EventBus
-import org.greenrobot.eventbus.Subscribe
-import org.greenrobot.eventbus.ThreadMode
+import kotlinx.coroutines.flow.collectLatest
 import org.koin.android.ext.android.inject
 
 class SeriesTimelineFragment : BaseFragment<FragmentSeriesTimelineBinding>() {
@@ -44,6 +46,7 @@ class SeriesTimelineFragment : BaseFragment<FragmentSeriesTimelineBinding>() {
         CONTENT
     }
 
+    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private val repository: SeriesRepository by inject()
 
     private var seasonType: Int = SeriesType.ANIME
@@ -156,33 +159,37 @@ class SeriesTimelineFragment : BaseFragment<FragmentSeriesTimelineBinding>() {
         loadTimeline()
     }
 
-    override fun onResume() {
-        super.onResume()
-        EventBus.getDefault().register(this)
-        binding.recyclerView.post {
-            if (!isAdded || view == null) {
-                return@post
-            }
-            restoreFocus()
-        }
-    }
+    override fun initObserver() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collectLatest { event ->
+                    if (isHidden || !isVisible) {
+                        return@collectLatest
+                    }
+                    when (event) {
+                        is MainNavigationViewModel.Event.MainTabReselected ->
+                            if (event.index == 0) {
+                                loadTimeline()
+                            }
 
-    override fun onPause() {
-        super.onPause()
-        EventBus.getDefault().unregister(this)
-    }
+                        is MainNavigationViewModel.Event.SecondaryTabReselected -> {
+                            val matchesHomeTab = event.host == MainNavigationViewModel.SecondaryTabHost.HOME &&
+                                (
+                                    (event.position == 2 && seasonType == SeriesType.ANIME) ||
+                                        (event.position == 3 && seasonType == SeriesType.MOVIE)
+                                    )
+                            if (matchesHomeTab) {
+                                loadTimeline()
+                            }
+                        }
 
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    fun onMessageEvent(event: String) {
-        if (isHidden || !isVisible) return
-        when {
-            event == "clickTab0"
-                    || (event == "clickTopTab2" && seasonType == SeriesType.ANIME)
-                    || (event == "clickTopTab3" && seasonType == SeriesType.MOVIE) -> {
-                loadTimeline()
-            }
-            event == "backPressed" -> {
-                binding.recyclerView.scrollToPosition(0)
+                        MainNavigationViewModel.Event.BackPressed -> {
+                            binding.recyclerView.scrollToPosition(0)
+                        }
+
+                        else -> Unit
+                    }
+                }
             }
         }
     }
@@ -315,6 +322,16 @@ class SeriesTimelineFragment : BaseFragment<FragmentSeriesTimelineBinding>() {
     override fun onDestroyView() {
         listLayoutState = binding.recyclerView.layoutManager?.onSaveInstanceState()
         super.onDestroyView()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        binding.recyclerView.post {
+            if (!isAdded || view == null) {
+                return@post
+            }
+            restoreFocus()
+        }
     }
 
     private fun restoreListState() {

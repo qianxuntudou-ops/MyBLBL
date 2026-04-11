@@ -4,7 +4,11 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.tabs.TabLayout
@@ -13,14 +17,14 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.FragmentCategoryBinding
 import com.tutu.myblbl.model.CategoryModel
 import com.tutu.myblbl.ui.base.BaseFragment
+import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.utils.AppLog
 import com.tutu.myblbl.utils.enableTouchNavigation
 import com.tutu.myblbl.utils.focusNearestTabTo
 import com.tutu.myblbl.utils.focusSelectedTab
-import org.greenrobot.eventbus.EventBus
-import org.greenrobot.eventbus.Subscribe
-import org.greenrobot.eventbus.ThreadMode
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTarget {
 
@@ -33,11 +37,7 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
     private lateinit var viewPager: ViewPager2
     private lateinit var adapter: CategoryFragmentAdapter
     private val categories = mutableListOf<CategoryModel>()
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        EventBus.getDefault().register(this)
-    }
+    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
 
     override fun getViewBinding(
         inflater: LayoutInflater,
@@ -113,22 +113,33 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
     }
 
     override fun initObserver() {
-    }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collectLatest { event ->
+                    if (isHidden) {
+                        return@collectLatest
+                    }
+                    when (event) {
+                        is MainNavigationViewModel.Event.MainTabSelected ->
+                            if (event.index == 1) {
+                                adapter.getCurrentFragment(viewPager.currentItem)?.onTabSelected()
+                            }
 
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    fun onMessageEvent(event: String) {
-        if (isHidden) {
-            return
-        }
-        when (event) {
-            "selectTab1" -> {
-                adapter.getCurrentFragment(viewPager.currentItem)?.onTabSelected()
+                        is MainNavigationViewModel.Event.MainTabReselected ->
+                            if (event.index == 1) {
+                                adapter.getCurrentFragment(viewPager.currentItem)?.refresh()
+                            }
+
+                        MainNavigationViewModel.Event.MenuPressed ->
+                            adapter.getCurrentFragment(viewPager.currentItem)?.refresh()
+
+                        MainNavigationViewModel.Event.BackPressed ->
+                            adapter.getCurrentFragment(viewPager.currentItem)?.scrollToTop()
+
+                        else -> Unit
+                    }
+                }
             }
-            "clickTab1" -> {
-                adapter.getCurrentFragment(viewPager.currentItem)?.refresh()
-            }
-            "keyMenuPress" -> adapter.getCurrentFragment(viewPager.currentItem)?.refresh()
-            "backPressed" -> adapter.getCurrentFragment(viewPager.currentItem)?.scrollToTop()
         }
     }
 
@@ -139,11 +150,6 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
     override fun onDestroyView() {
         binding.viewPager.adapter = null
         super.onDestroyView()
-    }
-
-    override fun onDestroy() {
-        EventBus.getDefault().unregister(this)
-        super.onDestroy()
     }
 
     fun focusCurrentTab(anchorView: View? = view?.findFocus() ?: activity?.currentFocus): Boolean {

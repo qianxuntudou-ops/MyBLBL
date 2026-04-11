@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -14,6 +15,7 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.FragmentMeBinding
 import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.ui.base.BaseFragment
+import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.ui.dialog.UserInfoDialog
 import com.tutu.myblbl.ui.fragment.main.settings.SignInFragment
@@ -36,6 +38,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
         fun newInstance(): MeFragment = MeFragment()
     }
 
+    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private val viewModel: MeViewModel by viewModel()
     private lateinit var tabLayout: TabLayout
     private lateinit var viewPager: ViewPager2
@@ -88,7 +91,6 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
             override fun onTabUnselected(tab: TabLayout.Tab) = Unit
 
             override fun onTabReselected(tab: TabLayout.Tab) {
-                postTopTabEvent(tab.position)
                 notifyCurrentTab { it.onTabReselected() }
             }
         })
@@ -133,6 +135,49 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
                 }
             }
         }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collectLatest { event ->
+                    if (isHidden) {
+                        return@collectLatest
+                    }
+                    when (event) {
+                        is MainNavigationViewModel.Event.MainTabSelected ->
+                            if (event.index == 4) {
+                                if (viewModel.shouldRefresh(USER_INFO_CACHE_TTL_MS)) {
+                                    viewModel.loadUserInfo()
+                                }
+                                dispatchHostEvent(MeTabPage.HostEvent.SELECT_TAB4)
+                            }
+
+                        is MainNavigationViewModel.Event.MainTabReselected ->
+                            if (event.index == 4) {
+                                if (viewModel.shouldRefresh(USER_INFO_CACHE_TTL_MS)) {
+                                    viewModel.loadUserInfo()
+                                }
+                                dispatchHostEvent(MeTabPage.HostEvent.CLICK_TAB4) {
+                                    getCurrentTabPage()?.refresh()
+                                }
+                            }
+
+                        MainNavigationViewModel.Event.BackPressed -> {
+                            dispatchHostEvent(MeTabPage.HostEvent.BACK_PRESSED) {
+                                getCurrentTabPage()?.scrollToTop()
+                            }
+                        }
+
+                        MainNavigationViewModel.Event.MenuPressed -> {
+                            dispatchHostEvent(MeTabPage.HostEvent.KEY_MENU_PRESS) {
+                                getCurrentTabPage()?.refresh()
+                            }
+                        }
+
+                        else -> Unit
+                    }
+                }
+            }
+        }
     }
 
     private fun updateUserInfo(avatarUrl: String) {
@@ -173,30 +218,6 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
                     if (fragment.view != null) {
                         (fragment as? MeTabPage)?.refresh()
                     }
-                }
-            }
-            "selectTab4" -> {
-                if (viewModel.shouldRefresh(USER_INFO_CACHE_TTL_MS)) {
-                    viewModel.loadUserInfo()
-                }
-                dispatchHostEvent(MeTabPage.HostEvent.SELECT_TAB4)
-            }
-            "clickTab4" -> {
-                if (viewModel.shouldRefresh(USER_INFO_CACHE_TTL_MS)) {
-                    viewModel.loadUserInfo()
-                }
-                dispatchHostEvent(MeTabPage.HostEvent.CLICK_TAB4) {
-                    getCurrentTabPage()?.refresh()
-                }
-            }
-            "backPressed" -> {
-                dispatchHostEvent(MeTabPage.HostEvent.BACK_PRESSED) {
-                    getCurrentTabPage()?.scrollToTop()
-                }
-            }
-            "keyMenuPress" -> {
-                dispatchHostEvent(MeTabPage.HostEvent.KEY_MENU_PRESS) {
-                    getCurrentTabPage()?.refresh()
                 }
             }
         }
@@ -273,9 +294,4 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
         binding.viewPager.adapter = null
         super.onDestroyView()
     }
-
-    private fun postTopTabEvent(position: Int) {
-        EventBus.getDefault().post("clickTopTab$position")
-    }
-
 }

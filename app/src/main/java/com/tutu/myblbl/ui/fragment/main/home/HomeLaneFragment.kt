@@ -2,7 +2,10 @@ package com.tutu.myblbl.ui.fragment.main.home
 
 import android.view.View
 import androidx.core.os.bundleOf
+import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.tutu.myblbl.R
 import com.tutu.myblbl.model.lane.HomeLaneSection
@@ -12,15 +15,14 @@ import com.tutu.myblbl.ui.adapter.HomeLaneAdapter
 import com.tutu.myblbl.ui.base.BaseAdapter
 import com.tutu.myblbl.ui.base.BaseListFragment
 import com.tutu.myblbl.ui.base.RecyclerViewFocusRestoreHelper
+import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.series.AllSeriesFragment
 import com.tutu.myblbl.ui.fragment.series.SeriesDetailFragment
 import com.tutu.myblbl.utils.AppLog
 import com.tutu.myblbl.utils.SpatialFocusNavigator
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import org.greenrobot.eventbus.EventBus
-import org.greenrobot.eventbus.Subscribe
-import org.greenrobot.eventbus.ThreadMode
+import kotlinx.coroutines.flow.collectLatest
 import org.koin.android.ext.android.inject
 
 class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
@@ -40,6 +42,7 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
         }
     }
 
+    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private val repository: HomeLaneRepository by inject()
 
     private var type: Int = TYPE_ANIMATION
@@ -57,11 +60,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
 
     override fun initArguments() {
         type = arguments?.getInt(ARG_TYPE, TYPE_ANIMATION) ?: TYPE_ANIMATION
-    }
-
-    override fun onCreate(savedInstanceState: android.os.Bundle?) {
-        super.onCreate(savedInstanceState)
-        EventBus.getDefault().register(this)
     }
 
     override fun createAdapter(): BaseAdapter<HomeLaneSection, *> {
@@ -106,6 +104,43 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
     override fun initData() {
         showLoading(true)
         restoreCacheThenLoad()
+    }
+
+    override fun initObserver() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collectLatest { event ->
+                    if (!isResumed || view == null) {
+                        return@collectLatest
+                    }
+                    when (event) {
+                        is MainNavigationViewModel.Event.MainTabReselected ->
+                            if (event.index == 0 && !isLoading) {
+                                refresh()
+                            }
+
+                        is MainNavigationViewModel.Event.SecondaryTabReselected -> {
+                            val shouldRefresh = event.host == MainNavigationViewModel.SecondaryTabHost.HOME &&
+                                (
+                                    (event.position == 2 && type == TYPE_ANIMATION) ||
+                                        (event.position == 3 && type == TYPE_CINEMA)
+                                    )
+                            if (shouldRefresh && !isLoading) {
+                                refresh()
+                            }
+                        }
+
+                        MainNavigationViewModel.Event.MenuPressed ->
+                            if (!isLoading) {
+                                refresh()
+                            }
+
+                        MainNavigationViewModel.Event.BackPressed -> scrollToTop()
+                        else -> Unit
+                    }
+                }
+            }
+        }
     }
 
     private fun restoreCacheThenLoad() {
@@ -323,20 +358,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
         }
     }
 
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    fun onMessageEvent(event: String) {
-        if (!isResumed || view == null) {
-            return
-        }
-        when (event) {
-            "clickTab0" -> if (!isLoading) refresh()
-            "clickTopTab2" -> if (type == TYPE_ANIMATION && !isLoading) refresh()
-            "clickTopTab3" -> if (type == TYPE_CINEMA && !isLoading) refresh()
-            "keyMenuPress" -> if (!isLoading) refresh()
-            "backPressed" -> scrollToTop()
-        }
-    }
-
     private fun cacheSections(sections: List<HomeLaneSection>) {
         viewLifecycleOwner.lifecycleScope.launch {
             runCatching {
@@ -395,8 +416,4 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
         return (parentFragment as? HomeFragment)?.focusCurrentTab() == true
     }
 
-    override fun onDestroy() {
-        EventBus.getDefault().unregister(this)
-        super.onDestroy()
-    }
 }

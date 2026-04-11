@@ -6,10 +6,13 @@ import android.view.View
 import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.viewModels
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentTransaction
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.util.UnstableApi
 import com.tutu.myblbl.R
 import com.tutu.myblbl.MyBLBLApplication
@@ -24,6 +27,7 @@ import com.tutu.myblbl.ui.fragment.main.dynamic.DynamicFragment
 import com.tutu.myblbl.ui.fragment.main.home.HomeFragment
 import com.tutu.myblbl.ui.fragment.main.live.LiveFragment
 import com.tutu.myblbl.ui.fragment.main.me.MeFragment
+import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.ui.fragment.main.search.SearchNewFragment
 import com.tutu.myblbl.ui.fragment.main.settings.SettingsFragment
@@ -57,6 +61,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     }
 
     private val fragments = mutableListOf<Fragment>()
+    private val mainNavigationViewModel: MainNavigationViewModel by viewModels()
     private val userRepository: UserRepository by inject()
     private var currentFragmentIndex = -1
     private var exitTime: Long = 0
@@ -95,6 +100,15 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             updateNavigationVisibility()
         }
         lastBackStackEntryCount = supportFragmentManager.backStackEntryCount
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collect { event ->
+                    if (event == MainNavigationViewModel.Event.HomeContentReady) {
+                        dismissSplash()
+                    }
+                }
+            }
+        }
     }
 
     override fun initView() {
@@ -282,8 +296,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     fun onMessageEvent(event: String) {
         if (event == "signIn" || event == "updateUserInfo") {
             refreshAvatar()
-        } else if (event == "homeContentReady") {
-            dismissSplash()
         }
     }
 
@@ -366,7 +378,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             return
         }
 
-        EventBus.getDefault().post("backPressed")
+        mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.BackPressed)
 
         if (System.currentTimeMillis() - exitTime <= exitInterval) {
             finish()
@@ -630,16 +642,16 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     }
 
     private fun postTabClickEvent(index: Int) {
-        EventBus.getDefault().post("clickTab$index")
+        mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.MainTabReselected(index))
     }
 
     private fun postTabSelectedEvent(index: Int) {
-        EventBus.getDefault().post("selectTab$index")
+        mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.MainTabSelected(index))
     }
 
     override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
         if (event?.action == android.view.KeyEvent.ACTION_DOWN && keyCode == android.view.KeyEvent.KEYCODE_MENU) {
-            EventBus.getDefault().post("keyMenuPress")
+            mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.MenuPressed)
         }
         return super.onKeyDown(keyCode, event)
     }

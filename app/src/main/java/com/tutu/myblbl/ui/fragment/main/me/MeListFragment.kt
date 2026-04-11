@@ -531,8 +531,6 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         }
         if (event in refreshEvents) {
             refresh()
-        } else if (event == "backPressed" && type == TYPE_LATER) {
-            scrollToTop()
         }
     }
 }

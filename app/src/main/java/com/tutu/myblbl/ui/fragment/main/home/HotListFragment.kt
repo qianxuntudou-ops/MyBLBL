@@ -2,6 +2,7 @@ package com.tutu.myblbl.ui.fragment.main.home
 
 import android.os.Bundle
 import android.view.View
+import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -10,6 +11,7 @@ import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.repository.cache.HomeCacheStore
 import com.tutu.myblbl.ui.adapter.VideoAdapter
 import com.tutu.myblbl.ui.base.BaseListFragment
+import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.utils.ContentFilter
 import com.tutu.myblbl.utils.VideoRouteNavigator
 import com.tutu.myblbl.utils.toast
@@ -17,9 +19,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel
-import org.greenrobot.eventbus.EventBus
-import org.greenrobot.eventbus.Subscribe
-import org.greenrobot.eventbus.ThreadMode
 
 class HotListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
 
@@ -32,16 +31,12 @@ class HotListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
     }
 
     private val viewModel: HotViewModel by viewModel()
+    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private var loadingPage = 1
     private var waitingForFirstLoad = true
     private var cacheRestoreJob: Job? = null
 
     override val autoLoad: Boolean = false
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        EventBus.getDefault().register(this)
-    }
 
     override fun createAdapter(): VideoAdapter {
         return VideoAdapter(
@@ -169,6 +164,38 @@ class HotListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
                 }
             }
         }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainNavigationViewModel.events.collectLatest { event ->
+                    if (!isResumed || view == null) {
+                        return@collectLatest
+                    }
+                    when (event) {
+                        is MainNavigationViewModel.Event.MainTabReselected ->
+                            if (event.index == 0 && !isLoading) {
+                                refresh()
+                            }
+
+                        is MainNavigationViewModel.Event.SecondaryTabReselected ->
+                            if (event.host == MainNavigationViewModel.SecondaryTabHost.HOME &&
+                                event.position == 1 &&
+                                !isLoading
+                            ) {
+                                refresh()
+                            }
+
+                        MainNavigationViewModel.Event.MenuPressed ->
+                            if (!isLoading) {
+                                refresh()
+                            }
+
+                        MainNavigationViewModel.Event.BackPressed -> scrollToTop()
+                        else -> Unit
+                    }
+                }
+            }
+        }
     }
 
     override fun onRetryClick() {
@@ -187,21 +214,6 @@ class HotListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
 
     override fun focusPrimaryContent(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
         return super<BaseListFragment>.focusPrimaryContent(anchorView, preferSpatialEntry)
-    }
-
-    @Subscribe(threadMode = ThreadMode.MAIN)
-    fun onMessageEvent(event: String) {
-        if (!isResumed || view == null) {
-            return
-        }
-        when (event) {
-            "clickTab0", "clickTopTab1", "keyMenuPress" -> {
-                if (!isLoading) {
-                    refresh()
-                }
-            }
-            "backPressed" -> scrollToTop()
-        }
     }
 
     private fun cacheVideos(videos: List<VideoModel>) {
@@ -227,8 +239,4 @@ class HotListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
         return true
     }
 
-    override fun onDestroy() {
-        EventBus.getDefault().unregister(this)
-        super.onDestroy()
-    }
 }

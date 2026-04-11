@@ -138,7 +138,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
     @Subscribe(threadMode = ThreadMode.MAIN)
     fun onMessageEvent(event: String) {
         if (isHidden || !isVisible) return
-        if (event in setOf("signIn", "updateUserInfo", "clickTab4")) {
+        if (event in setOf("signIn", "updateUserInfo")) {
             currentPage = 1
             hasMore = true
             loadFavoriteInfo()

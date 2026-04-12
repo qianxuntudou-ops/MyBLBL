@@ -50,6 +50,12 @@ object NetworkManager {
         )
     }
 
+    private val noCookieOkHttpClient: OkHttpClient by lazy {
+        internalOkHttpClient.newBuilder()
+            .cookieJar(okhttp3.CookieJar.NO_COOKIES)
+            .build()
+    }
+
     private val gson by lazy {
         NetworkClientFactory.createGson()
     }
@@ -62,8 +68,20 @@ object NetworkManager {
         )
     }
 
+    private val noCookieRetrofit: Retrofit by lazy {
+        NetworkClientFactory.createRetrofit(
+            baseUrl = API_BASE,
+            client = noCookieOkHttpClient,
+            gson = gson
+        )
+    }
+
     val apiService: ApiService by lazy {
         retrofit.create(ApiService::class.java)
+    }
+
+    val noCookieApiService: ApiService by lazy {
+        noCookieRetrofit.create(ApiService::class.java)
     }
 
     private val securityCoordinator: BiliSecurityCoordinator by lazy {

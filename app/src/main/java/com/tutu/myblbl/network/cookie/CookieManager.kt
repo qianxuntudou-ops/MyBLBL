@@ -80,6 +80,10 @@ class CookieManager : CookieJar {
         return findCookie(name)?.value
     }
 
+    fun getCookie(name: String): Cookie? {
+        return findCookie(name)
+    }
+
     fun getCookieHeaderFor(url: String): String? {
         val httpUrl = url.toHttpUrlOrNull() ?: return null
         val cookies = loadForRequest(httpUrl)

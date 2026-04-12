@@ -16,6 +16,7 @@ import okhttp3.Request
 
 class VideoPlayerPlayInfoGateway(
     private val apiService: ApiService,
+    private val noCookieApiService: ApiService,
     private val okHttpClient: OkHttpClient,
     private val cookieManager: CookieManager,
     private val sessionGateway: NetworkSessionGateway,
@@ -171,6 +172,10 @@ class VideoPlayerPlayInfoGateway(
             params["gaia_vtoken"] = gaiaVtoken
         }
 
+        if (!cookieManager.hasSessionCookie()) {
+            params["try_look"] = "1"
+        }
+
         val session = genPlayUrlSession()
         if (session != null) {
             params["session"] = session
@@ -204,6 +209,8 @@ class VideoPlayerPlayInfoGateway(
         fnval: Int,
         fourk: Int
     ): PlayInfoResult? {
+        val gaiaVtoken = cookieManager.getCookieValue("x-bili-gaia-vtoken")?.trim()
+        val tryLook = if (!cookieManager.hasSessionCookie()) 1 else null
         val normalResponse = runCatching {
             apiService.getVideoPlayInfo(
                 avid = aid,
@@ -212,7 +219,9 @@ class VideoPlayerPlayInfoGateway(
                 qn = qualityId,
                 fnval = fnval,
                 fourk = fourk,
-                fnver = 0
+                fnver = 0,
+                gaiaVtoken = gaiaVtoken?.takeIf { it.isNotBlank() },
+                tryLook = tryLook
             )
         }.onFailure { throwable ->
             AppLog.e(logTag, "requestPlayInfo normal exception: ${throwable.message}", throwable)
@@ -290,7 +299,7 @@ class VideoPlayerPlayInfoGateway(
         }
 
         val wbiResponse = runCatching {
-            apiService.getVideoPlayInfoWbiTryLook(buildWbiParams(params))
+            noCookieApiService.getVideoPlayInfoWbiTryLook(buildWbiParams(params))
         }.onFailure { throwable ->
             AppLog.e(logTag, "requestPlayInfo wbi try_look exception: ${throwable.message}", throwable)
         }.getOrNull()
@@ -318,7 +327,7 @@ class VideoPlayerPlayInfoGateway(
         fourk: Int
     ): PlayInfoResult? {
         val response = runCatching {
-            apiService.getVideoPlayInfoTryLook(
+            noCookieApiService.getVideoPlayInfoTryLook(
                 avid = aid,
                 bvid = bvid,
                 cid = cid,

@@ -36,6 +36,7 @@ import com.tutu.myblbl.network.security.NetworkSecurityGateway
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.network.response.Base2Response
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.network.cookie.CookieManager
 import com.tutu.myblbl.feature.player.cache.PlayerMediaCache
 import com.tutu.myblbl.feature.player.settings.PlayerSettings
@@ -58,6 +59,8 @@ class VideoPlayerViewModel(
     private val cookieManager: CookieManager,
     private val sessionGateway: NetworkSessionGateway,
     private val securityGateway: NetworkSecurityGateway,
+    private val appSettings: AppSettingsDataStore,
+    private val noCookieApiService: ApiService,
     context: Context
 ) : ViewModel() {
 
@@ -176,6 +179,7 @@ class VideoPlayerViewModel(
     // Encapsulates PGC/UGC play-info retries and WBI-dependent requests away from UI state changes.
     private val playInfoGateway = VideoPlayerPlayInfoGateway(
         apiService = apiService,
+        noCookieApiService = noCookieApiService,
         okHttpClient = okHttpClient,
         cookieManager = cookieManager,
         sessionGateway = sessionGateway,
@@ -260,6 +264,9 @@ class VideoPlayerViewModel(
     private val _riskControlVVoucher = MutableLiveData<String?>(null)
     val riskControlVVoucher: LiveData<String?> = _riskControlVVoucher
 
+    private val _riskControlTryLookBypass = MutableLiveData(false)
+    val riskControlTryLookBypass: LiveData<Boolean> = _riskControlTryLookBypass
+
     fun consumeRiskControlVVoucher(): String? {
         val value = _riskControlVVoucher.value
         _riskControlVVoucher.value = null
@@ -267,7 +274,7 @@ class VideoPlayerViewModel(
     }
 
     fun onGaiaVgateResult(gaiaVtoken: String) {
-        val expiresAt = System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000
+        val expiresAt = System.currentTimeMillis() + 12 * 60 * 60 * 1000L
         cookieManager.saveCookies(
             listOf(
                 "x-bili-gaia-vtoken=$gaiaVtoken; domain=bilibili.com; path=/; secure; expires=$expiresAt"
@@ -877,10 +884,13 @@ class VideoPlayerViewModel(
                 val vVoucher = response.vVoucher.trim()
                 if (vVoucher.isNotBlank()) {
                     AppLog.w(TAG, "loadPlayUrl v_voucher detected, posting to UI: vVoucherLen=${vVoucher.length}")
+                    appSettings.putStringAsync("gaia_vgate_v_voucher", vVoucher)
+                    appSettings.putStringAsync("gaia_vgate_v_voucher_saved_at_ms", System.currentTimeMillis().toString())
                     _riskControlVVoucher.value = vVoucher
                     _error.value = "账号触发风控验证，正在请求人机验证…"
                 } else if (response.isTryLookBypass) {
                     _error.value = "当前账号可能被风控，已降级为试看模式"
+                    _riskControlTryLookBypass.value = true
                 }
                 AppLog.e(
                     TAG,
@@ -1301,6 +1311,7 @@ class VideoPlayerViewModel(
                         TAG,
                         "playurl try_look bypass activated: requested=$requestedQualityId, actualRequest=$qualityId, cid=${identity.cid}"
                     )
+                    _riskControlTryLookBypass.value = true
                 }
                 return lastResult
             }

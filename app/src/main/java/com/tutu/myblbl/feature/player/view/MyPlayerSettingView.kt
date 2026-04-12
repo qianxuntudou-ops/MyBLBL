@@ -9,7 +9,9 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.util.Log
 import android.widget.FrameLayout
+import android.widget.Toast
 import android.widget.ImageView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -342,6 +344,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
 
     private fun handleSubMenuClick(itemId: Int) {
         if (adapter.currentMenuKey == ITEM_DM_SETTING) {
+            if (handleDmToggleClick(itemId)) return
             showDmOptionSubMenu(itemId)
             return
         }
@@ -392,6 +395,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
     }
 
     private fun handleDmMenuClick(itemId: Int) {
+        android.util.Log.d("DM_SETTING", "handleDmMenuClick: menuKey=${adapter.currentMenuKey}, itemId=$itemId")
         when (adapter.currentMenuKey) {
             ITEM_DM_ENABLE -> {
                 updateState { it.copy(dmEnabled = itemId == 0) }
@@ -412,7 +416,9 @@ class MyPlayerSettingView @JvmOverloads constructor(
 
             ITEM_DM_AREA -> {
                 val selected = DM_AREA_VALUES.getOrNull(itemId) ?: return
+                android.util.Log.d("DM_SETTING", "DM_AREA selected=$selected, area=${selected.area}, itemId=$itemId")
                 updateState { it.copy(dmArea = selected.area) }
+                android.util.Log.d("DM_SETTING", "after updateState dmArea=${panelState.dmArea}")
                 onPlayerSettingInnerChange?.onDmScreenArea(selected.area)
             }
 
@@ -438,6 +444,42 @@ class MyPlayerSettingView @JvmOverloads constructor(
             }
         }
         showDmSettingMenu()
+    }
+
+    private fun handleDmToggleClick(itemId: Int): Boolean {
+        val title: String
+        val newValue: Boolean
+        when (itemId) {
+            ITEM_DM_ENABLE -> {
+                newValue = !panelState.dmEnabled
+                updateState { it.copy(dmEnabled = newValue) }
+                onPlayerSettingInnerChange?.onDmEnableChange(newValue)
+                title = context.getString(R.string.dm_switch)
+            }
+            ITEM_DM_ALLOW_TOP -> {
+                newValue = !panelState.dmAllowTop
+                updateState { it.copy(dmAllowTop = newValue) }
+                onPlayerSettingInnerChange?.onDmAllowTop(newValue)
+                title = context.getString(R.string.dm_allow_top)
+            }
+            ITEM_DM_ALLOW_BOTTOM -> {
+                newValue = !panelState.dmAllowBottom
+                updateState { it.copy(dmAllowBottom = newValue) }
+                onPlayerSettingInnerChange?.onDmAllowBottom(newValue)
+                title = context.getString(R.string.dm_allow_bottom)
+            }
+            ITEM_DM_MERGE_DUPLICATE -> {
+                newValue = !panelState.dmMergeDuplicate
+                updateState { it.copy(dmMergeDuplicate = newValue) }
+                onPlayerSettingInnerChange?.onDmMergeDuplicate(newValue)
+                title = context.getString(R.string.dm_merge_duplicate)
+            }
+            else -> return false
+        }
+        val label = if (newValue) context.getString(R.string.on) else context.getString(R.string.off)
+        Toast.makeText(context, "$title：$label", Toast.LENGTH_SHORT).show()
+        showDmSettingMenu(animateTransition = true)
+        return true
     }
 
     private fun showVideoQualityMenu() {

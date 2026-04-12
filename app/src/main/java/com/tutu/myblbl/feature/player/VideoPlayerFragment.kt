@@ -49,6 +49,10 @@ import com.tutu.myblbl.core.ui.system.ViewUtils
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
+
+private const val RISK_CONTROL_USER_HINT = "当前账号可能被风控,请前往设置里面进行验证"
+private val riskControlUserHintShown = AtomicBoolean(false)
 
 @UnstableApi
 class VideoPlayerFragment : Fragment() {
@@ -574,6 +578,13 @@ class VideoPlayerFragment : Fragment() {
                 putExtra(GaiaVgateActivity.EXTRA_V_VOUCHER, vVoucher)
             }
             gaiaVgateLauncher.launch(intent)
+        }
+
+        viewModel.riskControlTryLookBypass.observe(viewLifecycleOwner) { bypassed ->
+            if (bypassed != true) return@observe
+            if (riskControlUserHintShown.compareAndSet(false, true)) {
+                Toast.makeText(requireContext(), RISK_CONTROL_USER_HINT, Toast.LENGTH_LONG).show()
+            }
         }
 
         viewModel.videoInfo.observe(viewLifecycleOwner) { info ->

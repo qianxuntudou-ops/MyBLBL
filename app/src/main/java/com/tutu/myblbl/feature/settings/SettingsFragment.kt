@@ -1,9 +1,22 @@
 package com.tutu.myblbl.feature.settings
 
+import android.app.Activity
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.os.Build
+import android.text.format.DateFormat
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDialog
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -22,6 +35,8 @@ import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.feature.player.cache.PlayerMediaCache
 import com.tutu.myblbl.core.common.ext.normalizeDanmakuSmartFilterValue
+import com.tutu.myblbl.network.cookie.CookieManager
+import com.tutu.myblbl.ui.activity.GaiaVgateActivity
 import org.koin.core.context.GlobalContext
 import java.util.Locale
 
@@ -69,6 +84,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         private const val KEY_DM_ALLOW_VIP_COLORFUL_DM = "dm_allow_vip_colorful_dm"
         private const val KEY_DM_SHOW_ADVANCED = "dm_show_advanced"
         private const val KEY_DM_MERGE_DUPLICATE = "dm_merge_duplicate"
+        private const val KEY_GAIA_VGATE_V_VOUCHER = "gaia_vgate_v_voucher"
+        private const val KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS = "gaia_vgate_v_voucher_saved_at_ms"
+        private const val COMMON_POSITION_RISK_CONTROL = 8
         private val DM_SMART_FILTER_OPTIONS = arrayOf("关", "1", "2", "3")
 
         private val HOME_START_PAGE_OPTIONS = arrayOf("推荐", "热门", "番剧", "影视")
@@ -79,11 +97,23 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     private lateinit var dmSettings: MutableList<SettingModel>
     private val deviceSettings = mutableListOf<SettingModel>()
     private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val cookieManager: CookieManager get() = GlobalContext.get().get()
 
     private lateinit var adapter: SettingAdapter
     private var currentCategory = -1
     private var categorySwitchVersion = 0
     private var shouldRequestInitialCategoryFocus = false
+
+    private val gaiaVgateLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val gaiaVtoken = result.data?.getStringExtra(GaiaVgateActivity.EXTRA_GAIA_VTOKEN)
+            if (!gaiaVtoken.isNullOrBlank()) {
+                onGaiaVgateResult(gaiaVtoken)
+            }
+        }
+    }
 
     override fun getViewBinding(inflater: LayoutInflater, container: ViewGroup?): FragmentSettingsBinding {
         return FragmentSettingsBinding.inflate(inflater, container, false)
@@ -108,6 +138,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     override fun onResume() {
         super.onResume()
         requestInitialCategoryFocus()
+        updateRiskControlStatus()
     }
 
     private fun initSettings() {
@@ -119,7 +150,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             SettingModel(getString(R.string.theme), "黑色"),
             SettingModel(getString(R.string.fullscreen_app), "开"),
             SettingModel(getString(R.string.live_entry), "关"),
-            SettingModel(getString(R.string.minor_protection), "开")
+            SettingModel(getString(R.string.minor_protection), "开"),
+            SettingModel(getString(R.string.risk_control_verify), "无")
         )
 
         playerSettings = mutableListOf(
@@ -247,9 +279,14 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             2 -> showCommonChoiceDialog(position, KEY_DEFAULT_START_PAGE, HOME_START_PAGE_OPTIONS)
             3 -> showCommonChoiceDialog(position, KEY_IMAGE_QUALITY, arrayOf("低尺寸", "中尺寸", "高尺寸"))
             4 -> showCommonChoiceDialog(position, KEY_THEME, resources.getStringArray(R.array.themes).drop(1).toTypedArray())
-            5 -> showCommonChoiceDialog(position, KEY_FULLSCREEN_APP, toggleOptions())
-            6 -> showLiveEntryDialog(position)
-            7 -> showCommonChoiceDialog(position, KEY_MINOR_PROTECTION, toggleOptions())
+            5 -> toggleSetting(commonSettings, 5, KEY_FULLSCREEN_APP)
+            6 -> toggleSetting(commonSettings, 6, KEY_LIVE_ENTRY) { value ->
+                appSettings.putStringAsync(KEY_LIVE_ENTRY, value)
+                val activity = activity as? com.tutu.myblbl.ui.activity.MainActivity
+                activity?.applyLiveEntryVisibility()
+            }
+            7 -> toggleSetting(commonSettings, 7, KEY_MINOR_PROTECTION)
+            COMMON_POSITION_RISK_CONTROL -> showRiskControlDialog()
         }
     }
 
@@ -259,35 +296,47 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             1 -> showPlayerChoiceDialog(position, KEY_DEFAULT_AUDIO_TRACK, arrayOf("192kbps", "132kbps", "64kbps", "杜比全景声", "Hi-Res无损"))
             2 -> showPlayerChoiceDialog(position, KEY_DEFAULT_PLAY_SPEED, arrayOf("0.25", "0.5", "0.75", "1.0", "1.25", "1.5", "2.0"))
             3 -> showPlayerChoiceDialog(position, KEY_AFTER_PLAY, arrayOf("什么都不做", "播推荐视频", "播列表中的下一个", "播剧集和PV中的下一个"))
-            4 -> showPlayerChoiceDialog(position, KEY_PLAY_FINISH_EXIT_PLAYER, toggleOptions())
-            5 -> showPlayerChoiceDialog(position, KEY_SHOW_RE_FF, toggleOptions())
+            4 -> toggleSetting(playerSettings, 4, KEY_PLAY_FINISH_EXIT_PLAYER)
+            5 -> toggleSetting(playerSettings, 5, KEY_SHOW_RE_FF)
             6 -> showPlayerChoiceDialog(position, KEY_VIDEO_CODEC, arrayOf("AVC", "HEVC", "AV1"))
-            7 -> showPlayerChoiceDialog(position, KEY_SHOW_SUBTITLE_DEFAULT, toggleOptions())
+            7 -> toggleSetting(playerSettings, 7, KEY_SHOW_SUBTITLE_DEFAULT)
             8 -> showPlayerChoiceDialog(position, KEY_SUBTITLE_TEXT_SIZE, arrayOf("35", "40", "45", "50", "55", "60"))
-            9 -> showPlayerChoiceDialog(position, KEY_SHOW_DEBUG, toggleOptions())
-            10 -> showPlayerChoiceDialog(position, KEY_SHOW_VIDEO_DETAIL, toggleOptions())
-            11 -> showPlayerChoiceDialog(position, KEY_SHOW_BOTTOM_PROGRESS_BAR, toggleOptions())
-            12 -> showPlayerChoiceDialog(position, KEY_SIMPLE_KEY_PRESS, toggleOptions())
+            9 -> toggleSetting(playerSettings, 9, KEY_SHOW_DEBUG)
+            10 -> toggleSetting(playerSettings, 10, KEY_SHOW_VIDEO_DETAIL)
+            11 -> toggleSetting(playerSettings, 11, KEY_SHOW_BOTTOM_PROGRESS_BAR)
+            12 -> toggleSetting(playerSettings, 12, KEY_SIMPLE_KEY_PRESS)
             13 -> showPlayerChoiceDialog(position, KEY_GIVE_COIN_NUMBER, arrayOf("1", "2"))
-            14 -> showPlayerChoiceDialog(position, KEY_SHOW_NEXT_PREVIOUS, toggleOptions())
-            15 -> showPlayerChoiceDialog(position, KEY_SHOW_DM_SWITCH, toggleOptions())
+            14 -> toggleSetting(playerSettings, 14, KEY_SHOW_NEXT_PREVIOUS)
+            15 -> toggleSetting(playerSettings, 15, KEY_SHOW_DM_SWITCH)
             16 -> showPlayerChoiceDialog(position, KEY_FF_SEEK_SECOND, arrayOf("10s", "15s", "20s", "25s", "30s", "35s", "40s", "45s", "50s", "55s", "60s"))
         }
     }
 
     private fun handleDmSettingClick(position: Int, @Suppress("UNUSED_PARAMETER") item: SettingModel) {
         when (position) {
-            0 -> showDmChoiceDialog(position, KEY_DM_SWITCH, toggleOptions())
+            0 -> toggleSetting(dmSettings, 0, KEY_DM_SWITCH) { value ->
+                appSettings.putStringAsync(KEY_DM_SWITCH, value)
+            }
             1 -> showDmChoiceDialog(position, KEY_DM_ALPHA, arrayOf("0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0"))
             2 -> showDmChoiceDialog(position, KEY_DM_TEXT_SIZE, Array(26) { (30 + it).toString() })
             3 -> showDmChoiceDialog(position, KEY_DM_SCREEN_AREA, arrayOf("1/8", "1/6", "1/4", "1/2", "3/4", "全屏"))
             4 -> showDmChoiceDialog(position, KEY_DM_SPEED, arrayOf("1", "2", "3", "4", "5", "6", "7", "8", "9"))
-            5 -> showDmChoiceDialog(position, KEY_DM_ALLOW_TOP, toggleOptions())
-            6 -> showDmChoiceDialog(position, KEY_DM_ALLOW_BOTTOM, toggleOptions())
+            5 -> toggleSetting(dmSettings, 5, KEY_DM_ALLOW_TOP) { value ->
+                appSettings.putStringAsync(KEY_DM_ALLOW_TOP, value)
+            }
+            6 -> toggleSetting(dmSettings, 6, KEY_DM_ALLOW_BOTTOM) { value ->
+                appSettings.putStringAsync(KEY_DM_ALLOW_BOTTOM, value)
+            }
             7 -> showDmChoiceDialog(position, KEY_DM_FILTER_WEIGHT, DM_SMART_FILTER_OPTIONS)
-            8 -> showDmChoiceDialog(position, KEY_DM_ALLOW_VIP_COLORFUL_DM, toggleOptions())
-            9 -> showDmChoiceDialog(position, KEY_DM_SHOW_ADVANCED, toggleOptions())
-            10 -> showDmChoiceDialog(position, KEY_DM_MERGE_DUPLICATE, toggleOptions())
+            8 -> toggleSetting(dmSettings, 8, KEY_DM_ALLOW_VIP_COLORFUL_DM) { value ->
+                appSettings.putStringAsync(KEY_DM_ALLOW_VIP_COLORFUL_DM, value)
+            }
+            9 -> toggleSetting(dmSettings, 9, KEY_DM_SHOW_ADVANCED) { value ->
+                appSettings.putStringAsync(KEY_DM_SHOW_ADVANCED, value)
+            }
+            10 -> toggleSetting(dmSettings, 10, KEY_DM_MERGE_DUPLICATE) { value ->
+                appSettings.putStringAsync(KEY_DM_MERGE_DUPLICATE, value)
+            }
         }
     }
 
@@ -378,6 +427,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         applySavedValue(commonSettings, 5, KEY_FULLSCREEN_APP)
         applySavedValue(commonSettings, 6, KEY_LIVE_ENTRY)
         applySavedValue(commonSettings, 7, KEY_MINOR_PROTECTION)
+        updateRiskControlStatus()
 
         applySavedValue(playerSettings, 0, KEY_DEFAULT_VIDEO_QUALITY)
         applySavedValue(playerSettings, 1, KEY_DEFAULT_AUDIO_TRACK)
@@ -467,19 +517,6 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
                 2
             }
             else -> 1
-        }
-    }
-
-    private fun showLiveEntryDialog(position: Int) {
-        showChoiceDialog(
-            title = commonSettings[position].title,
-            currentValue = commonSettings[position].info,
-            options = toggleOptions()
-        ) { value ->
-            updateSetting(commonSettings, position, value)
-            appSettings.putStringAsync(KEY_LIVE_ENTRY, value)
-            val activity = activity as? com.tutu.myblbl.ui.activity.MainActivity
-            activity?.applyLiveEntryVisibility()
         }
     }
 
@@ -646,6 +683,284 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     }
 
     private fun toggleOptions(): Array<String> = arrayOf("开", "关")
+
+    private fun toggleSetting(
+        target: MutableList<SettingModel>,
+        position: Int,
+        key: String,
+        persist: (String) -> Unit = { appSettings.putStringAsync(key, it) }
+    ) {
+        val setting = target.getOrNull(position) ?: return
+        val newValue = if (setting.info == "开") "关" else "开"
+        updateSetting(target, position, newValue)
+        persist(newValue)
+        Toast.makeText(requireContext(), "${setting.title}：$newValue", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun getRiskControlStatus(): String {
+        val now = System.currentTimeMillis()
+        val tokenCookie = cookieManager.getCookie("x-bili-gaia-vtoken")
+        val tokenOk = tokenCookie != null && tokenCookie.expiresAt > now
+        val voucherOk = !appSettings.getCachedString(KEY_GAIA_VGATE_V_VOUCHER).isNullOrBlank()
+        return when {
+            tokenOk -> "已通过"
+            voucherOk -> "待验证"
+            else -> "无"
+        }
+    }
+
+    private fun updateRiskControlStatus() {
+        val status = getRiskControlStatus()
+        commonSettings.getOrNull(COMMON_POSITION_RISK_CONTROL)?.info = status
+        if (currentCategory == CATEGORY_COMMON) {
+            adapter.notifyItemChanged(COMMON_POSITION_RISK_CONTROL)
+        }
+    }
+
+    private fun onGaiaVgateResult(gaiaVtoken: String) {
+        val expiresAt = System.currentTimeMillis() + 12 * 60 * 60 * 1000L
+        cookieManager.saveCookies(
+            listOf(
+                "x-bili-gaia-vtoken=$gaiaVtoken; domain=bilibili.com; path=/; secure; expires=$expiresAt"
+            )
+        )
+        appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER, null)
+        appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, null)
+        updateRiskControlStatus()
+        Toast.makeText(requireContext(), "验证成功，已写入风控票据", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showRiskControlDialog() {
+        val now = System.currentTimeMillis()
+        val tokenCookie = cookieManager.getCookie("x-bili-gaia-vtoken")
+        val tokenOk = tokenCookie != null && tokenCookie.expiresAt > now
+        val expiresAt = tokenCookie?.expiresAt ?: -1L
+
+        val vVoucher = appSettings.getCachedString(KEY_GAIA_VGATE_V_VOUCHER).orEmpty().trim()
+        val hasVoucher = vVoucher.isNotBlank()
+        val savedAt = appSettings.getCachedString(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS)?.toLongOrNull() ?: -1L
+
+        val msg = buildString {
+            append("用于处理播放接口返回 v_voucher 的人机验证（极验）。")
+            append("\n\n")
+            append("当前票据：")
+            append(if (tokenOk) "有效" else "无/已过期")
+            if (tokenOk && expiresAt > 0L) {
+                append("\n")
+                append("过期时间：").append(DateFormat.format("yyyy-MM-dd HH:mm", expiresAt))
+            }
+            append("\n\n")
+            append("v_voucher：")
+            append(if (hasVoucher) "已记录" else "暂无")
+            if (hasVoucher && savedAt > 0L) {
+                append("\n")
+                append("记录时间：").append(DateFormat.format("yyyy-MM-dd HH:mm", savedAt))
+            }
+        }
+
+        val dialog = AppCompatDialog(requireContext(), R.style.DialogTheme)
+        dialog.setContentView(R.layout.dialog_setting_choice)
+        dialog.setCanceledOnTouchOutside(true)
+        dialog.findViewById<View>(R.id.dialog_root)?.setOnClickListener { dialog.dismiss() }
+
+        val titleView = dialog.findViewById<TextView>(R.id.top_title)
+        val recyclerView = dialog.findViewById<RecyclerView>(R.id.recyclerView)
+        titleView?.text = "风控验证"
+        recyclerView?.visibility = View.GONE
+
+        val messageContainer = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            val px40 = resources.getDimensionPixelSize(R.dimen.px40)
+            val px20 = resources.getDimensionPixelSize(R.dimen.px20)
+            setPadding(px40, px20, px40, px20)
+            addView(TextView(requireContext()).apply {
+                text = msg
+                setTextColor(resources.getColor(R.color.textColor, null))
+                textSize = 12f
+                setLineSpacing(resources.getDimension(R.dimen.px6), 1f)
+            })
+        }
+
+        val parent = recyclerView?.parent as? ViewGroup
+        if (parent != null && recyclerView != null) {
+            val params = recyclerView.layoutParams
+            parent.addView(messageContainer, parent.indexOfChild(recyclerView), params)
+            recyclerView.layoutParams = RecyclerView.LayoutParams(0, 0)
+        }
+
+        val actions = mutableListOf<String>()
+        actions.add("关闭")
+        actions.add("编辑凭证")
+        actions.add(if (hasVoucher) "开始验证" else "粘贴凭证")
+
+        val actionContainer = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.END
+            val px18 = resources.getDimensionPixelSize(R.dimen.px18)
+            val px30 = resources.getDimensionPixelSize(R.dimen.px30)
+            setPadding(px18, 0, px18, px18)
+        }
+
+        actions.forEachIndexed { index, actionText ->
+            val btn = TextView(requireContext()).apply {
+                text = actionText
+                setTextColor(resources.getColor(R.color.textColor, null))
+                textSize = 12f
+                val px30 = resources.getDimensionPixelSize(R.dimen.px30)
+                val px14 = resources.getDimensionPixelSize(R.dimen.px14)
+                setPadding(px30, px14, px30, px14)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    dialog.dismiss()
+                    when (index) {
+                        1 -> showGaiaVgateVoucherDialog()
+                        2 -> {
+                            if (hasVoucher) {
+                                gaiaVgateLauncher.launch(
+                                    Intent(requireContext(), GaiaVgateActivity::class.java)
+                                        .putExtra(GaiaVgateActivity.EXTRA_V_VOUCHER, vVoucher)
+                                )
+                            } else {
+                                showGaiaVgateVoucherDialog()
+                            }
+                        }
+                    }
+                }
+                setBackgroundResource(R.drawable.bg_dialog_button)
+            }
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            val px10 = resources.getDimensionPixelSize(R.dimen.px10)
+            lp.setMargins(px10, 0, px10, 0)
+            actionContainer.addView(btn, lp)
+        }
+
+        (parent ?: messageContainer).addView(actionContainer)
+
+        dialog.show()
+    }
+
+    private fun showGaiaVgateVoucherDialog() {
+        val initial = appSettings.getCachedString(KEY_GAIA_VGATE_V_VOUCHER).orEmpty()
+        val dialog = AppCompatDialog(requireContext(), R.style.DialogTheme)
+        dialog.setContentView(R.layout.dialog_setting_choice)
+        dialog.setCanceledOnTouchOutside(true)
+        dialog.findViewById<View>(R.id.dialog_root)?.setOnClickListener { dialog.dismiss() }
+
+        val titleView = dialog.findViewById<TextView>(R.id.top_title)
+        val recyclerView = dialog.findViewById<RecyclerView>(R.id.recyclerView)
+        titleView?.text = "编辑验证凭证"
+        recyclerView?.visibility = View.GONE
+
+        val scrollView = ScrollView(requireContext())
+        val editText = EditText(requireContext()).apply {
+            hint = "粘贴验证凭证"
+            inputType = EditorInfo.TYPE_CLASS_TEXT
+            setText(initial)
+            setTextColor(resources.getColor(R.color.textColor, null))
+            setHintTextColor(resources.getColor(R.color.textColor, null).let { 0x80FFFFFF.toInt() })
+            val px16 = resources.getDimensionPixelSize(R.dimen.px16)
+            setPadding(px16, px16, px16, px16)
+            setBackgroundResource(R.drawable.bg_search_input)
+        }
+        val px40 = resources.getDimensionPixelSize(R.dimen.px40)
+        val px20 = resources.getDimensionPixelSize(R.dimen.px20)
+        scrollView.setPadding(px40, px20, px40, px20)
+        scrollView.addView(editText)
+
+        val parent = recyclerView?.parent as? ViewGroup
+        if (parent != null && recyclerView != null) {
+            val params = recyclerView.layoutParams
+            parent.addView(scrollView, parent.indexOfChild(recyclerView), params)
+            recyclerView.layoutParams = RecyclerView.LayoutParams(0, 0)
+        }
+
+        val actionContainer = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.END
+            val px18 = resources.getDimensionPixelSize(R.dimen.px18)
+            val px14 = resources.getDimensionPixelSize(R.dimen.px14)
+            setPadding(px18, px14, px18, px14)
+        }
+
+        fun clearVoucher() {
+            appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER, null)
+            appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, null)
+            updateRiskControlStatus()
+            Toast.makeText(requireContext(), "已清除验证凭证", Toast.LENGTH_SHORT).show()
+        }
+
+        fun saveVoucher() {
+            val v = editText.text?.toString()?.trim().orEmpty()
+            if (v.isNotBlank()) {
+                appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER, v)
+                appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, System.currentTimeMillis().toString())
+                updateRiskControlStatus()
+                Toast.makeText(requireContext(), "已保存验证凭证", Toast.LENGTH_SHORT).show()
+            } else {
+                clearVoucher()
+            }
+            dialog.dismiss()
+        }
+
+        val px10 = resources.getDimensionPixelSize(R.dimen.px10)
+        val px30 = resources.getDimensionPixelSize(R.dimen.px30)
+
+        val btnClear = TextView(requireContext()).apply {
+            text = "清除"
+            setTextColor(resources.getColor(R.color.textColor, null))
+            textSize = 12f
+            setPadding(px30, resources.getDimensionPixelSize(R.dimen.px14), px30, resources.getDimensionPixelSize(R.dimen.px14))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                clearVoucher()
+                dialog.dismiss()
+            }
+            setBackgroundResource(R.drawable.bg_dialog_button)
+        }
+        actionContainer.addView(btnClear, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(px10, 0, px10, 0) })
+
+        val btnCancel = TextView(requireContext()).apply {
+            text = "取消"
+            setTextColor(resources.getColor(R.color.textColor, null))
+            textSize = 12f
+            setPadding(px30, resources.getDimensionPixelSize(R.dimen.px14), px30, resources.getDimensionPixelSize(R.dimen.px14))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { dialog.dismiss() }
+            setBackgroundResource(R.drawable.bg_dialog_button)
+        }
+        actionContainer.addView(btnCancel, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(px10, 0, px10, 0) })
+
+        val btnSave = TextView(requireContext()).apply {
+            text = "保存"
+            setTextColor(resources.getColor(R.color.textColor, null))
+            textSize = 12f
+            setPadding(px30, resources.getDimensionPixelSize(R.dimen.px14), px30, resources.getDimensionPixelSize(R.dimen.px14))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { saveVoucher() }
+            setBackgroundResource(R.drawable.bg_dialog_button)
+        }
+        actionContainer.addView(btnSave, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(px10, 0, px10, 0) })
+
+        (parent ?: scrollView).addView(actionContainer)
+
+        dialog.setOnShowListener {
+            editText.requestFocus()
+        }
+        dialog.show()
+    }
 
     private fun buildCodecSupportText(): String {
         return VideoCodecSupport.buildSupportSummary(

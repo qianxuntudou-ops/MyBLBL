@@ -148,7 +148,9 @@ interface ApiService {
         @Query("qn") qn: Int = 80,
         @Query("fnval") fnval: Int = 4048,
         @Query("fourk") fourk: Int = 1,
-        @Query("fnver") fnver: Int = 0
+        @Query("fnver") fnver: Int = 0,
+        @Query("gaia_vtoken") gaiaVtoken: String? = null,
+        @Query("try_look") tryLook: Int? = null
     ): BaseResponse<PlayInfoModel>
 
     @GET("x/player/wbi/playurl?voice_balance=1&gaia_source=pre-load&isGaiaAvoided=true")

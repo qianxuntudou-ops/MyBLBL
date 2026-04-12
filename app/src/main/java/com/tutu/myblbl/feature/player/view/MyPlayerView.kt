@@ -316,6 +316,7 @@ class MyPlayerView @JvmOverloads constructor(
             }
 
             override fun onDmScreenArea(area: Int) {
+                android.util.Log.d("DM_SETTING", "onDmScreenArea callback: area=$area")
                 syncDanmakuSettings()
             }
 
@@ -1053,6 +1054,7 @@ class MyPlayerView @JvmOverloads constructor(
 
     private fun syncDanmakuSettings() {
         val snapshot = buildDanmakuSettingsSnapshot()
+        android.util.Log.d("DM_SETTING", "syncDanmakuSettings: screenArea=${snapshot.screenArea}, enabled=${snapshot.enabled}, alpha=${snapshot.alpha}, speed=${snapshot.speed}, textSize=${snapshot.textSize}")
         danmakuController.applySettings(snapshot)
         specialDanmakuController.applySettings(snapshot)
     }

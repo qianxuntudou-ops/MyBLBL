@@ -38,6 +38,7 @@ import com.tutu.myblbl.network.cookie.CookieManager
 import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.viewmodel.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
 @OptIn(UnstableApi::class)
@@ -48,6 +49,7 @@ val networkModule = module {
     single<NetworkSessionGateway> { NetworkManagerSessionGateway() }
     single<NetworkSecurityGateway> { NetworkManagerSecurityGateway() }
     single<NetworkWebGateway> { NetworkManagerWebGateway() }
+    factory(named("noCookie")) { NetworkManager.noCookieApiService }
 }
 
 @OptIn(UnstableApi::class)
@@ -76,7 +78,7 @@ val repositoryModule = module {
 val viewModelModule = module {
     viewModel { RecommendViewModel(get()) }
     viewModel { HotViewModel(get()) }
-    viewModel { VideoPlayerViewModel(get(), get(), get(), get(), get(), androidContext()) }
+    viewModel { VideoPlayerViewModel(get(), get(), get(), get(), get(), get(), get(named("noCookie")), androidContext()) }
     viewModel { CategoryViewModel(get()) }
     viewModel { DynamicViewModel(get()) }
     viewModel { LiveViewModel(get()) }

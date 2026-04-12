@@ -117,8 +117,10 @@ class MyPlayerDanmakuController(
      */
     fun applySettings(snapshot: SettingsSnapshot) {
         if (lastSettingsSnapshot == snapshot) {
+            android.util.Log.d("DM_SETTING", "applySettings: SKIPPED (same snapshot), screenArea=${snapshot.screenArea}")
             return
         }
+        android.util.Log.d("DM_SETTING", "applySettings: screenArea=${snapshot.screenArea}, old screenPart=${danmakuConfig.screenPart}")
         lastSettingsSnapshot = snapshot
         val normalizedSmartFilterLevel = snapshot.smartFilterLevel.normalizeSmartFilterLevel()
         val durationMs = snapshot.speed.toDanmakuDurationMs()
@@ -130,6 +132,7 @@ class MyPlayerDanmakuController(
             rollingDurationMs = durationMs,
             screenPart = snapshot.screenArea.toDanmakuScreenPart()
         )
+        android.util.Log.d("DM_SETTING", "applySettings: newConfig.screenPart=${newConfig.screenPart}, old=${danmakuConfig.screenPart}, equal=${danmakuConfig == newConfig}")
         val filterChanged = applyTypeFilterState(
             config = newConfig,
             type = DanmakuItemData.DANMAKU_MODE_CENTER_TOP,
@@ -482,8 +485,10 @@ class MyPlayerDanmakuController(
 
     private fun updateConfig(newConfig: DanmakuConfig) {
         if (danmakuConfig == newConfig) {
+            android.util.Log.d("DM_SETTING", "updateConfig: SKIPPED (equal), screenPart=${danmakuConfig.screenPart}")
             return
         }
+        android.util.Log.d("DM_SETTING", "updateConfig: APPLYING screenPart ${danmakuConfig.screenPart} -> ${newConfig.screenPart}")
         danmakuConfig = newConfig
         danmakuPlayer?.updateConfig(newConfig)
     }

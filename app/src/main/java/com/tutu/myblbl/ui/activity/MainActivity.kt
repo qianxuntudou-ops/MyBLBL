@@ -467,12 +467,15 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             }
         }
         val isSettingsOverlay = isSettingsOverlay(fragment = fragment, tag = tag)
+        val isVideoPlayerOverlay = isVideoPlayerOverlay(fragment = fragment, tag = tag)
 
-        supportFragmentManager.fragments
-            .asReversed()
-            .firstOrNull { it.isVisible }
-            ?.view
-            ?.clearFocus()
+        if (!isVideoPlayerOverlay) {
+            supportFragmentManager.fragments
+                .asReversed()
+                .firstOrNull { it.isVisible }
+                ?.view
+                ?.clearFocus()
+        }
 
         supportFragmentManager.commit {
             if (isSettingsOverlay) {
@@ -529,7 +532,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             }
             val handledByContent = focusCurrentMainContent(
                 anchorView = target,
-                preferSpatialEntry = false
+                preferSpatialEntry = target != null
             )
             if (handledByContent) {
                 return@postDelayed
@@ -557,6 +560,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
 
     private fun isSettingsOverlay(fragment: Fragment, tag: String): Boolean {
         return tag == SETTINGS_OVERLAY_TAG || fragment is SettingsFragment
+    }
+
+    private fun isVideoPlayerOverlay(fragment: Fragment, tag: String): Boolean {
+        return fragment is VideoPlayerFragment || tag.startsWith("video_player:")
     }
 
     private fun isOverlayVisible(tag: String): Boolean {

@@ -18,6 +18,8 @@ import com.tutu.myblbl.model.series.timeline.TimeLineADayModel
 import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.repository.UserRepository
 import com.tutu.myblbl.core.common.log.AppLog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -290,7 +292,7 @@ class HomeLaneRepository(
         return indexType
     }
 
-    private fun parseAnimeHomePage(): List<HomeLaneSection> {
+    private suspend fun parseAnimeHomePage(): List<HomeLaneSection> {
         AppLog.d(TAG, "parseAnimeHomePage start")
         val state = fetchInitialState("https://www.bilibili.com/anime/")
         val modules = state.getAsJsonObject("modules")
@@ -368,7 +370,7 @@ class HomeLaneRepository(
         return result
     }
 
-    private fun parseCinemaHomePage(): List<HomeLaneSection> {
+    private suspend fun parseCinemaHomePage(): List<HomeLaneSection> {
         AppLog.d(TAG, "parseCinemaHomePage start")
         val state = fetchInitialState("https://www.bilibili.com/cinema/")
         val sections = mutableListOf<HomeLaneSection>()
@@ -397,24 +399,26 @@ class HomeLaneRepository(
         return sections
     }
 
-    private fun fetchInitialState(url: String): JsonObject {
-        AppLog.d(TAG, "fetchInitialState start: url=$url")
-        val request = Request.Builder()
-            .url(url)
-            .header("Referer", WEB_REFERER)
-            .header(
-                "Accept",
-                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
-            )
-            .build()
-        val response = okHttpClient.newCall(request).execute()
-        response.use { call ->
-            if (!call.isSuccessful) {
-                throw IllegalStateException("Failed to load page: $url")
+    private suspend fun fetchInitialState(url: String): JsonObject {
+        return withContext(Dispatchers.IO) {
+            AppLog.d(TAG, "fetchInitialState start: url=$url")
+            val request = Request.Builder()
+                .url(url)
+                .header("Referer", WEB_REFERER)
+                .header(
+                    "Accept",
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
+                )
+                .build()
+            val response = okHttpClient.newCall(request).execute()
+            response.use { call ->
+                if (!call.isSuccessful) {
+                    throw IllegalStateException("Failed to load page: $url")
+                }
+                val html = call.body?.string().orEmpty()
+                AppLog.d(TAG, "fetchInitialState success: url=$url, htmlLength=${html.length}")
+                JsonParser.parseString(extractInitialStateJson(html, url)).asJsonObject
             }
-            val html = call.body?.string().orEmpty()
-            AppLog.d(TAG, "fetchInitialState success: url=$url, htmlLength=${html.length}")
-            return JsonParser.parseString(extractInitialStateJson(html, url)).asJsonObject
         }
     }
 

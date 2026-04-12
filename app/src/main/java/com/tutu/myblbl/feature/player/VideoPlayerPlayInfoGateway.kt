@@ -11,6 +11,8 @@ import com.tutu.myblbl.network.response.Base2Response
 import com.tutu.myblbl.network.response.PlayerInfoDataWrapper
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.network.cookie.CookieManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -551,19 +553,19 @@ class VideoPlayerPlayInfoGateway(
         }.getOrNull()
     }
 
-    suspend fun requestAbsoluteBytes(url: String): ByteArray? {
+    suspend fun requestAbsoluteBytes(url: String): ByteArray? = withContext(Dispatchers.IO) {
         val normalizedUrl = when {
             url.startsWith("http://") -> "https://${url.removePrefix("http://")}"
             url.startsWith("//") -> "https:$url"
             else -> url
         }
-        return runCatching {
+        return@withContext runCatching {
             val request = Request.Builder()
                 .url(normalizedUrl)
                 .build()
             okHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
-                    return null
+                    return@use null
                 }
                 response.body?.bytes()
             }

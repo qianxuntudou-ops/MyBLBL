@@ -95,7 +95,9 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         upAdapter = DynamicUpAdapter(
             onItemClick = { up -> onUpClick(up) },
             onItemFocused = {
-                preferredContentFocusTarget = ContentFocusTarget.LEFT_UP_LIST
+                if (!pendingVideoFocusRestoreOnResume) {
+                    preferredContentFocusTarget = ContentFocusTarget.LEFT_UP_LIST
+                }
             },
             onLeftEdge = { (activity as? MainActivity)?.focusLeftFunctionArea() == true },
             onRightEdge = { focusRightContent() },
@@ -461,6 +463,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
             val currentFocus = activity?.currentFocus
             if (currentFocus != null && currentFocus.isDescendantOf(binding.recyclerViewRight)) {
                 pendingVideoFocusRestoreOnResume = false
+                preferredContentFocusTarget = ContentFocusTarget.RIGHT_VIDEO_LIST
                 return@post
             }
             requestPreferredContentFocus(fallbackToAlternate = false)
@@ -558,6 +561,25 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
 
     private fun focusPrimaryContent(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
         if (preferSpatialEntry) {
+            if (anchorView != null) {
+                when {
+                    anchorView.isDescendantOf(binding.recyclerViewRight) -> {
+                        val handled = focusRightContent()
+                        AppLog.d(TAG, "DynamicFragment.focusPrimaryContent spatialEntryRight: handled=$handled")
+                        if (handled) {
+                            return true
+                        }
+                    }
+
+                    anchorView.isDescendantOf(binding.recyclerViewLeft) -> {
+                        val handled = focusSelectedUpItem()
+                        AppLog.d(TAG, "DynamicFragment.focusPrimaryContent spatialEntryLeftDirect: handled=$handled")
+                        if (handled) {
+                            return true
+                        }
+                    }
+                }
+            }
             val handled = SpatialFocusNavigator.requestBestDescendant(
                 anchorView = anchorView,
                 root = binding.recyclerViewLeft,
@@ -637,7 +659,12 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     }
 
     private fun requestPreferredContentFocus(fallbackToAlternate: Boolean): Boolean {
-        return when (preferredContentFocusTarget) {
+        val activeTarget = if (pendingVideoFocusRestoreOnResume) {
+            ContentFocusTarget.RIGHT_VIDEO_LIST
+        } else {
+            preferredContentFocusTarget
+        }
+        return when (activeTarget) {
             ContentFocusTarget.RIGHT_VIDEO_LIST -> {
                 if (focusRightContent()) {
                     true

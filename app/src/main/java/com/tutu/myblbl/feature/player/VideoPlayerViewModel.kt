@@ -3,9 +3,11 @@
 package com.tutu.myblbl.feature.player
 
 import android.content.Context
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -136,8 +138,8 @@ class VideoPlayerViewModel(
         val response: VideoPlayerPlayInfoGateway.PlayInfoResult
     )
 
-    private val _resumeHint = MutableLiveData<ResumeProgressHint?>()
-    val resumeHint: LiveData<ResumeProgressHint?> = _resumeHint
+    private val _resumeHint = MutableStateFlow<ResumeProgressHint?>(null)
+    val resumeHint: StateFlow<ResumeProgressHint?> = _resumeHint
 
     fun cancelResumeProgress() {
         _resumeHint.value = null
@@ -189,83 +191,83 @@ class VideoPlayerViewModel(
 
     private val subtitleCache = mutableMapOf<String, SubtitleData>()
 
-    private val _videoInfo = MutableLiveData<VideoDetailModel?>()
-    val videoInfo: LiveData<VideoDetailModel?> = _videoInfo
+    private val _videoInfo = MutableStateFlow<VideoDetailModel?>(null)
+    val videoInfo: StateFlow<VideoDetailModel?> = _videoInfo
 
-    private val _relatedVideos = MutableLiveData<List<VideoModel>>(emptyList())
-    val relatedVideos: LiveData<List<VideoModel>> = _relatedVideos
+    private val _relatedVideos = MutableStateFlow<List<VideoModel>>(emptyList())
+    val relatedVideos: StateFlow<List<VideoModel>> = _relatedVideos
 
-    private val _episodes = MutableLiveData<List<PlayableEpisode>>(emptyList())
-    val episodes: LiveData<List<PlayableEpisode>> = _episodes
+    private val _episodes = MutableStateFlow<List<PlayableEpisode>>(emptyList())
+    val episodes: StateFlow<List<PlayableEpisode>> = _episodes
 
-    private val _selectedEpisodeIndex = MutableLiveData(0)
-    val selectedEpisodeIndex: LiveData<Int> = _selectedEpisodeIndex
+    private val _selectedEpisodeIndex = MutableStateFlow(0)
+    val selectedEpisodeIndex: StateFlow<Int> = _selectedEpisodeIndex
 
-    private val _playbackRequest = MutableLiveData<PlaybackRequest?>()
-    val playbackRequest: LiveData<PlaybackRequest?> = _playbackRequest
+    private val _playbackRequest = MutableStateFlow<PlaybackRequest?>(null)
+    val playbackRequest: StateFlow<PlaybackRequest?> = _playbackRequest
 
-    private val _currentPosition = MutableLiveData(0L)
-    val currentPosition: LiveData<Long> = _currentPosition
+    private val _currentPosition = MutableStateFlow(0L)
+    val currentPosition: StateFlow<Long> = _currentPosition
 
-    private val _duration = MutableLiveData(0L)
-    val duration: LiveData<Long> = _duration
+    private val _duration = MutableStateFlow(0L)
+    val duration: StateFlow<Long> = _duration
 
-    private val _isLoading = MutableLiveData(false)
-    val isLoading: LiveData<Boolean> = _isLoading
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading
 
-    private val _error = MutableLiveData<String?>(null)
-    val error: LiveData<String?> = _error
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error
 
-    private val _qualities = MutableLiveData<List<VideoQuality>>(emptyList())
-    val qualities: LiveData<List<VideoQuality>> = _qualities
+    private val _qualities = MutableStateFlow<List<VideoQuality>>(emptyList())
+    val qualities: StateFlow<List<VideoQuality>> = _qualities
 
-    private val _selectedQuality = MutableLiveData<VideoQuality?>(null)
-    val selectedQuality: LiveData<VideoQuality?> = _selectedQuality
+    private val _selectedQuality = MutableStateFlow<VideoQuality?>(null)
+    val selectedQuality: StateFlow<VideoQuality?> = _selectedQuality
 
-    private val _audioQualities = MutableLiveData<List<AudioQuality>>(emptyList())
-    val audioQualities: LiveData<List<AudioQuality>> = _audioQualities
+    private val _audioQualities = MutableStateFlow<List<AudioQuality>>(emptyList())
+    val audioQualities: StateFlow<List<AudioQuality>> = _audioQualities
 
-    private val _selectedAudioQuality = MutableLiveData<AudioQuality?>(null)
-    val selectedAudioQuality: LiveData<AudioQuality?> = _selectedAudioQuality
+    private val _selectedAudioQuality = MutableStateFlow<AudioQuality?>(null)
+    val selectedAudioQuality: StateFlow<AudioQuality?> = _selectedAudioQuality
 
-    private val _videoCodecs = MutableLiveData<List<VideoCodecEnum>>(emptyList())
-    val videoCodecs: LiveData<List<VideoCodecEnum>> = _videoCodecs
+    private val _videoCodecs = MutableStateFlow<List<VideoCodecEnum>>(emptyList())
+    val videoCodecs: StateFlow<List<VideoCodecEnum>> = _videoCodecs
 
-    private val _selectedVideoCodec = MutableLiveData<VideoCodecEnum?>(null)
-    val selectedVideoCodec: LiveData<VideoCodecEnum?> = _selectedVideoCodec
+    private val _selectedVideoCodec = MutableStateFlow<VideoCodecEnum?>(null)
+    val selectedVideoCodec: StateFlow<VideoCodecEnum?> = _selectedVideoCodec
 
-    private val _subtitles = MutableLiveData<List<SubtitleInfoModel>>(emptyList())
-    val subtitles: LiveData<List<SubtitleInfoModel>> = _subtitles
+    private val _subtitles = MutableStateFlow<List<SubtitleInfoModel>>(emptyList())
+    val subtitles: StateFlow<List<SubtitleInfoModel>> = _subtitles
 
-    private val _selectedSubtitleIndex = MutableLiveData(-1)
-    val selectedSubtitleIndex: LiveData<Int> = _selectedSubtitleIndex
+    private val _selectedSubtitleIndex = MutableStateFlow(-1)
+    val selectedSubtitleIndex: StateFlow<Int> = _selectedSubtitleIndex
 
-    private val _currentSubtitleText = MutableLiveData<String?>(null)
-    val currentSubtitleText: LiveData<String?> = _currentSubtitleText
+    private val _currentSubtitleText = MutableStateFlow<String?>(null)
+    val currentSubtitleText: StateFlow<String?> = _currentSubtitleText
 
-    private val _danmaku = MutableLiveData<List<DmModel>>(emptyList())
-    val danmaku: LiveData<List<DmModel>> = _danmaku
+    private val _danmaku = MutableStateFlow<List<DmModel>>(emptyList())
+    val danmaku: StateFlow<List<DmModel>> = _danmaku
 
-    private val _danmakuUpdates = MutableLiveData<DanmakuUpdate>()
-    val danmakuUpdates: LiveData<DanmakuUpdate> = _danmakuUpdates
+    private val _danmakuUpdates = MutableSharedFlow<DanmakuUpdate>(extraBufferCapacity = 1)
+    val danmakuUpdates: SharedFlow<DanmakuUpdate> = _danmakuUpdates
 
-    private val _specialDanmaku = MutableLiveData<List<SpecialDanmakuModel>>(emptyList())
-    val specialDanmaku: LiveData<List<SpecialDanmakuModel>> = _specialDanmaku
+    private val _specialDanmaku = MutableStateFlow<List<SpecialDanmakuModel>>(emptyList())
+    val specialDanmaku: StateFlow<List<SpecialDanmakuModel>> = _specialDanmaku
 
-    private val _interactionModel = MutableLiveData<InteractionModel?>(null)
-    val interactionModel: LiveData<InteractionModel?> = _interactionModel
+    private val _interactionModel = MutableStateFlow<InteractionModel?>(null)
+    val interactionModel: StateFlow<InteractionModel?> = _interactionModel
 
-    private val _videoSnapshot = MutableLiveData<VideoSnapshotData?>(null)
-    val videoSnapshot: LiveData<VideoSnapshotData?> = _videoSnapshot
+    private val _videoSnapshot = MutableStateFlow<VideoSnapshotData?>(null)
+    val videoSnapshot: StateFlow<VideoSnapshotData?> = _videoSnapshot
 
-    private val _currentCidLive = MutableLiveData(0L)
-    val currentCidLive: LiveData<Long> = _currentCidLive
+    private val _currentCidLive = MutableStateFlow(0L)
+    val currentCidLive: StateFlow<Long> = _currentCidLive
 
-    private val _riskControlVVoucher = MutableLiveData<String?>(null)
-    val riskControlVVoucher: LiveData<String?> = _riskControlVVoucher
+    private val _riskControlVVoucher = MutableStateFlow<String?>(null)
+    val riskControlVVoucher: StateFlow<String?> = _riskControlVVoucher
 
-    private val _riskControlTryLookBypass = MutableLiveData(false)
-    val riskControlTryLookBypass: LiveData<Boolean> = _riskControlTryLookBypass
+    private val _riskControlTryLookBypass = MutableStateFlow(false)
+    val riskControlTryLookBypass: StateFlow<Boolean> = _riskControlTryLookBypass
 
     fun consumeRiskControlVVoucher(): String? {
         val value = _riskControlVVoucher.value
@@ -1858,20 +1860,20 @@ class VideoPlayerViewModel(
         } else {
             _danmaku.value.orEmpty() + items
         }
-        _danmakuUpdates.value = DanmakuUpdate(
+        _danmakuUpdates.tryEmit(DanmakuUpdate(
             items = items,
             replace = replace
-        )
+        ))
     }
 
     private fun clearDanmaku() {
         danmakuLoadJob?.cancel()
         _danmaku.value = emptyList()
         _specialDanmaku.value = emptyList()
-        _danmakuUpdates.value = DanmakuUpdate(
+        _danmakuUpdates.tryEmit(DanmakuUpdate(
             items = emptyList(),
             replace = true
-        )
+        ))
     }
 
     private fun isActiveDanmakuRequest(loadGeneration: Long): Boolean {

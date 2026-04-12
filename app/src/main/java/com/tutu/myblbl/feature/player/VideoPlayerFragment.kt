@@ -19,6 +19,9 @@ import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.commit
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -46,6 +49,7 @@ import com.tutu.myblbl.feature.player.settings.PlayerSettings
 import com.tutu.myblbl.feature.player.settings.PlayerSettingsStore
 import com.tutu.myblbl.core.common.time.TimeUtils
 import com.tutu.myblbl.core.ui.system.ViewUtils
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 import java.util.Locale
@@ -570,179 +574,237 @@ class VideoPlayerFragment : Fragment() {
     }
 
     private fun setupObservers() {
-        viewModel.riskControlVVoucher.observe(viewLifecycleOwner) { vVoucher ->
-            if (vVoucher.isNullOrBlank()) return@observe
-            viewModel.consumeRiskControlVVoucher() ?: return@observe
-            AppLog.w(TAG, "risk-control v_voucher received, launching GaiaVgateActivity")
-            val intent = Intent(requireContext(), GaiaVgateActivity::class.java).apply {
-                putExtra(GaiaVgateActivity.EXTRA_V_VOUCHER, vVoucher)
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.riskControlVVoucher.collect { vVoucher ->
+                        if (vVoucher.isNullOrBlank()) return@collect
+                        viewModel.consumeRiskControlVVoucher() ?: return@collect
+                        AppLog.w(TAG, "risk-control v_voucher received, launching GaiaVgateActivity")
+                        val intent = Intent(requireContext(), GaiaVgateActivity::class.java).apply {
+                            putExtra(GaiaVgateActivity.EXTRA_V_VOUCHER, vVoucher)
+                        }
+                        gaiaVgateLauncher.launch(intent)
+                    }
+                }
+
+                launch {
+                    viewModel.riskControlTryLookBypass.collect { bypassed ->
+                        if (bypassed != true) return@collect
+                        if (riskControlUserHintShown.compareAndSet(false, true)) {
+                            Toast.makeText(requireContext(), RISK_CONTROL_USER_HINT, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+
+                launch {
+                    viewModel.videoInfo.collect { info ->
+                        latestVideoInfo = info
+                        sessionCoordinator.updateVideoInfo(info)
+                        updatePrimaryActionVisibility()
+                        renderPlayerHeader()
+                    }
+                }
+
+                launch {
+                    viewModel.playbackRequest.collect { request ->
+                        val currentPlayer = player ?: return@collect
+                        val playbackRequest = request ?: return@collect
+                        viewModel.setErrorMessage(null)
+                        resumePlaybackWhenStarted = playbackRequest.playWhenReady
+
+                        if (playbackRequest.replaceInPlace) {
+                            playerView.showController()
+                            playerView.removeControllerHideCallbacks()
+                        }
+                        progressCoordinator.reset()
+                        if (!playbackRequest.replaceInPlace) {
+                            playerView.prepareForPlaybackTransition()
+                        }
+                        playerView.syncDanmakuPosition(playbackRequest.seekPositionMs, forceSeek = true)
+                        currentPlayer.playWhenReady = false
+                        currentPlayer.setMediaSource(playbackRequest.mediaSource)
+                        currentPlayer.seekTo(playbackRequest.seekPositionMs)
+                        currentPlayer.prepare()
+                        currentPlayer.playWhenReady = playbackRequest.playWhenReady
+
+                        if (::playerSettings.isInitialized) {
+                            playerView.setPlaySpeed(playerSettings.defaultPlaybackSpeed)
+                        }
+                    }
+                }
+
+                launch {
+                    viewModel.resumeHint.collect { hint ->
+                        resumeHintController.onHintChanged(hint)
+                    }
+                }
+
+                launch {
+                    viewModel.qualities.collect { qualities ->
+                        playerView.setQualities(qualities)
+                    }
+                }
+
+                launch {
+                    viewModel.selectedQuality.collect { quality ->
+                        quality?.let(playerView::selectQuality)
+                    }
+                }
+
+                launch {
+                    viewModel.audioQualities.collect { qualities ->
+                        playerView.setAudiosSelect(qualities)
+                    }
+                }
+
+                launch {
+                    viewModel.selectedAudioQuality.collect { quality ->
+                        quality?.let(playerView::selectAudio)
+                    }
+                }
+
+                launch {
+                    viewModel.videoCodecs.collect { codecs ->
+                        playerView.setVideoCodec(codecs)
+                    }
+                }
+
+                launch {
+                    viewModel.selectedVideoCodec.collect { codec ->
+                        codec?.let(playerView::selectVideoCodec)
+                    }
+                }
+
+                launch {
+                    viewModel.subtitles.collect { subtitles ->
+                        playerView.setSubtitles(subtitles)
+                        playerView.showHideSubtitleButton(subtitles.isNotEmpty())
+                    }
+                }
+
+                launch {
+                    viewModel.selectedSubtitleIndex.collect { index ->
+                        playerView.selectSubtitle(index)
+                    }
+                }
+
+                launch {
+                    viewModel.currentSubtitleText.collect { subtitle ->
+                        val visible = !subtitle.isNullOrBlank()
+                        textSubtitle.isVisible = visible
+                        textSubtitle.text = subtitle.orEmpty()
+                        if (::playerSettings.isInitialized) {
+                            textSubtitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, playerSettings.subtitleTextSizePx.toFloat())
+                        }
+                    }
+                }
+
+                launch {
+                    viewModel.danmakuUpdates.collect { update ->
+                        if (update.replace) {
+                            playerView.setDanmakuData(update.items)
+                        } else {
+                            playerView.appendDanmakuData(update.items)
+                        }
+                    }
+                }
+
+                launch {
+                    viewModel.danmaku.collect {
+                        updateDanmakuSwitchVisibility()
+                    }
+                }
+
+                launch {
+                    viewModel.specialDanmaku.collect { data ->
+                        playerView.setSpecialDanmakuData(data)
+                        updateDanmakuSwitchVisibility()
+                    }
+                }
+
+                launch {
+                    viewModel.interactionModel.collect { model ->
+                        if (model == null) {
+                            interactionView.visibility = View.GONE
+                            interactionView.removeAllViews()
+                        } else {
+                            interactionView.visibility = View.VISIBLE
+                            interactionView.setModel(model)
+                        }
+                    }
+                }
+
+                launch {
+                    viewModel.videoSnapshot.collect { snapshot ->
+                        playerView.setSeekPreviewSnapshot(snapshot)
+                    }
+                }
+
+                launch {
+                    viewModel.currentCidLive.collect { cid ->
+                        interactionView.setCurrentCid(cid)
+                    }
+                }
+
+                launch {
+                    viewModel.episodes.collect { episodes ->
+                        sessionCoordinator.updateEpisodes(episodes)
+                        playerView.showHideEpisodeButton(episodes.isNotEmpty())
+                        updateEpisodeNavigationVisibility()
+                        renderPlayerHeader()
+                    }
+                }
+
+                launch {
+                    viewModel.selectedEpisodeIndex.collect { index ->
+                        sessionCoordinator.updateSelectedEpisodeIndex(index)
+                        updateEpisodeNavigationVisibility()
+                        renderPlayerHeader()
+                    }
+                }
+
+                launch {
+                    viewModel.relatedVideos.collect { rawRelated ->
+                        val related = ContentFilter.filterVideos(requireContext(), rawRelated)
+                        sessionCoordinator.updateRelatedVideos(related)
+                        relatedAdapter.setData(related)
+                        playerView.showHideRelatedButton(related.isNotEmpty())
+                    }
+                }
+
+                launch {
+                    viewModel.currentPosition.collect { position ->
+                        latestPlaybackPositionMs = position.coerceAtLeast(0L)
+                        renderBottomProgressBar()
+                    }
+                }
+
+                launch {
+                    viewModel.duration.collect { duration ->
+                        latestPlaybackDurationMs = duration.coerceAtLeast(0L)
+                        renderBottomProgressBar()
+                    }
+                }
+
+                launch {
+                    viewModel.isLoading.collect { isLoading ->
+                        latestLoadingState = isLoading
+                        renderDebugState()
+                    }
+                }
+
+                launch {
+                    viewModel.error.collect { error ->
+                        latestErrorMessage = error
+                        if (!error.isNullOrBlank()) {
+                            AppLog.e(TAG, "viewModel error: $error")
+                        }
+                        playerView.setCustomErrorMessage(error)
+                        renderDebugState()
+                    }
+                }
             }
-            gaiaVgateLauncher.launch(intent)
-        }
-
-        viewModel.riskControlTryLookBypass.observe(viewLifecycleOwner) { bypassed ->
-            if (bypassed != true) return@observe
-            if (riskControlUserHintShown.compareAndSet(false, true)) {
-                Toast.makeText(requireContext(), RISK_CONTROL_USER_HINT, Toast.LENGTH_LONG).show()
-            }
-        }
-
-        viewModel.videoInfo.observe(viewLifecycleOwner) { info ->
-            latestVideoInfo = info
-            sessionCoordinator.updateVideoInfo(info)
-            updatePrimaryActionVisibility()
-            renderPlayerHeader()
-        }
-
-        viewModel.playbackRequest.observe(viewLifecycleOwner) { request ->
-            val currentPlayer = player ?: return@observe
-            val playbackRequest = request ?: return@observe
-            viewModel.setErrorMessage(null)
-            resumePlaybackWhenStarted = playbackRequest.playWhenReady
-
-            if (playbackRequest.replaceInPlace) {
-                playerView.showController()
-                playerView.removeControllerHideCallbacks()
-            }
-            progressCoordinator.reset()
-            if (!playbackRequest.replaceInPlace) {
-                playerView.prepareForPlaybackTransition()
-            }
-            playerView.syncDanmakuPosition(playbackRequest.seekPositionMs, forceSeek = true)
-            currentPlayer.playWhenReady = false
-            currentPlayer.setMediaSource(playbackRequest.mediaSource)
-            currentPlayer.seekTo(playbackRequest.seekPositionMs)
-            currentPlayer.prepare()
-            currentPlayer.playWhenReady = playbackRequest.playWhenReady
-            
-            if (::playerSettings.isInitialized) {
-                playerView.setPlaySpeed(playerSettings.defaultPlaybackSpeed)
-            }
-        }
-
-        viewModel.resumeHint.observe(viewLifecycleOwner) { hint ->
-            resumeHintController.onHintChanged(hint)
-        }
-
-        viewModel.qualities.observe(viewLifecycleOwner) { qualities ->
-            playerView.setQualities(qualities)
-        }
-
-        viewModel.selectedQuality.observe(viewLifecycleOwner) { quality ->
-            quality?.let(playerView::selectQuality)
-        }
-
-        viewModel.audioQualities.observe(viewLifecycleOwner) { qualities ->
-            playerView.setAudiosSelect(qualities)
-        }
-
-        viewModel.selectedAudioQuality.observe(viewLifecycleOwner) { quality ->
-            quality?.let(playerView::selectAudio)
-        }
-
-        viewModel.videoCodecs.observe(viewLifecycleOwner) { codecs ->
-            playerView.setVideoCodec(codecs)
-        }
-
-        viewModel.selectedVideoCodec.observe(viewLifecycleOwner) { codec ->
-            codec?.let(playerView::selectVideoCodec)
-        }
-
-        viewModel.subtitles.observe(viewLifecycleOwner) { subtitles ->
-            playerView.setSubtitles(subtitles)
-            playerView.showHideSubtitleButton(subtitles.isNotEmpty())
-        }
-
-        viewModel.selectedSubtitleIndex.observe(viewLifecycleOwner) { index ->
-            playerView.selectSubtitle(index)
-        }
-
-        viewModel.currentSubtitleText.observe(viewLifecycleOwner) { subtitle ->
-            val visible = !subtitle.isNullOrBlank()
-            textSubtitle.isVisible = visible
-            textSubtitle.text = subtitle.orEmpty()
-            if (::playerSettings.isInitialized) {
-                textSubtitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, playerSettings.subtitleTextSizePx.toFloat())
-            }
-        }
-
-        viewModel.danmakuUpdates.observe(viewLifecycleOwner) { update ->
-            if (update.replace) {
-                playerView.setDanmakuData(update.items)
-            } else {
-                playerView.appendDanmakuData(update.items)
-            }
-        }
-
-        viewModel.danmaku.observe(viewLifecycleOwner) {
-            updateDanmakuSwitchVisibility()
-        }
-
-        viewModel.specialDanmaku.observe(viewLifecycleOwner) { data ->
-            playerView.setSpecialDanmakuData(data)
-            updateDanmakuSwitchVisibility()
-        }
-
-        viewModel.interactionModel.observe(viewLifecycleOwner) { model ->
-            if (model == null) {
-                interactionView.visibility = View.GONE
-                interactionView.removeAllViews()
-            } else {
-                interactionView.visibility = View.VISIBLE
-                interactionView.setModel(model)
-            }
-        }
-
-        viewModel.videoSnapshot.observe(viewLifecycleOwner) { snapshot ->
-            playerView.setSeekPreviewSnapshot(snapshot)
-        }
-
-        viewModel.currentCidLive.observe(viewLifecycleOwner) { cid ->
-            interactionView.setCurrentCid(cid)
-        }
-
-        viewModel.episodes.observe(viewLifecycleOwner) { episodes ->
-            sessionCoordinator.updateEpisodes(episodes)
-            playerView.showHideEpisodeButton(episodes.isNotEmpty())
-            updateEpisodeNavigationVisibility()
-            renderPlayerHeader()
-        }
-
-        viewModel.selectedEpisodeIndex.observe(viewLifecycleOwner) { index ->
-            sessionCoordinator.updateSelectedEpisodeIndex(index)
-            updateEpisodeNavigationVisibility()
-            renderPlayerHeader()
-        }
-
-        viewModel.relatedVideos.observe(viewLifecycleOwner) { rawRelated ->
-            val related = ContentFilter.filterVideos(requireContext(), rawRelated)
-            sessionCoordinator.updateRelatedVideos(related)
-            relatedAdapter.setData(related)
-            playerView.showHideRelatedButton(related.isNotEmpty())
-        }
-
-        viewModel.currentPosition.observe(viewLifecycleOwner) { position ->
-            latestPlaybackPositionMs = position.coerceAtLeast(0L)
-            renderBottomProgressBar()
-        }
-
-        viewModel.duration.observe(viewLifecycleOwner) { duration ->
-            latestPlaybackDurationMs = duration.coerceAtLeast(0L)
-            renderBottomProgressBar()
-        }
-
-        viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
-            latestLoadingState = isLoading
-            renderDebugState()
-        }
-
-        viewModel.error.observe(viewLifecycleOwner) { error ->
-            latestErrorMessage = error
-            if (!error.isNullOrBlank()) {
-                AppLog.e(TAG, "viewModel error: $error")
-            }
-            playerView.setCustomErrorMessage(error)
-            renderDebugState()
         }
     }
 

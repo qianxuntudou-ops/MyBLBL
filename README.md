@@ -23,7 +23,7 @@
 - **弹幕**: 快手 AkDanmaku 引擎 
 - **数据存储**: DataStore Preferences 1.1.4
 - **UI**: AndroidX (Fragment 1.8.6, Lifecycle 2.8.7, RecyclerView 1.4.0)
-- **最低版本**: Android 6.0 (API 23)
+- **最低版本**: Android 10 (API 29)
 - **目标版本**: Android 15 (API 35)
 
 

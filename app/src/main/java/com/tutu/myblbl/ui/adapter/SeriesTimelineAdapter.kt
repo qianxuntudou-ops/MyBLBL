@@ -96,6 +96,7 @@ class SeriesTimelineAdapter(
 
         init {
             binding.clickView.setOnClickListener {
+                onFocused(binding.clickView)
                 currentItem?.let(onItemClick)
             }
             if (trackFocusedView) {

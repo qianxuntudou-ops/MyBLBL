@@ -889,9 +889,9 @@ class VideoPlayerViewModel(
                     appSettings.putStringAsync("gaia_vgate_v_voucher", vVoucher)
                     appSettings.putStringAsync("gaia_vgate_v_voucher_saved_at_ms", System.currentTimeMillis().toString())
                     _riskControlVVoucher.value = vVoucher
-                    _error.value = "账号触发风控验证，正在请求人机验证…"
+                    _error.value = "账号被风控，正在请求人机验证…"
                 } else if (response.isTryLookBypass) {
-                    _error.value = "当前账号可能被风控，已降级为试看模式"
+                    _error.value = "账号被风控，已降级为试看模式"
                     _riskControlTryLookBypass.value = true
                 }
                 AppLog.e(

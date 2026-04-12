@@ -39,6 +39,7 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
     private var loadingPage = 1
     private var waitingForFirstLoad = true
     private var cacheRestoreJob: Job? = null
+    private var pendingScrollToTopAfterRefresh = false
 
     override val autoLoad: Boolean = false
 
@@ -77,6 +78,7 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
         currentPage = 1
         hasMore = true
         waitingForFirstLoad = true
+        pendingScrollToTopAfterRefresh = true
         loadData(1)
     }
 
@@ -123,9 +125,13 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
                         mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.HomeContentReady)
                         if (loadingPage == 1) {
                             cacheVideos(videos)
-                            scrollToTop()
+                            if (pendingScrollToTopAfterRefresh && !isPendingReturnRestore()) {
+                                scrollToTop()
+                            }
+                            pendingScrollToTopAfterRefresh = false
                         }
                     } else if (loadingPage == 1) {
+                        pendingScrollToTopAfterRefresh = false
                         showEmpty()
                     }
                 }

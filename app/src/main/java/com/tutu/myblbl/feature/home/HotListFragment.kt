@@ -35,6 +35,7 @@ class HotListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
     private var loadingPage = 1
     private var waitingForFirstLoad = true
     private var cacheRestoreJob: Job? = null
+    private var pendingScrollToTopAfterRefresh = false
 
     override val autoLoad: Boolean = false
 
@@ -71,6 +72,7 @@ class HotListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
     override fun refresh() {
         currentPage = 1
         waitingForFirstLoad = true
+        pendingScrollToTopAfterRefresh = true
         loadData(1)
     }
 
@@ -116,9 +118,13 @@ class HotListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
                         showLoading(false)
                         if (loadingPage == 1) {
                             cacheVideos(videos)
-                            scrollToTop()
+                            if (pendingScrollToTopAfterRefresh && !isPendingReturnRestore()) {
+                                scrollToTop()
+                            }
+                            pendingScrollToTopAfterRefresh = false
                         }
                     } else if (loadingPage == 1) {
+                        pendingScrollToTopAfterRefresh = false
                         showEmpty()
                     }
                 }

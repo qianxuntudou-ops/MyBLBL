@@ -3,6 +3,7 @@
 package com.tutu.myblbl.feature.me
 
 import android.os.Bundle
+import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.KeyEvent
 import android.view.View
@@ -66,6 +67,11 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     private var lastFocusedHistoryPosition = RecyclerView.NO_POSITION
     private var lastFocusedHistoryKey: String? = null
     private var pendingRestoreFocus = false
+    private var pendingListLayoutState: Parcelable? = null
+    private var pendingHistoryAnchorPosition = RecyclerView.NO_POSITION
+    private var pendingHistoryAnchorOffset = 0
+    private var pendingHistoryReturnRestore = false
+    private var pendingHistoryScrollToTop = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,9 +125,10 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             }
         }
         setupLoadMore()
-        swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(binding.recyclerView) {
-            refresh()
-        }
+        swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(
+            recyclerView = binding.recyclerView,
+            onRefresh = { refresh() }
+        )
     }
     
     private fun setupLoadMore() {
@@ -148,7 +155,6 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     override fun onResume() {
         super.onResume()
         if (pendingRestoreFocus) {
-            pendingRestoreFocus = false
             restoreContentFocus()
         }
     }
@@ -233,6 +239,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
 
     private fun onVideoClick(video: VideoModel) {
         pendingRestoreFocus = true
+        pendingListLayoutState = binding.recyclerView.layoutManager?.onSaveInstanceState()
         VideoRouteNavigator.openVideo(
             context = requireContext(),
             video = video,
@@ -249,6 +256,10 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             lastFocusedHistoryPosition = historyAdapter?.getFocusedPosition() ?: RecyclerView.NO_POSITION
             lastFocusedHistoryKey = historyItemKey(video)
             pendingRestoreFocus = true
+            pendingHistoryReturnRestore = true
+            pendingHistoryScrollToTop = false
+            pendingListLayoutState = binding.recyclerView.layoutManager?.onSaveInstanceState()
+            captureHistoryViewportAnchor()
             VideoRouteNavigator.openHistory(
                 context = requireContext(),
                 historyVideo = video,
@@ -264,16 +275,21 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         swipeRefreshLayout?.isRefreshing = false
         val adapter = historyAdapter ?: return
         val filtered = videos.filter { !ContentFilter.isVideoBlocked(requireContext(), it.tagName, it.title, authorName = it.authorName) }
-        adapter.setData(filtered)
+        val shouldRestoreFocus = pendingHistoryReturnRestore && filtered.isNotEmpty()
+        val shouldScrollToTop = pendingHistoryScrollToTop && filtered.isNotEmpty()
+        adapter.setData(filtered) {
+            when {
+                shouldRestoreFocus -> {
+                    restoreContentFocus()
+                }
+                shouldScrollToTop -> {
+                    pendingHistoryScrollToTop = false
+                    scrollHistoryListToTopAfterRefresh()
+                }
+            }
+        }
         cacheHistoryVideos(videos)
         updateContentState(filtered.isEmpty())
-        if (currentPage == 1 && !pendingRestoreFocus && filtered.isNotEmpty()) {
-            binding.recyclerView.scrollToPosition(0)
-        }
-        if (pendingRestoreFocus && filtered.isNotEmpty()) {
-            pendingRestoreFocus = false
-            restoreContentFocus()
-        }
     }
 
     private fun bindLaterData(videos: List<VideoModel>) {
@@ -314,11 +330,22 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     }
 
     override fun scrollToTop() {
-        binding.recyclerView.smoothScrollToPosition(0)
+        scrollListToTop(immediate = false)
     }
 
     override fun refresh() {
         currentPage = 1
+        pendingRestoreFocus = false
+        pendingHistoryReturnRestore = false
+        pendingHistoryScrollToTop = type == TYPE_HISTORY
+        pendingListLayoutState = null
+        pendingHistoryAnchorPosition = RecyclerView.NO_POSITION
+        pendingHistoryAnchorOffset = 0
+        if (type == TYPE_HISTORY) {
+            lastFocusedHistoryPosition = RecyclerView.NO_POSITION
+            lastFocusedHistoryKey = null
+            historyAdapter?.clearFocusMemory()
+        }
         loadData()
     }
 
@@ -326,9 +353,19 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         if (!isAdded || view == null || viewModel.loading.value) {
             return
         }
-        if (!hasContentItems() || viewModel.shouldRefresh(CACHE_TTL_MS)) {
-            currentPage = 1
-            loadData()
+        when (type) {
+            TYPE_HISTORY, TYPE_LATER -> {
+                if (!hasContentItems()) {
+                    currentPage = 1
+                    loadData()
+                }
+            }
+            else -> {
+                if (!hasContentItems() || viewModel.shouldRefresh(CACHE_TTL_MS)) {
+                    currentPage = 1
+                    loadData()
+                }
+            }
         }
     }
 
@@ -398,12 +435,22 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         if (!isAdded || view == null || binding.recyclerView.visibility != View.VISIBLE) {
             return
         }
+        pendingRestoreFocus = false
+        if (type == TYPE_HISTORY) {
+            pendingHistoryReturnRestore = false
+            pendingHistoryScrollToTop = false
+        }
         binding.recyclerView.post {
             if (!isAdded || binding.recyclerView.visibility != View.VISIBLE) {
                 return@post
             }
+            pendingListLayoutState?.let { state ->
+                binding.recyclerView.layoutManager?.onRestoreInstanceState(state)
+                pendingListLayoutState = null
+            }
             if (type == TYPE_HISTORY) {
                 val adapter = historyAdapter ?: return@post
+                restoreHistoryViewportAnchor()
                 val targetPosition = lastFocusedHistoryKey
                     ?.let(adapter::findPositionByKey)
                     ?.takeIf { it != RecyclerView.NO_POSITION }
@@ -411,18 +458,25 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                         .takeIf { it != RecyclerView.NO_POSITION }
                         ?.coerceIn(0, adapter.itemCount - 1)
                     ?: 0
-                val result = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
-                    recyclerView = binding.recyclerView,
-                    position = targetPosition
-                )
-                AppLog.d(
-                    TAG,
-                    "restoreContentFocus history targetPosition=$targetPosition handled=${result.handled} deferred=${result.deferred}"
-                )
+                val handled = requestVisibleHistoryFocus(targetPosition)
+                binding.recyclerView.post {
+                    restoreHistoryViewportAnchor()
+                }
+                AppLog.d(TAG, "restoreContentFocus history targetPosition=$targetPosition handled=$handled anchor=$pendingHistoryAnchorPosition/$pendingHistoryAnchorOffset")
             } else {
                 val handled = videoAdapter?.focusedView?.requestFocus() == true
                 if (!handled) {
-                    focusPrimaryContent()
+                    val adapter = videoAdapter
+                    val rememberedPosition = adapter?.getRememberedPosition() ?: RecyclerView.NO_POSITION
+                    if (rememberedPosition != RecyclerView.NO_POSITION && (adapter?.contentCount() ?: 0) > 0) {
+                        RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
+                            recyclerView = binding.recyclerView,
+                            position = rememberedPosition.coerceIn(0, adapter!!.contentCount() - 1),
+                            scrollIfMissing = false
+                        )
+                    } else {
+                        focusPrimaryContent()
+                    }
                 }
             }
         }
@@ -457,6 +511,72 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             return
         }
         binding.recyclerView.post { requestItemFocus(position, retries - 1) }
+    }
+
+    private fun requestVisibleHistoryFocus(position: Int, retries: Int = 6): Boolean {
+        val holder = binding.recyclerView.findViewHolderForAdapterPosition(position)
+        if (holder?.itemView?.requestFocus() == true) {
+            return true
+        }
+        if (retries <= 0) {
+            return false
+        }
+        binding.recyclerView.post {
+            requestVisibleHistoryFocus(position, retries - 1)
+        }
+        return false
+    }
+
+    private fun captureHistoryViewportAnchor() {
+        val layoutManager = binding.recyclerView.layoutManager as? WrapContentGridLayoutManager ?: return
+        val firstVisiblePosition = layoutManager.findFirstVisibleItemPosition()
+        if (firstVisiblePosition == RecyclerView.NO_POSITION) {
+            return
+        }
+        val firstVisibleView = layoutManager.findViewByPosition(firstVisiblePosition) ?: return
+        pendingHistoryAnchorPosition = firstVisiblePosition
+        pendingHistoryAnchorOffset = layoutManager.getDecoratedTop(firstVisibleView) - binding.recyclerView.paddingTop
+    }
+
+    private fun restoreHistoryViewportAnchor() {
+        val layoutManager = binding.recyclerView.layoutManager as? WrapContentGridLayoutManager ?: return
+        if (pendingHistoryAnchorPosition == RecyclerView.NO_POSITION) {
+            return
+        }
+        layoutManager.scrollToPositionWithOffset(pendingHistoryAnchorPosition, pendingHistoryAnchorOffset)
+    }
+
+    private fun scrollHistoryListToTopAfterRefresh() {
+        pendingListLayoutState = null
+        pendingHistoryAnchorPosition = RecyclerView.NO_POSITION
+        pendingHistoryAnchorOffset = 0
+        binding.recyclerView.stopScroll()
+        binding.recyclerView.clearFocus()
+        historyAdapter?.clearFocusMemory()
+        scrollListToTop(immediate = true)
+        binding.recyclerView.post {
+            scrollListToTop(immediate = true)
+        }
+    }
+
+    private fun scrollListToTop(immediate: Boolean) {
+        val layoutManager = binding.recyclerView.layoutManager as? WrapContentGridLayoutManager
+        if (layoutManager != null) {
+            if (immediate) {
+                layoutManager.scrollToPositionWithOffset(0, 0)
+            } else {
+                binding.recyclerView.smoothScrollToPosition(0)
+                binding.recyclerView.post {
+                    layoutManager.scrollToPositionWithOffset(0, 0)
+                }
+            }
+            return
+        }
+        if (immediate) {
+            binding.recyclerView.scrollToPosition(0)
+        } else {
+            binding.recyclerView.smoothScrollToPosition(0)
+        }
     }
 
     private fun historyItemKey(item: HistoryVideoModel): String {

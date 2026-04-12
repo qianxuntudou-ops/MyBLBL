@@ -38,6 +38,11 @@ import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarget {
+    private enum class ContentFocusTarget {
+        LEFT_UP_LIST,
+        RIGHT_VIDEO_LIST
+    }
+
     companion object {
         private const val TAG = "MainEntryFocus"
         private const val FOCUS_TAG = "DynamicFocus"
@@ -62,6 +67,8 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     private var lastToastMessage: String? = null
     private var lastFocusedVideoPosition = 0
     private var pendingScrollToTop = false
+    private var pendingVideoFocusRestoreOnResume = false
+    private var preferredContentFocusTarget = ContentFocusTarget.LEFT_UP_LIST
 
     override fun getViewBinding(
         inflater: LayoutInflater,
@@ -87,6 +94,9 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     private fun setupUpList() {
         upAdapter = DynamicUpAdapter(
             onItemClick = { up -> onUpClick(up) },
+            onItemFocused = {
+                preferredContentFocusTarget = ContentFocusTarget.LEFT_UP_LIST
+            },
             onLeftEdge = { (activity as? MainActivity)?.focusLeftFunctionArea() == true },
             onRightEdge = { focusRightContent() },
             debugTag = FOCUS_TAG
@@ -106,7 +116,10 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     private fun setupVideoList() {
         videoAdapter = DynamicVideoAdapter(
             onItemClick = { video -> onVideoClick(video) },
-            onItemFocused = { position -> lastFocusedVideoPosition = position },
+            onItemFocused = { position ->
+                lastFocusedVideoPosition = position
+                preferredContentFocusTarget = ContentFocusTarget.RIGHT_VIDEO_LIST
+            },
             onLeftEdge = { focusSelectedUpItem() },
             debugTag = FOCUS_TAG
         )
@@ -143,24 +156,34 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                 if (dy > 0) checkLoadMore()
             }
         })
-        swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(binding.recyclerViewRight) {
-            currentUpId = 0L
-            loadData()
+        swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(
+            recyclerView = binding.recyclerViewRight,
+            onRefresh = ::refreshCurrentVideoList
+        ) {
+            setOnChildScrollUpCallback { _, _ ->
+                binding.recyclerViewRight.canScrollVertically(-1)
+            }
         }
     }
 
     private fun onUpClick(up: FollowingModel) {
         val clickedPosition = upAdapter.getData().indexOfFirst { it.mid == up.mid }
+        val wasSelected = clickedPosition >= 0 &&
+            clickedPosition == upAdapter.getSelectedPosition() &&
+            currentUpId == up.mid
         if (clickedPosition >= 0) {
             upAdapter.setSelectedPosition(clickedPosition)
         }
         currentUpId = up.mid
         lastFocusedVideoPosition = 0
         pendingScrollToTop = true
-        viewModel.selectUp(currentUpId.toString(), pageSize)
+        preferredContentFocusTarget = ContentFocusTarget.LEFT_UP_LIST
+        viewModel.selectUp(currentUpId.toString(), pageSize, forceRefresh = wasSelected)
     }
 
     private fun onVideoClick(video: VideoModel) {
+        preferredContentFocusTarget = ContentFocusTarget.RIGHT_VIDEO_LIST
+        pendingVideoFocusRestoreOnResume = true
         VideoRouteNavigator.openVideo(
             context = requireContext(),
             video = video,
@@ -178,6 +201,19 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         renderUiState()
     }
 
+    override fun onPause() {
+        pendingVideoFocusRestoreOnResume =
+            rememberVideoFocusForResume() || pendingVideoFocusRestoreOnResume
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (pendingVideoFocusRestoreOnResume) {
+            scheduleVideoFocusRestore()
+        }
+    }
+
     private fun loadData() {
         pendingScrollToTop = true
         lastRefreshTime = System.currentTimeMillis()
@@ -191,6 +227,28 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         }
         viewModel.loadFollowingList()
         viewModel.selectUp(currentUpId.toString(), pageSize)
+    }
+
+    private fun refreshCurrentVideoList() {
+        pendingScrollToTop = true
+        lastRefreshTime = System.currentTimeMillis()
+        if (!sessionGateway.isLoggedIn()) {
+            currentUpId = 0L
+            loadData()
+            return
+        }
+        val targetUpId = currentUpId.takeIf { upAdapter.itemCount > 0 } ?: 0L
+        currentUpId = targetUpId
+        val selectedPosition = upAdapter.getData()
+            .indexOfFirst { it.mid == targetUpId }
+            .takeIf { it >= 0 }
+            ?: 0
+        if (upAdapter.itemCount > 0) {
+            upAdapter.setSelectedPosition(selectedPosition)
+        }
+        lastFocusedVideoPosition = 0
+        preferredContentFocusTarget = ContentFocusTarget.RIGHT_VIDEO_LIST
+        viewModel.selectUp(targetUpId.toString(), pageSize, forceRefresh = true)
     }
 
     override fun initObserver() {
@@ -395,6 +453,42 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         )
     }
 
+    private fun scheduleVideoFocusRestore(retries: Int = 8) {
+        binding.recyclerViewRight.post {
+            if (!isAdded || view == null) {
+                return@post
+            }
+            val currentFocus = activity?.currentFocus
+            if (currentFocus != null && currentFocus.isDescendantOf(binding.recyclerViewRight)) {
+                pendingVideoFocusRestoreOnResume = false
+                return@post
+            }
+            requestPreferredContentFocus(fallbackToAlternate = false)
+            if (retries > 0) {
+                binding.recyclerViewRight.postDelayed(
+                    { scheduleVideoFocusRestore(retries - 1) },
+                    48L
+                )
+            } else {
+                pendingVideoFocusRestoreOnResume = false
+            }
+        }
+    }
+
+    private fun rememberVideoFocusForResume(): Boolean {
+        if (!isAdded || view == null || videoAdapter.itemCount == 0) {
+            return false
+        }
+        val currentFocusedView = activity?.currentFocus ?: return false
+        val focusedChild = findRecyclerViewChild(binding.recyclerViewRight, currentFocusedView) ?: return false
+        val focusedPosition = binding.recyclerViewRight.getChildAdapterPosition(focusedChild)
+        if (focusedPosition == RecyclerView.NO_POSITION) {
+            return false
+        }
+        lastFocusedVideoPosition = focusedPosition
+        return true
+    }
+
     private fun focusSelectedUpItem(): Boolean {
         if (!isAdded || view == null || upAdapter.itemCount == 0) {
             return false
@@ -459,10 +553,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                 viewError?.requestFocus() == true
             }
         }
-        if (focusSelectedUpItem()) {
-            return true
-        }
-        return focusRightContent()
+        return requestPreferredContentFocus(fallbackToAlternate = true)
     }
 
     private fun focusPrimaryContent(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
@@ -498,7 +589,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                 AppLog.d(TAG, "DynamicFragment.onHiddenChanged skipRestore: currentFocus=${currentFocusedView.javaClass.simpleName}")
                 return
             }
-            restoreVideoFocus()
+            requestPreferredContentFocus(fallbackToAlternate = true)
         }
     }
 
@@ -531,6 +622,38 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
             current = current.parent as? View
         }
         return false
+    }
+
+    private fun findRecyclerViewChild(recyclerView: RecyclerView, view: View): View? {
+        var current: View? = view
+        while (current != null) {
+            val parent = current.parent
+            if (parent === recyclerView) {
+                return current
+            }
+            current = parent as? View
+        }
+        return null
+    }
+
+    private fun requestPreferredContentFocus(fallbackToAlternate: Boolean): Boolean {
+        return when (preferredContentFocusTarget) {
+            ContentFocusTarget.RIGHT_VIDEO_LIST -> {
+                if (focusRightContent()) {
+                    true
+                } else {
+                    fallbackToAlternate && focusSelectedUpItem()
+                }
+            }
+
+            ContentFocusTarget.LEFT_UP_LIST -> {
+                if (focusSelectedUpItem()) {
+                    true
+                } else {
+                    fallbackToAlternate && focusRightContent()
+                }
+            }
+        }
     }
 
     private fun directionName(direction: Int): String {

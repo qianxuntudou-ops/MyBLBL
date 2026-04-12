@@ -63,7 +63,7 @@ class FavoriteFolderAdapter(
             return
         }
         val newList = currentList.toMutableList()
-        newList[index] = item.apply { imageUrl = coverUrl }
+        newList[index] = item.copy(imageUrl = coverUrl)
         submitList(newList)
     }
 

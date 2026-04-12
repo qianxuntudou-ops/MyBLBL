@@ -38,7 +38,7 @@ class GaiaVgateActivity : AppCompatActivity() {
             return
         }
 
-        status = TextView(this).apply { text = "正在申请风控验证…" }
+        status = TextView(this).apply { text = "正在请求验证…" }
         webView = WebView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
@@ -140,8 +140,8 @@ class GaiaVgateActivity : AppCompatActivity() {
   </style>
 </head>
 <body>
-  <div>风控验证（极验）</div>
-  <button id="btnStart" disabled>开始验证</button>
+    <div>人机验证</div>
+    <button id="btnStart" disabled>开始验证</button>
   <div id="captcha"></div>
   <script>
     function start() {

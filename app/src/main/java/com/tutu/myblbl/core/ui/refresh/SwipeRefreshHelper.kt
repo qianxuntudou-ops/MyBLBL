@@ -11,6 +11,18 @@ object SwipeRefreshHelper {
         recyclerView: RecyclerView,
         onRefresh: () -> Unit
     ): SwipeRefreshLayout {
+        return wrapRecyclerView(
+            recyclerView = recyclerView,
+            onRefresh = onRefresh,
+            configure = null
+        )
+    }
+
+    fun wrapRecyclerView(
+        recyclerView: RecyclerView,
+        onRefresh: () -> Unit,
+        configure: (SwipeRefreshLayout.() -> Unit)? = null
+    ): SwipeRefreshLayout {
         val parent = recyclerView.parent as? ViewGroup
             ?: throw IllegalStateException("RecyclerView must have a parent")
         val index = parent.indexOfChild(recyclerView)
@@ -26,6 +38,7 @@ object SwipeRefreshHelper {
                 FrameLayout.LayoutParams.MATCH_PARENT
             ))
             setOnRefreshListener { onRefresh() }
+            configure?.invoke(this)
             parent.addView(this, index)
         }
     }

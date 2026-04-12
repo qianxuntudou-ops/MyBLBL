@@ -189,138 +189,144 @@ class BiliSecurityCoordinator(
     }
 
     private suspend fun ensureWebFingerprintCookies() {
-        val hasBuvid3 = !cookieManager.getCookieValue("buvid3").isNullOrBlank()
-        val hasBNut = !cookieManager.getCookieValue("b_nut").isNullOrBlank()
-        val hasBuvid4 = !cookieManager.getCookieValue("buvid4").isNullOrBlank()
+        withContext(Dispatchers.IO) {
+            val hasBuvid3 = !cookieManager.getCookieValue("buvid3").isNullOrBlank()
+            val hasBNut = !cookieManager.getCookieValue("b_nut").isNullOrBlank()
+            val hasBuvid4 = !cookieManager.getCookieValue("buvid4").isNullOrBlank()
 
-        if (!hasBuvid3 || !hasBNut) {
-            runCatching {
-                apiService.getMainPage().use { body ->
-                    body.source().request(1)
+            if (!hasBuvid3 || !hasBNut) {
+                runCatching {
+                    apiService.getMainPage().use { body ->
+                        body.source().request(1)
+                    }
+                }.onFailure {
+                    AppLog.w(tag, "ensureWebFingerprintCookies homepage failed: ${it.message}")
                 }
-            }.onFailure {
-                AppLog.w(tag, "ensureWebFingerprintCookies homepage failed: ${it.message}")
             }
-        }
 
-        if (!hasBuvid4) {
-            runCatching {
-                val request = okhttp3.Request.Builder()
-                    .url("https://api.bilibili.com/x/frontend/finger/spi")
-                    .build()
-                val response = okHttpClient.newCall(request).execute()
-                val body = response.body?.string().orEmpty()
-                val json = JSONObject(body)
-                val data = json.optJSONObject("data") ?: JSONObject()
-                val b3 = data.optString("b_3", "").trim()
-                val b4 = data.optString("b_4", "").trim()
-                val expiresAt = System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000
-                val cookies = mutableListOf<Cookie>()
-                if (b3.isNotBlank() && cookieManager.getCookieValue("buvid3").isNullOrBlank()) {
-                    cookies.add(buildCookie("buvid3", b3, expiresAt))
+            if (!hasBuvid4) {
+                runCatching {
+                    val request = okhttp3.Request.Builder()
+                        .url("https://api.bilibili.com/x/frontend/finger/spi")
+                        .build()
+                    val response = okHttpClient.newCall(request).execute()
+                    val body = response.body?.string().orEmpty()
+                    val json = JSONObject(body)
+                    val data = json.optJSONObject("data") ?: JSONObject()
+                    val b3 = data.optString("b_3", "").trim()
+                    val b4 = data.optString("b_4", "").trim()
+                    val expiresAt = System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000
+                    val cookies = mutableListOf<Cookie>()
+                    if (b3.isNotBlank() && cookieManager.getCookieValue("buvid3").isNullOrBlank()) {
+                        cookies.add(buildCookie("buvid3", b3, expiresAt))
+                    }
+                    if (b4.isNotBlank()) {
+                        cookies.add(buildCookie("buvid4", b4, expiresAt))
+                    }
+                    if (cookies.isNotEmpty()) {
+                        cookieManager.saveCookies(cookies.map { encodeCookieDirect(it) })
+                    }
+                }.onFailure {
+                    AppLog.w(tag, "ensureWebFingerprintCookies spi failed: ${it.message}")
                 }
-                if (b4.isNotBlank()) {
-                    cookies.add(buildCookie("buvid4", b4, expiresAt))
-                }
-                if (cookies.isNotEmpty()) {
-                    cookieManager.saveCookies(cookies.map { encodeCookieDirect(it) })
-                }
-            }.onFailure {
-                AppLog.w(tag, "ensureWebFingerprintCookies spi failed: ${it.message}")
             }
         }
     }
 
     private suspend fun ensureBiliTicket() {
-        val nowMs = System.currentTimeMillis()
-        val epochDay = nowMs / 86_400_000L
-        if (biliTicketCheckedDay == epochDay) return
-        biliTicketCheckedDay = epochDay
+        withContext(Dispatchers.IO) {
+            val nowMs = System.currentTimeMillis()
+            val epochDay = nowMs / 86_400_000L
+            if (biliTicketCheckedDay == epochDay) return@withContext
+            biliTicketCheckedDay = epochDay
 
-        runCatching {
-            val ts = (nowMs / 1000).toString()
-            val hexsign = hmacSha256Hex(key = BILI_TICKET_HMAC_KEY, message = "ts$ts")
-            val url = "https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket" +
-                "?key_id=$BILI_TICKET_KEY_ID&hexsign=$hexsign&context[ts]=$ts"
-            val request = okhttp3.Request.Builder()
-                .url(url)
-                .post(ByteArray(0).toRequestBody("application/json".toMediaType()))
-                .build()
-            val response = okHttpClient.newCall(request).execute()
-            val body = response.body?.string().orEmpty()
-            val json = JSONObject(body)
-            val data = json.optJSONObject("data") ?: return@runCatching
-            val ticket = data.optString("ticket", "").trim()
-            val createdAt = data.optLong("created_at", 0L)
-            val ttl = data.optLong("ttl", 0L)
-            if (ticket.isBlank() || createdAt <= 0L || ttl <= 0L) return@runCatching
-            val expiresSec = createdAt + ttl
-            val expiresAt = expiresSec * 1000L
-            cookieManager.saveCookies(
-                listOf(
-                    buildCookie("bili_ticket", ticket, expiresAt),
-                    buildCookie("bili_ticket_expires", expiresSec.toString(), expiresAt)
-                ).map { encodeCookieDirect(it) }
-            )
-        }.onFailure {
-            AppLog.w(tag, "ensureBiliTicket failed: ${it.message}")
+            runCatching {
+                val ts = (nowMs / 1000).toString()
+                val hexsign = hmacSha256Hex(key = BILI_TICKET_HMAC_KEY, message = "ts$ts")
+                val url = "https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket" +
+                    "?key_id=$BILI_TICKET_KEY_ID&hexsign=$hexsign&context[ts]=$ts"
+                val request = okhttp3.Request.Builder()
+                    .url(url)
+                    .post(ByteArray(0).toRequestBody("application/json".toMediaType()))
+                    .build()
+                val response = okHttpClient.newCall(request).execute()
+                val body = response.body?.string().orEmpty()
+                val json = JSONObject(body)
+                val data = json.optJSONObject("data") ?: return@runCatching
+                val ticket = data.optString("ticket", "").trim()
+                val createdAt = data.optLong("created_at", 0L)
+                val ttl = data.optLong("ttl", 0L)
+                if (ticket.isBlank() || createdAt <= 0L || ttl <= 0L) return@runCatching
+                val expiresSec = createdAt + ttl
+                val expiresAt = expiresSec * 1000L
+                cookieManager.saveCookies(
+                    listOf(
+                        buildCookie("bili_ticket", ticket, expiresAt),
+                        buildCookie("bili_ticket_expires", expiresSec.toString(), expiresAt)
+                    ).map { encodeCookieDirect(it) }
+                )
+            }.onFailure {
+                AppLog.w(tag, "ensureBiliTicket failed: ${it.message}")
+            }
         }
     }
 
     private suspend fun ensureBuvidActiveOncePerDay() {
-        val midStr = cookieManager.getCookieValue("DedeUserID")?.trim().orEmpty()
-        val mid = midStr.toLongOrNull()?.takeIf { it > 0 } ?: return
-        val epochDay = System.currentTimeMillis() / 86_400_000L
-        if (buvidActivatedMid == mid && buvidActivatedDay == epochDay) return
+        withContext(Dispatchers.IO) {
+            val midStr = cookieManager.getCookieValue("DedeUserID")?.trim().orEmpty()
+            val mid = midStr.toLongOrNull()?.takeIf { it > 0 } ?: return@withContext
+            val epochDay = System.currentTimeMillis() / 86_400_000L
+            if (buvidActivatedMid == mid && buvidActivatedDay == epochDay) return@withContext
 
-        runCatching {
-            val rand = ByteArray(32 + 8 + 4)
-            SecureRandom().nextBytes(rand)
-            rand[32] = 0; rand[33] = 0; rand[34] = 0; rand[35] = 0
-            rand[36] = 73; rand[37] = 69; rand[38] = 78; rand[39] = 68
-            val tail = ByteArray(4)
-            SecureRandom().nextBytes(tail)
-            System.arraycopy(tail, 0, rand, 40, 4)
-            val randPngEnd = Base64.encodeToString(rand, Base64.NO_WRAP)
+            runCatching {
+                val rand = ByteArray(32 + 8 + 4)
+                SecureRandom().nextBytes(rand)
+                rand[32] = 0; rand[33] = 0; rand[34] = 0; rand[35] = 0
+                rand[36] = 73; rand[37] = 69; rand[38] = 78; rand[39] = 68
+                val tail = ByteArray(4)
+                SecureRandom().nextBytes(tail)
+                System.arraycopy(tail, 0, rand, 40, 4)
+                val randPngEnd = Base64.encodeToString(rand, Base64.NO_WRAP)
 
-            val jsonData = JSONObject()
-                .put("3064", 1)
-                .put("39c8", "333.1387.fp.risk")
-                .put("3c43", JSONObject().put("adca", "Linux").put("bfe9", randPngEnd.takeLast(50)))
-                .toString()
+                val jsonData = JSONObject()
+                    .put("3064", 1)
+                    .put("39c8", "333.1387.fp.risk")
+                    .put("3c43", JSONObject().put("adca", "Linux").put("bfe9", randPngEnd.takeLast(50)))
+                    .toString()
 
-            val payload = JSONObject().put("payload", jsonData).toString()
+                val payload = JSONObject().put("payload", jsonData).toString()
 
-            val cookieHeader = buildList {
-                listOf("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid", "buvid3").forEach { name ->
-                    val value = cookieManager.getCookieValue(name)?.takeIf { it.isNotBlank() } ?: return@forEach
-                    add("$name=$value")
+                val cookieHeader = buildList {
+                    listOf("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid", "buvid3").forEach { name ->
+                        val value = cookieManager.getCookieValue(name)?.takeIf { it.isNotBlank() } ?: return@forEach
+                        add("$name=$value")
+                    }
+                }.joinToString("; ")
+
+                val request = okhttp3.Request.Builder()
+                    .url("https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi")
+                    .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .header("Content-Type", "application/json")
+                    .header("env", "prod")
+                    .header("app-key", "android64")
+                    .header("x-bili-aurora-zone", "sh001")
+                    .header("x-bili-mid", mid.toString())
+                    .apply {
+                        genAuroraEid(mid)?.let { header("x-bili-aurora-eid", it) }
+                    }
+                    .header("Referer", "https://www.bilibili.com")
+                    .header("Cookie", cookieHeader)
+                    .build()
+
+                okHttpClient.newCall(request).execute().use { resp ->
+                    if (resp.isSuccessful) {
+                        buvidActivatedMid = mid
+                        buvidActivatedDay = epochDay
+                    }
                 }
-            }.joinToString("; ")
-
-            val request = okhttp3.Request.Builder()
-                .url("https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi")
-                .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
-                .header("Content-Type", "application/json")
-                .header("env", "prod")
-                .header("app-key", "android64")
-                .header("x-bili-aurora-zone", "sh001")
-                .header("x-bili-mid", mid.toString())
-                .apply {
-                    genAuroraEid(mid)?.let { header("x-bili-aurora-eid", it) }
-                }
-                .header("Referer", "https://www.bilibili.com")
-                .header("Cookie", cookieHeader)
-                .build()
-
-            okHttpClient.newCall(request).execute().use { resp ->
-                if (resp.isSuccessful) {
-                    buvidActivatedMid = mid
-                    buvidActivatedDay = epochDay
-                }
+            }.onFailure {
+                AppLog.w(tag, "ensureBuvidActiveOncePerDay failed: ${it.message}")
             }
-        }.onFailure {
-            AppLog.w(tag, "ensureBuvidActiveOncePerDay failed: ${it.message}")
         }
     }
 

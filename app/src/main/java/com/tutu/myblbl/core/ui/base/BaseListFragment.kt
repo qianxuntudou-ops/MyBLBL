@@ -1,5 +1,6 @@
 package com.tutu.myblbl.core.ui.base
 
+import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -31,6 +32,16 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
     protected val loadMoreThreshold = 12
     protected open val autoLoad: Boolean = true
     protected open val enableSwipeRefresh: Boolean = true
+    private var pendingReturnRestoreAttempts = 0
+    private var pendingLayoutState: Parcelable? = null
+    private var restorePosted = false
+    private val restoreObserver = object : RecyclerView.AdapterDataObserver() {
+        override fun onChanged() = schedulePendingReturnRestore()
+        override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = schedulePendingReturnRestore()
+        override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = schedulePendingReturnRestore()
+        override fun onItemRangeChanged(positionStart: Int, itemCount: Int) = schedulePendingReturnRestore()
+        override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) = schedulePendingReturnRestore()
+    }
 
     abstract fun createAdapter(): BaseAdapter<MODEL, *>
     open fun loadData(page: Int) {}
@@ -43,6 +54,7 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
         recyclerView = binding.recyclerView
         adapter = createAdapter()
         recyclerView?.adapter = adapter
+        adapter?.registerAdapterDataObserver(restoreObserver)
         layoutManager = createLayoutManager()
         recyclerView?.layoutManager = layoutManager
         if (layoutManager is WrapContentGridLayoutManager) {
@@ -74,6 +86,16 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
         if (autoLoad) {
             refresh()
         }
+    }
+
+    override fun onPause() {
+        captureListStateForReturnRestore()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        schedulePendingReturnRestore()
     }
 
     private fun setupSwipeRefresh() {
@@ -145,6 +167,23 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
                     "${javaClass.simpleName}.focusPrimaryContent restoreFocusedView: handled=$handled pos=$pos view=${describeView(fv)}"
                 )
                 return handled
+            }
+        }
+
+        val rememberedPosition = adp.getRememberedPosition()
+        if (rememberedPosition != RecyclerView.NO_POSITION && adp.contentCount() > 0) {
+            val boundedPosition = rememberedPosition.coerceIn(0, adp.contentCount() - 1)
+            val restoreResult = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
+                recyclerView = rv,
+                position = boundedPosition,
+                scrollIfMissing = false
+            )
+            if (restoreResult.handled || restoreResult.deferred) {
+                AppLog.d(
+                    TAG,
+                    "${javaClass.simpleName}.focusPrimaryContent remembered: handled=${restoreResult.handled} deferred=${restoreResult.deferred} pos=$boundedPosition"
+                )
+                return true
             }
         }
 
@@ -232,11 +271,15 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
     }
 
     override fun onDestroyView() {
+        adapter?.unregisterAdapterDataObserver(restoreObserver)
         adapter?.clear()
         adapter = null
         layoutManager = null
         swipeRefreshLayout = null
         recyclerView = null
+        pendingReturnRestoreAttempts = 0
+        pendingLayoutState = null
+        restorePosted = false
         super.onDestroyView()
     }
 
@@ -256,5 +299,79 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
             current = current.parent as? View
         }
         return false
+    }
+
+    protected fun isPendingReturnRestore(): Boolean = pendingReturnRestoreAttempts > 0
+
+    private fun captureListStateForReturnRestore() {
+        val rv = recyclerView ?: return
+        val lm = layoutManager ?: return
+        val adp = adapter ?: return
+        if (!isAdded || view == null || adp.contentCount() == 0) {
+            return
+        }
+        pendingLayoutState = lm.onSaveInstanceState()
+        pendingReturnRestoreAttempts = 2
+
+        val currentFocusedView = activity?.currentFocus
+        val currentFocusedChild = currentFocusedView?.let { findRecyclerViewChild(rv, it) }
+        val focusedPosition = currentFocusedChild?.let(rv::getChildAdapterPosition)
+        if (currentFocusedView != null && focusedPosition != null && focusedPosition != RecyclerView.NO_POSITION) {
+            adp.rememberItemInteraction(currentFocusedView, focusedPosition)
+            return
+        }
+
+        if (adp.getRememberedPosition() != RecyclerView.NO_POSITION) {
+            return
+        }
+        val anchorPosition = lm.findFirstVisibleItemPosition()
+        if (anchorPosition == RecyclerView.NO_POSITION) {
+            return
+        }
+        rv.findViewHolderForAdapterPosition(anchorPosition)?.itemView?.let { anchorView ->
+            adp.rememberItemInteraction(anchorView, anchorPosition)
+        }
+    }
+
+    private fun schedulePendingReturnRestore() {
+        val rv = recyclerView ?: return
+        if (pendingReturnRestoreAttempts <= 0 || restorePosted || !isAdded || view == null) {
+            return
+        }
+        restorePosted = true
+        rv.post {
+            restorePosted = false
+            restorePendingReturnState()
+        }
+    }
+
+    private fun restorePendingReturnState() {
+        val rv = recyclerView ?: return
+        val adp = adapter ?: return
+        if (pendingReturnRestoreAttempts <= 0 || !isAdded || view == null) {
+            return
+        }
+        pendingReturnRestoreAttempts--
+        pendingLayoutState?.let { state ->
+            rv.layoutManager?.onRestoreInstanceState(state)
+        }
+
+        val focusedView = adp.focusedView
+        if (focusedView != null && focusedView.isAttachedToWindow && focusedView.visibility == View.VISIBLE) {
+            focusedView.requestFocus()
+        } else {
+            val rememberedPosition = adp.getRememberedPosition()
+            if (rememberedPosition != RecyclerView.NO_POSITION && adp.contentCount() > 0) {
+                RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
+                    recyclerView = rv,
+                    position = rememberedPosition.coerceIn(0, adp.contentCount() - 1),
+                    scrollIfMissing = false
+                )
+            }
+        }
+
+        if (pendingReturnRestoreAttempts <= 0) {
+            pendingLayoutState = null
+        }
     }
 }

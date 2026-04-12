@@ -80,7 +80,6 @@ internal class DanmakuSystem(context: DanmakuContext) : DanmakuEntitySystem(cont
 
       if (currentConfig.screenPart != config.screenPart ||
         currentConfig.allowOverlap != config.allowOverlap) {
-        android.util.Log.d("DM_SETTING", "[DanmakuSystem] screenPart ${currentConfig.screenPart} -> ${config.screenPart}, allowOverlap ${currentConfig.allowOverlap} -> ${config.allowOverlap}")
         config.updateLayout()
         config.updateVisibility()
         config.updateRetainer()

@@ -62,7 +62,6 @@ internal class AkTopRetainer(
     val topPos: Int
     val visibility: Boolean
     if (needRelayout && !isRunning) {
-      android.util.Log.d("DM_SETTING", "[AkTopRetainer] layout: needRelayout=true, range=[${ranges.start}..${ranges.end}], itemHeight=${drawState.height.toInt()}, endRatio=$endRatio")
       var holder = ranges.find(drawState.height.toInt()) {
         it == null || !it.willCollision(
           drawItem,
@@ -91,7 +90,6 @@ internal class AkTopRetainer(
     } else {
       visibility = drawState.visibility
       topPos = drawItem.drawState.positionY.toInt()
-      android.util.Log.d("DM_SETTING", "[AkTopRetainer] layout: SKIP relayout, needRelayout=$needRelayout, isRunning=$isRunning, topPos=$topPos, range=[${ranges.start}..${ranges.end}]")
     }
 
     drawState.layoutGeneration = config.layoutGeneration

@@ -111,9 +111,10 @@ class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                 }
             }
         })
-        swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(binding.recyclerView) {
-            refresh()
-        }
+        swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(
+            recyclerView = binding.recyclerView,
+            onRefresh = { refresh() }
+        )
     }
 
     override fun initData() {
@@ -243,7 +244,7 @@ class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         if (!isAdded || view == null || isLoading) {
             return
         }
-        if (adapter.itemCount == 0 || System.currentTimeMillis() - lastRefreshTime >= 15 * 60 * 1000L) {
+        if (adapter.itemCount == 0) {
             currentPage = 1
             hasMore = true
             loadData()

@@ -117,10 +117,8 @@ class MyPlayerDanmakuController(
      */
     fun applySettings(snapshot: SettingsSnapshot) {
         if (lastSettingsSnapshot == snapshot) {
-            android.util.Log.d("DM_SETTING", "applySettings: SKIPPED (same snapshot), screenArea=${snapshot.screenArea}")
             return
         }
-        android.util.Log.d("DM_SETTING", "applySettings: screenArea=${snapshot.screenArea}, old screenPart=${danmakuConfig.screenPart}")
         lastSettingsSnapshot = snapshot
         val normalizedSmartFilterLevel = snapshot.smartFilterLevel.normalizeSmartFilterLevel()
         val durationMs = snapshot.speed.toDanmakuDurationMs()
@@ -132,7 +130,6 @@ class MyPlayerDanmakuController(
             rollingDurationMs = durationMs,
             screenPart = snapshot.screenArea.toDanmakuScreenPart()
         )
-        android.util.Log.d("DM_SETTING", "applySettings: newConfig.screenPart=${newConfig.screenPart}, old=${danmakuConfig.screenPart}, equal=${danmakuConfig == newConfig}")
         val filterChanged = applyTypeFilterState(
             config = newConfig,
             type = DanmakuItemData.DANMAKU_MODE_CENTER_TOP,
@@ -274,6 +271,11 @@ class MyPlayerDanmakuController(
         danmakuPlayer = DanmakuPlayer(SimpleRenderer()).also { player ->
             player.bindView(danmakuView)
             player.updateConfig(danmakuConfig)
+            val viewWidth = danmakuView.measuredWidth
+            val viewHeight = danmakuView.measuredHeight
+            if (viewWidth > 0 && viewHeight > 0) {
+                player.notifyDisplayerSizeChanged(viewWidth, viewHeight)
+            }
             if (danmakuData.isNotEmpty()) {
                 player.updateData(danmakuData)
             }
@@ -485,10 +487,8 @@ class MyPlayerDanmakuController(
 
     private fun updateConfig(newConfig: DanmakuConfig) {
         if (danmakuConfig == newConfig) {
-            android.util.Log.d("DM_SETTING", "updateConfig: SKIPPED (equal), screenPart=${danmakuConfig.screenPart}")
             return
         }
-        android.util.Log.d("DM_SETTING", "updateConfig: APPLYING screenPart ${danmakuConfig.screenPart} -> ${newConfig.screenPart}, retainerGen ${danmakuConfig.retainerGeneration}->${newConfig.retainerGeneration}, layoutGen ${danmakuConfig.layoutGeneration}->${newConfig.layoutGeneration}")
         danmakuConfig = newConfig
         danmakuPlayer?.updateConfig(newConfig)
     }
@@ -697,15 +697,15 @@ class MyPlayerDanmakuController(
 
     private fun Int.toDanmakuDurationMs(): Long {
         return when (this) {
-            1 -> 7000L
-            2 -> 6000L
-            3 -> 5000L
-            5 -> 3200L
-            6 -> 2600L
-            7 -> 2200L
-            8 -> 1800L
-            9 -> 1200L
-            else -> 3800L
+            1 -> 12000L
+            2 -> 10200L
+            3 -> 8400L
+            5 -> 6000L
+            6 -> 4800L
+            7 -> 3840L
+            8 -> 3000L
+            9 -> 2160L
+            else -> 6600L
         }
     }
 

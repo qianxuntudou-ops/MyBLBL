@@ -15,6 +15,7 @@ import com.tutu.myblbl.core.ui.image.ImageLoader
 
 class DynamicUpAdapter(
     private val onItemClick: (FollowingModel) -> Unit,
+    private val onItemFocused: (() -> Unit)? = null,
     private val onLeftEdge: () -> Boolean = { false },
     private val onRightEdge: () -> Boolean = { false },
     private val debugTag: String? = null
@@ -89,6 +90,9 @@ class DynamicUpAdapter(
                     )
                 }
                 binding.textName.isSelected = hasFocus
+                if (hasFocus) {
+                    onItemFocused?.invoke()
+                }
             }
             binding.root.setOnKeyListener { _, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) {

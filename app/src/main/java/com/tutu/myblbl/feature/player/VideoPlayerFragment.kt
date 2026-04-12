@@ -55,7 +55,7 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
-private const val RISK_CONTROL_USER_HINT = "当前账号可能被风控,请前往设置里面进行验证"
+private const val RISK_CONTROL_USER_HINT = "账号被风控了，请到设置中完成验证"
 private val riskControlUserHintShown = AtomicBoolean(false)
 
 @UnstableApi

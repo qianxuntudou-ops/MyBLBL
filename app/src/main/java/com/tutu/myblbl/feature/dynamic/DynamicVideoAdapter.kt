@@ -91,6 +91,8 @@ class DynamicVideoAdapter(
                 }
                 val position = bindingAdapterPosition
                 if (position != NO_POSITION) {
+                    focusedView = binding.root
+                    onItemFocused(position)
                     onItemClick(getItem(position))
                 }
             }

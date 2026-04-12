@@ -47,7 +47,6 @@ class OrderedRangeList<T>(var start: Int, var end: Int, private val margin: Int 
   fun isEmpty() = holders.size == 1 && holders.firstOrNull()?.data == null
 
   fun update(start: Int, end: Int) {
-    android.util.Log.d("DM_SETTING", "OrderedRangeList.update: new range [$start..$end], old was [$this.start..$this.end]")
     this.start = start
     this.end = end
     clear()

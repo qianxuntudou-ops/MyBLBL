@@ -157,6 +157,11 @@ class FavoriteHistoryAdapter(
                     longPressTriggered = false
                     return@setOnClickListener
                 }
+                val position = bindingAdapterPosition
+                if (position != RecyclerView.NO_POSITION) {
+                    onItemFocused?.invoke(position)
+                    updateFocusedPosition(binding.root, position)
+                }
                 currentItem?.let(onItemClick)
             }
             binding.root.setOnKeyListener(keyListener)

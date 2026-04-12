@@ -9,7 +9,6 @@ import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
-import android.util.Log
 import android.widget.FrameLayout
 import android.widget.Toast
 import android.widget.ImageView
@@ -395,7 +394,6 @@ class MyPlayerSettingView @JvmOverloads constructor(
     }
 
     private fun handleDmMenuClick(itemId: Int) {
-        android.util.Log.d("DM_SETTING", "handleDmMenuClick: menuKey=${adapter.currentMenuKey}, itemId=$itemId")
         when (adapter.currentMenuKey) {
             ITEM_DM_ENABLE -> {
                 updateState { it.copy(dmEnabled = itemId == 0) }
@@ -416,9 +414,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
 
             ITEM_DM_AREA -> {
                 val selected = DM_AREA_VALUES.getOrNull(itemId) ?: return
-                android.util.Log.d("DM_SETTING", "DM_AREA selected=$selected, area=${selected.area}, itemId=$itemId")
                 updateState { it.copy(dmArea = selected.area) }
-                android.util.Log.d("DM_SETTING", "after updateState dmArea=${panelState.dmArea}")
                 onPlayerSettingInnerChange?.onDmScreenArea(selected.area)
             }
 

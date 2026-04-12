@@ -1,8 +1,6 @@
 package com.tutu.myblbl.feature.settings
 
 import android.app.Activity
-import android.content.ClipboardManager
-import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.text.format.DateFormat
@@ -11,9 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -727,7 +723,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER, null)
         appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, null)
         updateRiskControlStatus()
-        Toast.makeText(requireContext(), "验证成功，已写入风控票据", Toast.LENGTH_SHORT).show()
+        Toast.makeText(requireContext(), "验证成功", Toast.LENGTH_SHORT).show()
     }
 
     private fun showRiskControlDialog() {
@@ -741,74 +737,86 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         val savedAt = appSettings.getCachedString(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS)?.toLongOrNull() ?: -1L
 
         val msg = buildString {
-            append("用于处理播放接口返回 v_voucher 的人机验证（极验）。")
+            append("当账号被B站风控时，播放视频会触发人机验证。")
             append("\n\n")
-            append("当前票据：")
-            append(if (tokenOk) "有效" else "无/已过期")
+            append("验证状态：")
+            append(if (tokenOk) "已通过" else "未验证")
             if (tokenOk && expiresAt > 0L) {
                 append("\n")
-                append("过期时间：").append(DateFormat.format("yyyy-MM-dd HH:mm", expiresAt))
+                append("到期时间：").append(DateFormat.format("yyyy-MM-dd HH:mm", expiresAt))
             }
             append("\n\n")
-            append("v_voucher：")
-            append(if (hasVoucher) "已记录" else "暂无")
+            append("验证凭证：")
+            append(if (hasVoucher) "已保存" else "暂无")
             if (hasVoucher && savedAt > 0L) {
                 append("\n")
-                append("记录时间：").append(DateFormat.format("yyyy-MM-dd HH:mm", savedAt))
+                append("保存时间：").append(DateFormat.format("yyyy-MM-dd HH:mm", savedAt))
             }
         }
 
+        val px40 = resources.getDimensionPixelSize(R.dimen.px40)
+        val px35 = resources.getDimensionPixelSize(R.dimen.px35)
+        val px20 = resources.getDimensionPixelSize(R.dimen.px20)
+        val px18 = resources.getDimensionPixelSize(R.dimen.px18)
+        val px16 = resources.getDimensionPixelSize(R.dimen.px16)
+        val px14 = resources.getDimensionPixelSize(R.dimen.px14)
+        val px10 = resources.getDimensionPixelSize(R.dimen.px10)
+        val textColor = resources.getColor(R.color.textColor, null)
+
         val dialog = AppCompatDialog(requireContext(), R.style.DialogTheme)
-        dialog.setContentView(R.layout.dialog_setting_choice)
         dialog.setCanceledOnTouchOutside(true)
-        dialog.findViewById<View>(R.id.dialog_root)?.setOnClickListener { dialog.dismiss() }
 
-        val titleView = dialog.findViewById<TextView>(R.id.top_title)
-        val recyclerView = dialog.findViewById<RecyclerView>(R.id.recyclerView)
-        titleView?.text = "风控验证"
-        recyclerView?.visibility = View.GONE
-
-        val messageContainer = LinearLayout(requireContext()).apply {
+        val root = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
-            val px40 = resources.getDimensionPixelSize(R.dimen.px40)
-            val px20 = resources.getDimensionPixelSize(R.dimen.px20)
-            setPadding(px40, px20, px40, px20)
-            addView(TextView(requireContext()).apply {
-                text = msg
-                setTextColor(resources.getColor(R.color.textColor, null))
-                textSize = 12f
-                setLineSpacing(resources.getDimension(R.dimen.px6), 1f)
-            })
+            setBackgroundResource(R.drawable.dialog_background)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { dialog.dismiss() }
         }
 
-        val parent = recyclerView?.parent as? ViewGroup
-        if (parent != null && recyclerView != null) {
-            val params = recyclerView.layoutParams
-            parent.addView(messageContainer, parent.indexOfChild(recyclerView), params)
-            recyclerView.layoutParams = RecyclerView.LayoutParams(0, 0)
-        }
+        root.addView(TextView(requireContext()).apply {
+            text = "风控验证"
+            setTextColor(textColor)
+            textSize = 14f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(px40, px35, px40, px20)
+            layoutParams = lp
+        })
 
-        val actions = mutableListOf<String>()
-        actions.add("关闭")
-        actions.add("编辑凭证")
-        actions.add(if (hasVoucher) "开始验证" else "粘贴凭证")
+        root.addView(View(requireContext()).apply {
+            setBackgroundColor(0x1FFFFFFF)
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, resources.getDimensionPixelSize(R.dimen.px2))
+            lp.setMargins(px18, 0, px18, 0)
+            layoutParams = lp
+        })
+
+        root.addView(TextView(requireContext()).apply {
+            text = msg
+            setTextColor(textColor)
+            textSize = 12f
+            setLineSpacing(resources.getDimension(R.dimen.px6), 1f)
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(px40, px20, px40, 0)
+            layoutParams = lp
+        })
 
         val actionContainer = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.END
-            val px18 = resources.getDimensionPixelSize(R.dimen.px18)
-            val px30 = resources.getDimensionPixelSize(R.dimen.px30)
-            setPadding(px18, 0, px18, px18)
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(px18, px20, px18, px18)
+            layoutParams = lp
         }
 
+        val actions = listOf("关闭", "编辑凭证", if (hasVoucher) "开始验证" else "填写凭证")
+
         actions.forEachIndexed { index, actionText ->
-            val btn = TextView(requireContext()).apply {
+            actionContainer.addView(TextView(requireContext()).apply {
                 text = actionText
-                setTextColor(resources.getColor(R.color.textColor, null))
+                setTextColor(textColor)
                 textSize = 12f
-                val px30 = resources.getDimensionPixelSize(R.dimen.px30)
-                val px14 = resources.getDimensionPixelSize(R.dimen.px14)
-                setPadding(px30, px14, px30, px14)
+                setPadding(px16, px14, px16, px14)
                 isClickable = true
                 isFocusable = true
                 setOnClickListener {
@@ -828,69 +836,80 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
                     }
                 }
                 setBackgroundResource(R.drawable.bg_dialog_button)
-            }
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            val px10 = resources.getDimensionPixelSize(R.dimen.px10)
-            lp.setMargins(px10, 0, px10, 0)
-            actionContainer.addView(btn, lp)
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(px10, 0, px10, 0)
+            })
         }
 
-        (parent ?: messageContainer).addView(actionContainer)
-
+        root.addView(actionContainer)
+        dialog.setContentView(root)
         dialog.show()
     }
 
     private fun showGaiaVgateVoucherDialog() {
         val initial = appSettings.getCachedString(KEY_GAIA_VGATE_V_VOUCHER).orEmpty()
+
+        val px40 = resources.getDimensionPixelSize(R.dimen.px40)
+        val px35 = resources.getDimensionPixelSize(R.dimen.px35)
+        val px20 = resources.getDimensionPixelSize(R.dimen.px20)
+        val px18 = resources.getDimensionPixelSize(R.dimen.px18)
+        val px16 = resources.getDimensionPixelSize(R.dimen.px16)
+        val px14 = resources.getDimensionPixelSize(R.dimen.px14)
+        val px10 = resources.getDimensionPixelSize(R.dimen.px10)
+        val textColor = resources.getColor(R.color.textColor, null)
+
         val dialog = AppCompatDialog(requireContext(), R.style.DialogTheme)
-        dialog.setContentView(R.layout.dialog_setting_choice)
         dialog.setCanceledOnTouchOutside(true)
-        dialog.findViewById<View>(R.id.dialog_root)?.setOnClickListener { dialog.dismiss() }
 
-        val titleView = dialog.findViewById<TextView>(R.id.top_title)
-        val recyclerView = dialog.findViewById<RecyclerView>(R.id.recyclerView)
-        titleView?.text = "编辑验证凭证"
-        recyclerView?.visibility = View.GONE
+        val root = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.dialog_background)
+        }
 
-        val scrollView = ScrollView(requireContext())
+        root.addView(TextView(requireContext()).apply {
+            text = "编辑验证凭证"
+            setTextColor(textColor)
+            textSize = 14f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(px40, px35, px40, px20)
+            layoutParams = lp
+        })
+
+        root.addView(View(requireContext()).apply {
+            setBackgroundColor(0x1FFFFFFF)
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, resources.getDimensionPixelSize(R.dimen.px2))
+            lp.setMargins(px18, 0, px18, 0)
+            layoutParams = lp
+        })
+
         val editText = EditText(requireContext()).apply {
-            hint = "粘贴验证凭证"
+            hint = "请粘贴验证凭证"
             inputType = EditorInfo.TYPE_CLASS_TEXT
             setText(initial)
-            setTextColor(resources.getColor(R.color.textColor, null))
-            setHintTextColor(resources.getColor(R.color.textColor, null).let { 0x80FFFFFF.toInt() })
-            val px16 = resources.getDimensionPixelSize(R.dimen.px16)
+            setTextColor(textColor)
+            setHintTextColor(0x80FFFFFF.toInt())
             setPadding(px16, px16, px16, px16)
             setBackgroundResource(R.drawable.bg_search_input)
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, resources.getDimensionPixelSize(R.dimen.px150))
+            lp.setMargins(px40, px20, px40, 0)
+            layoutParams = lp
         }
-        val px40 = resources.getDimensionPixelSize(R.dimen.px40)
-        val px20 = resources.getDimensionPixelSize(R.dimen.px20)
-        scrollView.setPadding(px40, px20, px40, px20)
-        scrollView.addView(editText)
-
-        val parent = recyclerView?.parent as? ViewGroup
-        if (parent != null && recyclerView != null) {
-            val params = recyclerView.layoutParams
-            parent.addView(scrollView, parent.indexOfChild(recyclerView), params)
-            recyclerView.layoutParams = RecyclerView.LayoutParams(0, 0)
-        }
+        root.addView(editText)
 
         val actionContainer = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.END
-            val px18 = resources.getDimensionPixelSize(R.dimen.px18)
-            val px14 = resources.getDimensionPixelSize(R.dimen.px14)
-            setPadding(px18, px14, px18, px14)
+            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.setMargins(px18, px20, px18, px18)
+            layoutParams = lp
         }
 
         fun clearVoucher() {
             appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER, null)
             appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, null)
             updateRiskControlStatus()
-            Toast.makeText(requireContext(), "已清除验证凭证", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "凭证已清除", Toast.LENGTH_SHORT).show()
         }
 
         fun saveVoucher() {
@@ -899,66 +918,33 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
                 appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER, v)
                 appSettings.putStringAsync(KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS, System.currentTimeMillis().toString())
                 updateRiskControlStatus()
-                Toast.makeText(requireContext(), "已保存验证凭证", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "凭证已保存", Toast.LENGTH_SHORT).show()
             } else {
                 clearVoucher()
             }
             dialog.dismiss()
         }
 
-        val px10 = resources.getDimensionPixelSize(R.dimen.px10)
-        val px30 = resources.getDimensionPixelSize(R.dimen.px30)
-
-        val btnClear = TextView(requireContext()).apply {
-            text = "清除"
-            setTextColor(resources.getColor(R.color.textColor, null))
-            textSize = 12f
-            setPadding(px30, resources.getDimensionPixelSize(R.dimen.px14), px30, resources.getDimensionPixelSize(R.dimen.px14))
-            isClickable = true
-            isFocusable = true
-            setOnClickListener {
-                clearVoucher()
-                dialog.dismiss()
-            }
-            setBackgroundResource(R.drawable.bg_dialog_button)
+        listOf("清除" to { clearVoucher(); dialog.dismiss() },
+               "取消" to { dialog.dismiss() },
+               "保存" to { saveVoucher() }).forEach { (text, action) ->
+            actionContainer.addView(TextView(requireContext()).apply {
+                this.text = text
+                setTextColor(textColor)
+                textSize = 12f
+                setPadding(px16, px14, px16, px14)
+                isClickable = true
+                isFocusable = true
+                setOnClickListener { action() }
+                setBackgroundResource(R.drawable.bg_dialog_button)
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                setMargins(px10, 0, px10, 0)
+            })
         }
-        actionContainer.addView(btnClear, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(px10, 0, px10, 0) })
 
-        val btnCancel = TextView(requireContext()).apply {
-            text = "取消"
-            setTextColor(resources.getColor(R.color.textColor, null))
-            textSize = 12f
-            setPadding(px30, resources.getDimensionPixelSize(R.dimen.px14), px30, resources.getDimensionPixelSize(R.dimen.px14))
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { dialog.dismiss() }
-            setBackgroundResource(R.drawable.bg_dialog_button)
-        }
-        actionContainer.addView(btnCancel, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(px10, 0, px10, 0) })
-
-        val btnSave = TextView(requireContext()).apply {
-            text = "保存"
-            setTextColor(resources.getColor(R.color.textColor, null))
-            textSize = 12f
-            setPadding(px30, resources.getDimensionPixelSize(R.dimen.px14), px30, resources.getDimensionPixelSize(R.dimen.px14))
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { saveVoucher() }
-            setBackgroundResource(R.drawable.bg_dialog_button)
-        }
-        actionContainer.addView(btnSave, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { setMargins(px10, 0, px10, 0) })
-
-        (parent ?: scrollView).addView(actionContainer)
-
-        dialog.setOnShowListener {
-            editText.requestFocus()
-        }
+        root.addView(actionContainer)
+        dialog.setContentView(root)
+        dialog.setOnShowListener { editText.requestFocus() }
         dialog.show()
     }
 

@@ -80,7 +80,7 @@ class AppSettingsDataStore(private val context: Context) {
     }
 
     suspend fun putString(key: String, value: String?) {
-        cache[key] = value
+        if (value != null) cache[key] = value else cache.remove(key)
         dataStore.edit { prefs ->
             if (value != null) prefs[stringPreferencesKey(key)] = value
             else prefs.remove(stringPreferencesKey(key))
@@ -109,7 +109,7 @@ class AppSettingsDataStore(private val context: Context) {
     }
 
     fun putStringAsync(key: String, value: String?) {
-        cache[key] = value
+        if (value != null) cache[key] = value else cache.remove(key)
         scope.launch {
             dataStore.edit { prefs ->
                 if (value != null) prefs[stringPreferencesKey(key)] = value

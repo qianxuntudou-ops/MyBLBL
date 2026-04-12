@@ -59,6 +59,7 @@ class LaneItemAdapter(
 
         init {
             binding.clickView.setOnClickListener {
+                onItemFocused?.invoke(binding.clickView)
                 currentItem?.let(onItemClick)
             }
             binding.clickView.setOnFocusChangeListener { view, hasFocus ->

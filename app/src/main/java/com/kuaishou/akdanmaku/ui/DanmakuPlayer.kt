@@ -198,7 +198,6 @@ class DanmakuPlayer(renderer: DanmakuRenderer, dataSource: DataSource? = null) {
     this.danmakuView = danmakuView
     danmakuView.danmakuPlayer = this
     engine.context.displayer = danmakuView.displayer
-    notifyDisplayerSizeChanged(danmakuView.displayer.width, danmakuView.displayer.height)
     danmakuView.postInvalidate()
   }
 
@@ -309,7 +308,6 @@ class DanmakuPlayer(renderer: DanmakuRenderer, dataSource: DataSource? = null) {
 
   fun updateConfig(danmakuConfig: DanmakuConfig?) {
     config = danmakuConfig
-    Log.d(DanmakuEngine.TAG, "[DanmakuPlayer] updateConfig: screenPart=${danmakuConfig?.screenPart}, retainerGen=${danmakuConfig?.retainerGeneration}, layoutGen=${danmakuConfig?.layoutGeneration}")
     engine.updateConfig(danmakuConfig ?: return)
   }
 
@@ -352,17 +350,16 @@ class DanmakuPlayer(renderer: DanmakuRenderer, dataSource: DataSource? = null) {
       currentDisplayerHeight != height ||
       currentDisplayerSizeFactor != viewportSizeFactor) {
       val duration = clamp(
-        (DanmakuConfig.DEFAULT_DURATION * (viewportSizeFactor * width / PLAYER_WIDTH)).toLong(),
+        (config.rollingDurationMs * (viewportSizeFactor * width / PLAYER_WIDTH)).toLong(),
         MIN_DANMAKU_DURATION,
         MAX_DANMAKU_DURATION_HIGH_DENSITY
       )
-      if (config.rollingDurationMs != duration) {
-        config.rollingDurationMs = duration
+      if (config.durationMs != duration) {
+        config.durationMs = duration
         config.updateRetainer()
         config.updateLayout()
         config.updateVisibility()
       }
-      Log.d("XanaDanmaku", "[Factor] update rolling duration to $duration")
       currentDisplayerWidth = width
       currentDisplayerHeight = height
       currentDisplayerSizeFactor = viewportSizeFactor
@@ -384,10 +381,12 @@ class DanmakuPlayer(renderer: DanmakuRenderer, dataSource: DataSource? = null) {
         }
         NOTIFY_DISPLAYER_SIZE_CHANGE -> {
           val newConfig = engine.context.config
-          newConfig.updateLayout()
-          newConfig.updateMeasure()
-          newConfig.updateCache()
-          newConfig.updateRetainer()
+          if (started) {
+            newConfig.updateLayout()
+            newConfig.updateMeasure()
+            newConfig.updateCache()
+            newConfig.updateRetainer()
+          }
         }
       }
     }

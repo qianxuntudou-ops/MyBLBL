@@ -36,12 +36,17 @@ class HistoryVideoAdapter(
         setHasStableIds(true)
     }
 
-    fun setData(newItems: List<HistoryVideoModel>) {
+    fun setData(
+        newItems: List<HistoryVideoModel>,
+        onCommitted: (() -> Unit)? = null
+    ) {
         val deduplicated = newItems.distinctBy(::itemKey)
         focusedPosition = focusedPosition
             .takeIf { it != RecyclerView.NO_POSITION && it < deduplicated.size && hasActiveFocus() }
             ?: RecyclerView.NO_POSITION
-        submitList(deduplicated)
+        submitList(deduplicated) {
+            onCommitted?.invoke()
+        }
     }
 
     fun addData(newItems: List<HistoryVideoModel>) {
@@ -74,18 +79,8 @@ class HistoryVideoAdapter(
             progress = pageOrProgressMs.coerceAtLeast(0L) / 1000L,
             viewAt = System.currentTimeMillis() / 1000L
         )
-        if (index == 0) {
-            submitList(currentList.mapIndexed { i, v -> if (i == 0) updatedItem else v })
-            return
-        }
         val newList = currentList.toMutableList()
-        newList.removeAt(index)
-        newList.add(0, updatedItem)
-        if (focusedPosition == index) {
-            focusedPosition = 0
-        } else if (focusedPosition in 0 until index) {
-            focusedPosition += 1
-        }
+        newList[index] = updatedItem
         submitList(newList)
     }
 
@@ -94,6 +89,12 @@ class HistoryVideoAdapter(
     fun getItemsSnapshot(): List<HistoryVideoModel> = currentList.toList()
 
     fun findPositionByKey(key: String): Int = currentList.indexOfFirst { itemKey(it) == key }
+
+    fun clearFocusMemory() {
+        setFocusedState(focusedView, false)
+        focusedView = null
+        focusedPosition = RecyclerView.NO_POSITION
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = CellVideoBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -217,6 +218,11 @@ class HistoryVideoAdapter(
                 if (longPressTriggered) {
                     longPressTriggered = false
                     return@setOnClickListener
+                }
+                val position = bindingAdapterPosition
+                if (position != RecyclerView.NO_POSITION) {
+                    onItemFocused?.invoke(position)
+                    updateFocusedState(binding.root, position)
                 }
                 currentItem?.let(onItemClick)
             }

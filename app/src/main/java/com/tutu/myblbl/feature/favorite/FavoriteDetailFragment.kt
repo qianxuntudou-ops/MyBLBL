@@ -1,6 +1,7 @@
 package com.tutu.myblbl.feature.favorite
 
 import android.os.Bundle
+import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -56,6 +57,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
     private var lastFocusedPosition = RecyclerView.NO_POSITION
     private var pendingRestoreFocus = false
     private var hasRequestedInitialFocus = false
+    private var pendingListLayoutState: Parcelable? = null
 
     override fun getViewBinding(inflater: LayoutInflater, container: ViewGroup?): FragmentFavoriteDetailBinding {
         return FragmentFavoriteDetailBinding.inflate(inflater, container, false)
@@ -75,6 +77,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
                 if (video.aid != 0L || video.bvid.isNotEmpty()) {
                     lastFocusedPosition = favoriteAdapter.getFocusedPosition()
                     pendingRestoreFocus = true
+                    pendingListLayoutState = binding.recyclerViewVideos.layoutManager?.onSaveInstanceState()
                     VideoRouteNavigator.openHistory(
                         context = requireContext(),
                         historyVideo = item,
@@ -251,6 +254,10 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
         if (!isAdded) return
         binding.recyclerViewVideos.post {
             if (!isAdded) return@post
+            pendingListLayoutState?.let { state ->
+                binding.recyclerViewVideos.layoutManager?.onRestoreInstanceState(state)
+                pendingListLayoutState = null
+            }
             if (binding.recyclerViewVideos.isVisible && favoriteAdapter.itemCount > 0 && lastFocusedPosition != RecyclerView.NO_POSITION) {
                 val targetPosition = lastFocusedPosition.coerceIn(0, favoriteAdapter.itemCount - 1)
                 binding.recyclerViewVideos.scrollToPosition(targetPosition)

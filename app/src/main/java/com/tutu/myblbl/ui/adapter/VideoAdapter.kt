@@ -98,9 +98,13 @@ class VideoAdapter(
             focusDebugTag,
             { view, position, hasFocus ->
                 if (hasFocus) {
-                    focusedView = view
+                    rememberItemInteraction(view, position)
                     onItemFocused?.invoke(position)
                 }
+            },
+            { view, position ->
+                rememberItemInteraction(view, position)
+                onItemFocused?.invoke(position)
             },
             { blockedName -> removeBlockedItems(blockedName) }
         )
@@ -152,6 +156,7 @@ class VideoAdapter(
         onBottomEdgeDown: (() -> Boolean)?,
         private val focusDebugTag: String? = null,
         onFocusChange: ((View, Int, Boolean) -> Unit)? = null,
+        private val onItemInteracted: ((View, Int) -> Unit)? = null,
         private val onItemBlocked: ((String) -> Unit)? = null
     ) : androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root) {
 
@@ -210,6 +215,10 @@ class VideoAdapter(
                 if (longPressTriggered) {
                     longPressTriggered = false
                     return@setOnClickListener
+                }
+                val position = bindingAdapterPosition
+                if (position != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
+                    onItemInteracted?.invoke(binding.root, position)
                 }
                 currentVideo?.let { onItemClick(binding.root, it) }
             }

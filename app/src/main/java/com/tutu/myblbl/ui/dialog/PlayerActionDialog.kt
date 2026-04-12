@@ -65,6 +65,7 @@ class PlayerActionDialog(
                 runCatching {
                     videoRepository.like(aid, bvid, if (isLiked) 0 else 1)
                 }.onSuccess { response ->
+                    AppLog.d("PlayerAction", "like response: code=${response.code}, message=${response.message}")
                     if (response.isSuccess) {
                         isLiked = !isLiked
                         renderState()
@@ -74,9 +75,17 @@ class PlayerActionDialog(
                             Toast.LENGTH_SHORT
                         ).show()
                     } else {
-                        toast(response.message)
+                        if (isRiskControl(response.code, response.message)) {
+                            AppLog.w("PlayerAction", "like risk control detected: code=${response.code}, message=${response.message}")
+                            showRiskControlHint()
+                        } else {
+                            toast(response.message)
+                        }
                     }
-                }.onFailure { toast(it.message ?: "操作失败") }
+                }.onFailure {
+                    AppLog.e("PlayerAction", "like failed", it)
+                    toast(it.message ?: "操作失败")
+                }
             }
         }
 
@@ -90,14 +99,23 @@ class PlayerActionDialog(
                 runCatching {
                     videoRepository.giveCoin(aid, bvid, multiply = selectedCoinMultiply, selectLike = 0)
                 }.onSuccess { response ->
+                    AppLog.d("PlayerAction", "coin response: code=${response.code}, message=${response.message}")
                     if (response.isSuccess) {
                         isCoined = true
                         renderState()
                         toast("投币成功")
                     } else {
-                        toast(response.message)
+                        if (isRiskControl(response.code, response.message)) {
+                            AppLog.w("PlayerAction", "coin risk control detected: code=${response.code}, message=${response.message}")
+                            showRiskControlHint()
+                        } else {
+                            toast(response.message)
+                        }
                     }
-                }.onFailure { toast(it.message ?: "操作失败") }
+                }.onFailure {
+                    AppLog.e("PlayerAction", "coin failed", it)
+                    toast(it.message ?: "操作失败")
+                }
             }
         }
         binding.buttonCoin.setOnLongClickListener {
@@ -127,7 +145,11 @@ class PlayerActionDialog(
                             else context.getString(R.string.collection)
                         )
                     } else {
-                        toast(response.errorMessage)
+                        if (isRiskControl(response.code, response.errorMessage)) {
+                            showRiskControlHint()
+                        } else {
+                            toast(response.errorMessage)
+                        }
                     }
                 }.onFailure { toast(it.message ?: "操作失败") }
             }
@@ -154,7 +176,11 @@ class PlayerActionDialog(
                         renderState()
                         toast(context.getString(R.string.triple_action))
                     } else {
-                        toast(response.errorMessage)
+                        if (isRiskControl(response.code, response.message)) {
+                            showRiskControlHint()
+                        } else {
+                            toast(response.errorMessage)
+                        }
                     }
                 }.onFailure { 
                     AppLog.e("PlayerActionDialog", "tripleAction failed", it)
@@ -374,6 +400,16 @@ class PlayerActionDialog(
             }
         }
         return super.onKeyLongPress(keyCode, event)
+    }
+
+    private fun isRiskControl(code: Int, message: String?): Boolean {
+        if (code == -352 || code == -412 || code == -351) return true
+        val msg = message.orEmpty()
+        return msg.contains("风控") || msg.contains("拦截") || msg.contains("异常") || msg.contains("非法")
+    }
+
+    private fun showRiskControlHint() {
+        Toast.makeText(context, "账号被风控了，请到B站官方App或网页端完成验证后再试", Toast.LENGTH_LONG).show()
     }
 
     private companion object {

@@ -11,8 +11,19 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
     internal val items = ArrayList<MODEL>()
     internal var showLoadMore = true
     internal var focusedView: View? = null
+    internal var rememberedPosition: Int = RecyclerView.NO_POSITION
 
     fun contentCount(): Int = items.size
+
+    fun getRememberedPosition(): Int = rememberedPosition
+
+    fun rememberItemInteraction(view: View, position: Int) {
+        if (position == RecyclerView.NO_POSITION) {
+            return
+        }
+        focusedView = view
+        rememberedPosition = position
+    }
 
     fun setShowLoadMore(show: Boolean) {
         if (showLoadMore == show) {
@@ -51,6 +62,9 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
     fun setData(data: List<MODEL>) {
         val oldItemCount = itemCount
         focusedView = null
+        rememberedPosition = rememberedPosition
+            .takeIf { it != RecyclerView.NO_POSITION && it < data.size }
+            ?: RecyclerView.NO_POSITION
         items.clear()
         items.addAll(data)
         val newItemCount = itemCount
@@ -77,6 +91,7 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
 
     fun clear() {
         focusedView = null
+        rememberedPosition = RecyclerView.NO_POSITION
         items.clear()
     }
 

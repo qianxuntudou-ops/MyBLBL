@@ -127,8 +127,18 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
                 binding.recyclerViewFavorite.layoutParams = params
             }
         }
-        swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(binding.recyclerViewFavorite) {
+        swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(binding.recyclerViewFavorite, onRefresh = {
             refresh()
+        }) {
+            post {
+                val topOffset = if (embedded) {
+                    resources.getDimensionPixelSize(R.dimen.px20)
+                } else {
+                    binding.buttonBack.bottom + resources.getDimensionPixelSize(R.dimen.px20)
+                }
+                val endOffset = topOffset + resources.getDimensionPixelSize(R.dimen.px120)
+                setProgressViewOffset(false, topOffset, endOffset)
+            }
         }
     }
 
@@ -232,7 +242,7 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
 
     private fun hydrateMissingFolderCovers(folders: List<com.tutu.myblbl.model.favorite.FavoriteFolderModel>) {
         val pendingFolders = folders.filter { folder ->
-            folder.id > 0L && folder.mediaCount > 0 && folder.displayImageUrl.isBlank()
+            folder.id > 0L && folder.mediaCount > 0 && folder.cover.isBlank()
         }
         if (pendingFolders.isEmpty()) {
             return
@@ -248,10 +258,11 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
                             return@onSuccess
                         }
                         val detail = response.data
-                        val coverUrl = detail?.info?.cover
-                            ?.takeIf { it.isNotBlank() }
-                            ?: detail?.medias?.firstOrNull()?.cover?.takeIf { it.isNotBlank() }
-                            ?: detail?.medias?.firstOrNull()?.covers?.firstOrNull()?.takeIf { it.isNotBlank() }
+                        val latestMedia = detail?.medias
+                            ?.maxByOrNull { maxOf(it.favTime, it.viewAt) }
+                        val coverUrl = detail?.info?.cover?.takeIf { it.isNotBlank() }
+                            ?: latestMedia?.cover?.takeIf { it.isNotBlank() }
+                            ?: latestMedia?.covers?.firstOrNull()?.takeIf { it.isNotBlank() }
                         if (!coverUrl.isNullOrBlank()) {
                             saveFolderCover(folder.id, coverUrl)
                             adapter.updateCover(folder.id, coverUrl)
@@ -274,7 +285,7 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
         if (!isAdded || view == null) {
             return
         }
-        if (adapter.itemCount == 0 || System.currentTimeMillis() - lastRefreshTime >= 15 * 60 * 1000L) {
+        if (adapter.itemCount == 0) {
             loadFavoriteFolders()
         }
     }

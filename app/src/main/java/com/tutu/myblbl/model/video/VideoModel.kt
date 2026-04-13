@@ -149,6 +149,7 @@ data class VideoModel(
 ) : Serializable {
     val isChargingExclusive: Boolean
         get() = isUpowerExclusive || isChargingArc || elecArcType == 1 || rights?.elec == 1
+                || (!isPgc && rights?.autoplay == 0)
     val coverUrl: String
         get() = pic.ifEmpty { cover }
 
@@ -279,7 +280,15 @@ data class Stat(
 
 data class VideoRights(
     @SerializedName("elec")
-    val elec: Int = 0
+    val elec: Int = 0,
+    @SerializedName("autoplay")
+    val autoplay: Int = 1,
+    @SerializedName("pay")
+    val pay: Int = 0,
+    @SerializedName("ugc_pay")
+    val ugcPay: Int = 0,
+    @SerializedName("arc_pay")
+    val arcPay: Int = 0
 ) : Serializable
 
 data class Dimension(

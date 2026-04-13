@@ -54,8 +54,19 @@ data class HistoryVideoModel(
     @SerializedName("live_status")
     val liveStatus: Int = 0,
     @SerializedName("cnt_info")
-    val cntInfo: FolderStatModel? = null
+    val cntInfo: FolderStatModel? = null,
+
+    @SerializedName("is_upower_exclusive")
+    val isUpowerExclusive: Boolean = false,
+
+    @SerializedName("elec_arc_type")
+    val elecArcType: Int = 0,
+
+    @SerializedName("rights")
+    val rights: HistoryVideoRights? = null
 ) : Serializable {
+    val isChargingExclusive: Boolean
+        get() = isUpowerExclusive || elecArcType == 1 || rights?.autoplay == 0
     fun toVideoModel(): VideoModel {
         val historyInfo = history
         val aid = historyInfo?.oid ?: 0L
@@ -82,3 +93,10 @@ data class HistoryVideoModel(
         )
     }
 }
+
+data class HistoryVideoRights(
+    @SerializedName("autoplay")
+    val autoplay: Int = 1,
+    @SerializedName("elec")
+    val elec: Int = 0
+)

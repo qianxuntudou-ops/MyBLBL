@@ -19,9 +19,9 @@ class VideoCodecSupportTest {
     }
 
     @Test
-    fun fallsBackToAv1ThenAvcWhenHevcHardwareIsMissing() {
+    fun honorsPreferredCodecEvenWithoutHardwareSupport() {
         assertEquals(
-            listOf(VideoCodecEnum.AV1, VideoCodecEnum.AVC, VideoCodecEnum.HEVC),
+            listOf(VideoCodecEnum.HEVC, VideoCodecEnum.AV1, VideoCodecEnum.AVC),
             VideoCodecSupport.orderCandidates(
                 availableCodecs = listOf(VideoCodecEnum.AVC, VideoCodecEnum.HEVC, VideoCodecEnum.AV1),
                 preferredCodec = VideoCodecEnum.HEVC,
@@ -31,9 +31,9 @@ class VideoCodecSupportTest {
     }
 
     @Test
-    fun fallsBackToHevcThenAvcWhenAv1HardwareIsMissing() {
+    fun honorsPreferredCodecEvenWithoutHardwareSupport_av1() {
         assertEquals(
-            listOf(VideoCodecEnum.HEVC, VideoCodecEnum.AVC, VideoCodecEnum.AV1),
+            listOf(VideoCodecEnum.AV1, VideoCodecEnum.HEVC, VideoCodecEnum.AVC),
             VideoCodecSupport.orderCandidates(
                 availableCodecs = listOf(VideoCodecEnum.AVC, VideoCodecEnum.HEVC, VideoCodecEnum.AV1),
                 preferredCodec = VideoCodecEnum.AV1,
@@ -43,7 +43,7 @@ class VideoCodecSupportTest {
     }
 
     @Test
-    fun keepsSoftwareCodecAsLastResortWhenNoHardwareMatchExists() {
+    fun honorsPreferredCodecWhenNoHardwareSupportExists() {
         assertEquals(
             listOf(VideoCodecEnum.AV1, VideoCodecEnum.HEVC),
             VideoCodecSupport.orderCandidates(

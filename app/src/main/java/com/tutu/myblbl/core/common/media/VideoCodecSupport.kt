@@ -45,28 +45,30 @@ object VideoCodecSupport {
             return emptyList()
         }
 
+        if (preferredCodec != null && preferredCodec in uniqueAvailable) {
+            val rest = uniqueAvailable.filterTo(linkedSetOf()) { it != preferredCodec }
+            return listOf(preferredCodec) + orderByHardwareThenPriority(rest, hardwareSupportedCodecs)
+        }
+
+        return orderByHardwareThenPriority(uniqueAvailable, hardwareSupportedCodecs)
+    }
+
+    private fun orderByHardwareThenPriority(
+        codecs: Set<VideoCodecEnum>,
+        hardwareSupportedCodecs: Collection<VideoCodecEnum>
+    ): List<VideoCodecEnum> {
+        if (codecs.isEmpty()) return emptyList()
+
         val hardwareSupported = hardwareSupportedCodecs.toSet()
-        val hardwareAvailable = uniqueAvailable.filterTo(linkedSetOf<VideoCodecEnum>()) {
-            it in hardwareSupported
-        }
-        val softwareFallback = uniqueAvailable.filterTo(linkedSetOf<VideoCodecEnum>()) {
-            it !in hardwareAvailable
-        }
+        val hardwareAvailable = codecs.filterTo(linkedSetOf()) { it in hardwareSupported }
+        val softwareFallback = codecs.filterTo(linkedSetOf()) { it !in hardwareAvailable }
 
-        if (hardwareAvailable.isNotEmpty()) {
-            return orderWithinTier(
-                availableCodecs = hardwareAvailable,
-                preferredCodec = preferredCodec.takeIf { it in hardwareAvailable }
-            ) + orderWithinTier(
-                availableCodecs = softwareFallback,
-                preferredCodec = preferredCodec.takeIf { it in softwareFallback }
-            )
+        return if (hardwareAvailable.isNotEmpty()) {
+            orderWithinTier(hardwareAvailable, null) +
+                orderWithinTier(softwareFallback, null)
+        } else {
+            orderWithinTier(codecs, null)
         }
-
-        return orderWithinTier(
-            availableCodecs = uniqueAvailable,
-            preferredCodec = preferredCodec
-        )
     }
 
     private fun orderWithinTier(

@@ -94,7 +94,7 @@
         app:layout_constraintTop_toBottomOf="@+id/button_live"
         app:srcCompat="@drawable/tab_me"
         app:tint="?attr/tabBarNormal"/>
-    <androidx.appcompat.widget.AppCompatImageView
+    <com.tutu.myblbl.core.ui.image.AvatarBadgeView
         android:id="@+id/image_avatar"
         android:background="@drawable/tab_round_background"
         android:padding="@dimen/px10"

@@ -8,18 +8,19 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Toast
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
-import com.tutu.myblbl.databinding.CellVideoBinding
-import com.tutu.myblbl.model.live.LiveRoomItem
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.common.format.NumberUtils
 import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
+import com.tutu.myblbl.databinding.CellVideoBinding
+import com.tutu.myblbl.model.live.LiveRoomItem
+import com.tutu.myblbl.model.video.Owner
+import com.tutu.myblbl.model.video.VideoModel
+import com.tutu.myblbl.ui.dialog.VideoCardMenuDialog
 
 class LiveRoomAdapter(
     private val onItemClick: (LiveRoomItem) -> Unit,
@@ -47,8 +48,14 @@ class LiveRoomAdapter(
         holder.bind(getItem(position))
     }
 
-    private fun removeBlockedItems(blockedName: String) {
+    private fun removeItemsByAnchorName(blockedName: String) {
         val filtered = currentList.filter { !it.uname.equals(blockedName, ignoreCase = true) }
+        if (filtered.size == currentList.size) return
+        submitList(filtered)
+    }
+
+    private fun removeRoom(roomId: Long) {
+        val filtered = currentList.filter { it.roomId != roomId }
         if (filtered.size == currentList.size) return
         submitList(filtered)
     }
@@ -84,18 +91,21 @@ class LiveRoomAdapter(
             longPressTriggered = false
             longPressRunnable = Runnable {
                 val item = currentItem ?: return@Runnable
-                val anchorName = item.uname
-                if (anchorName.isNotBlank()) {
-                    longPressTriggered = true
-                    ContentFilter.addBlockedUpName(itemView.context, anchorName)
-                    Toast.makeText(
-                        itemView.context,
-                        itemView.context.getString(R.string.blocked_up_toast, anchorName),
-                        Toast.LENGTH_LONG
-                    ).show()
-                    AppLog.d("LiveRoomAdapter", "Blocked anchor: $anchorName")
-                    removeBlockedItems(anchorName)
-                }
+                longPressTriggered = true
+                AppLog.d(
+                    "LiveRoomAdapter",
+                    "show live dislike menu: roomId=${item.roomId}, uid=${item.uid}, uname=${item.uname}, title=${item.title.take(30)}"
+                )
+                VideoCardMenuDialog(
+                    context = itemView.context,
+                    video = item.toFeedbackVideoModel(),
+                    onDislikeVideo = {
+                        removeRoom(item.roomId)
+                    },
+                    onDislikeUp = { upName ->
+                        removeItemsByAnchorName(upName)
+                    }
+                ).show()
             }
             handler.postDelayed(longPressRunnable!!, longPressThreshold)
         }
@@ -152,6 +162,20 @@ class LiveRoomAdapter(
                 url = item.cover
             )
         }
+    }
+
+    private fun LiveRoomItem.toFeedbackVideoModel(): VideoModel {
+        return VideoModel(
+            title = title,
+            cover = cover,
+            goto = "live",
+            roomId = roomId,
+            owner = Owner(
+                mid = uid,
+                name = uname,
+                face = face
+            )
+        )
     }
 
     companion object {

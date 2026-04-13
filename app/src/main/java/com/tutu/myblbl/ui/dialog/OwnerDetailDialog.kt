@@ -90,6 +90,9 @@ class OwnerDetailDialog(
             placeholder = R.drawable.default_avatar,
             error = R.drawable.default_avatar
         )
+        binding.imageAvatar.setBadge(
+            officialVerifyType = owner.officialVerify?.type ?: -1
+        )
 
         val isSelf = sessionGateway.getUserInfo()?.mid == owner.mid
         binding.buttonFollow.isVisible = !isSelf

@@ -205,6 +205,7 @@ class DynamicVideoAdapter(
             binding.textPlayCount.text = NumberUtils.formatCount(item.viewCount)
             binding.textDanmakuCount.text = NumberUtils.formatCount(item.danmakuCount)
             binding.textDuration.text = NumberUtils.formatDuration(item.durationValue.coerceAtLeast(0L))
+            binding.textChargeBadge.visibility = if (item.isChargingExclusive) View.VISIBLE else View.GONE
         }
 
         private fun formatPublishTime(video: VideoModel): String {

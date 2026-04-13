@@ -266,12 +266,18 @@ interface ApiService {
         @Query("ps") ps: Int = 20
     ): BaseResponse<HistoryListResponse>
 
-    @POST("x/feed/dislike")
+    @POST("x/web-interface/feedback/dislike")
     @FormUrlEncoded
     suspend fun dislikeFeed(
-        @Field("aid") aid: Long,
-        @Field("reason_id") reasonId: Int,
-        @Field("csrf") csrf: String
+        @QueryMap params: Map<String, String>,
+        @FieldMap form: Map<String, String>
+    ): BaseBaseResponse
+
+    @POST("x/web-interface/feedback/dislike/cancel")
+    @FormUrlEncoded
+    suspend fun cancelDislikeFeed(
+        @QueryMap params: Map<String, String>,
+        @FieldMap form: Map<String, String>
     ): BaseBaseResponse
 
     @GET("x/v2/history/toview")
@@ -280,7 +286,7 @@ interface ApiService {
     @POST("x/v2/history/toview/add")
     @FormUrlEncoded
     suspend fun addWatchLater(
-        @Field("aid") aid: Long,
+        @Field("aid") aid: Long?,
         @Field("bvid") bvid: String?,
         @Field("csrf") csrf: String
     ): BaseBaseResponse

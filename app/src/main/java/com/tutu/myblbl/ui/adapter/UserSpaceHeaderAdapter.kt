@@ -194,6 +194,12 @@ class UserSpaceHeaderAdapter(
                 placeholder = R.drawable.default_avatar,
                 error = R.drawable.default_avatar
             )
+            binding.userSpaceTop.imageAvatar.setBadge(
+                officialVerifyType = if (state.userInfo?.official?.role != null && state.userInfo.official.role > 0) state.userInfo.official.type else -1,
+                vipStatus = state.userInfo?.vip?.vipStatus ?: 0,
+                vipType = state.userInfo?.vip?.vipType ?: 0,
+                vipAvatarSubscript = state.userInfo?.vip?.avatarSubscript ?: 0
+            )
 
             ImageLoader.loadCenterCrop(
                 imageView = binding.userSpaceTop.imageTop,

@@ -124,12 +124,16 @@ class DynamicUpAdapter(
             if (item.mid == 0L) {
                 binding.imageAvatar.scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
                 binding.imageAvatar.setImageResource(R.drawable.ic_dynamic)
+                binding.imageAvatar.setBadge(officialVerifyType = -1)
             } else {
                 ImageLoader.loadCircle(
                     imageView = binding.imageAvatar,
                     url = item.face,
                     placeholder = R.drawable.default_avatar,
                     error = R.drawable.default_avatar
+                )
+                binding.imageAvatar.setBadge(
+                    officialVerifyType = item.officialVerify?.type ?: -1
                 )
             }
         }

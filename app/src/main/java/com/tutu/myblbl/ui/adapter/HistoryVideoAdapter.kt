@@ -281,6 +281,7 @@ class HistoryVideoAdapter(
                 "${NumberUtils.formatDuration(progressValue)}/${NumberUtils.formatDuration(durationValue)}"
             }
             binding.textViewOwner.text = TimeUtils.formatHistoryViewTime(item.viewAt)
+            binding.textChargeBadge.visibility = View.GONE
 
             ImageLoader.loadVideoCover(
                 imageView = binding.imageView,

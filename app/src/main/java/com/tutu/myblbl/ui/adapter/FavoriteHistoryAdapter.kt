@@ -224,6 +224,7 @@ class FavoriteHistoryAdapter(
                 binding.iconDanmaku.visibility = View.GONE
                 binding.textDanmakuCount.visibility = View.GONE
             }
+            binding.textChargeBadge.visibility = View.GONE
 
             ImageLoader.loadVideoCover(
                 imageView = binding.imageView,

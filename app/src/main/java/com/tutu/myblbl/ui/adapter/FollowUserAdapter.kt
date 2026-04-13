@@ -100,6 +100,9 @@ class FollowUserAdapter(
                 placeholder = R.drawable.default_avatar,
                 error = R.drawable.default_avatar
             )
+            binding.imageView.setBadge(
+                officialVerifyType = item.officialVerify?.type ?: -1
+            )
         }
     }
 }

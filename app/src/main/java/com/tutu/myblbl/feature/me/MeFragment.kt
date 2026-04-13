@@ -48,6 +48,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
     private lateinit var viewPager: ViewPager2
     private lateinit var adapter: MeFragmentAdapter
     private var pageChangeCallback: ViewPager2.OnPageChangeCallback? = null
+    private var pendingRefreshAfterLogin = false
 
     override fun getViewBinding(
         inflater: LayoutInflater,
@@ -113,6 +114,14 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
                 viewModel.userInfo.collectLatest { userInfo ->
                     userInfo?.let {
                         updateUserInfo(it.face)
+                        val oType = it.officialVerify?.type ?: it.official?.let { o -> if (o.role > 0) o.type else -1 } ?: -1
+                        val vStatus = it.vipStatus.coerceAtLeast(it.vip?.vipStatus ?: 0)
+                        val vType = it.vipType.coerceAtLeast(it.vip?.vipType ?: 0)
+                        binding.imageAvatar.setBadge(
+                            officialVerifyType = oType,
+                            vipStatus = vStatus,
+                            vipType = vType
+                        )
                     }
                 }
             }
@@ -124,6 +133,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
                     renderLoginState(isLoggedIn)
                     if (!isLoggedIn) {
                         updateUserInfo("")
+                        binding.imageAvatar.setBadge(officialVerifyType = -1)
                     }
                 }
             }
@@ -176,6 +186,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 appEventHub.events.collectLatest { event ->
                     if (event == AppEventHub.Event.UserSessionChanged && !isHidden) {
+                        pendingRefreshAfterLogin = true
                         viewModel.loadUserInfo()
                         adapter.getFragments().forEach { fragment ->
                             if (fragment.view != null) {
@@ -287,6 +298,18 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
         binding.tabLayout.visibility = if (isLoggedIn) View.VISIBLE else View.GONE
         binding.viewPager.visibility = if (isLoggedIn) View.VISIBLE else View.GONE
         binding.rightStateText.text = getString(R.string.feature_wait_tip)
+
+        if (isLoggedIn && pendingRefreshAfterLogin) {
+            pendingRefreshAfterLogin = false
+            binding.viewPager.post {
+                if (!isAdded || view == null) return@post
+                adapter.getFragments().forEach { fragment ->
+                    if (fragment.view != null) {
+                        (fragment as? MeTabPage)?.refresh()
+                    }
+                }
+            }
+        }
     }
 
     override fun onDestroyView() {

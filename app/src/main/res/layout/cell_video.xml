@@ -96,6 +96,23 @@
         app:layout_constraintBottom_toBottomOf="@+id/imageView"
         app:layout_constraintEnd_toEndOf="@+id/imageView"/>
     <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_charge_badge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="@dimen/px10"
+        android:layout_marginTop="@dimen/px10"
+        android:background="@drawable/bg_charge_badge"
+        android:paddingStart="@dimen/px8"
+        android:paddingEnd="@dimen/px8"
+        android:paddingTop="@dimen/px3"
+        android:paddingBottom="@dimen/px3"
+        android:text="充电专属"
+        android:textColor="#FFFFFF"
+        android:textSize="@dimen/px20"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="@+id/imageView"
+        app:layout_constraintTop_toTopOf="@+id/imageView"/>
+    <androidx.appcompat.widget.AppCompatTextView
         android:textSize="@dimen/px31"
         android:textStyle="bold"
         android:textColor="?android:attr/textColorPrimary"

@@ -25,5 +25,8 @@ data class DynamicFollowingUserInfo(
     @SerializedName("uname")
     val uname: String = "",
     @SerializedName("face")
-    val face: String = ""
+    val face: String = "",
+
+    @SerializedName("official_verify")
+    val officialVerify: OfficialVerifySimple? = null
 )

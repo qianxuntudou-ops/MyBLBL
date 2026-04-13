@@ -27,6 +27,8 @@ class MeListViewModel(
 
     private var historyCursorViewAt: Long = 0
 
+    fun isLoggedIn(): Boolean = userRepository.isLoggedIn()
+
     fun loadFavorites(@Suppress("UNUSED_PARAMETER") page: Int, @Suppress("UNUSED_PARAMETER") pageSize: Int) {
         viewModelScope.launch {
             _loading.value = true

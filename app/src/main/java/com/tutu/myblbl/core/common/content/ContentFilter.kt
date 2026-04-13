@@ -11,6 +11,7 @@ object ContentFilter {
 
     private const val KEY_MINOR_PROTECTION = "minor_protection"
     private const val KEY_BLOCKED_UP_NAMES = "blocked_up_names"
+    private const val KEY_BLOCKED_VIDEO_KEYS = "blocked_video_keys"
 
     private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
 
@@ -264,6 +265,30 @@ object ContentFilter {
         appSettings.putStringSetAsync(KEY_BLOCKED_UP_NAMES, existing)
     }
 
+    fun addBlockedVideo(
+        context: Context,
+        aid: Long = 0,
+        bvid: String = "",
+        title: String = "",
+        coverUrl: String = ""
+    ) {
+        val keys = buildVideoBlockKeys(aid, bvid, title, coverUrl)
+        if (keys.isEmpty()) return
+        val existing = appSettings.getCachedStringSet(KEY_BLOCKED_VIDEO_KEYS).toMutableSet()
+        existing.addAll(keys)
+        appSettings.putStringSetAsync(KEY_BLOCKED_VIDEO_KEYS, existing)
+    }
+
+    fun addBlockedVideo(context: Context, video: VideoModel) {
+        addBlockedVideo(
+            context = context,
+            aid = video.aid,
+            bvid = video.bvid,
+            title = video.title,
+            coverUrl = video.coverUrl
+        )
+    }
+
     fun removeBlockedUpName(context: Context, name: String) {
         val existing = appSettings.getCachedStringSet(KEY_BLOCKED_UP_NAMES).toMutableSet()
         existing.remove(name)
@@ -274,6 +299,10 @@ object ContentFilter {
         return appSettings.getCachedStringSet(KEY_BLOCKED_UP_NAMES)
     }
 
+    fun getBlockedVideoKeys(context: Context): Set<String> {
+        return appSettings.getCachedStringSet(KEY_BLOCKED_VIDEO_KEYS)
+    }
+
     private fun isUpNameBlocked(context: Context, name: String): Boolean {
         if (name.isEmpty()) return false
         val trimmed = name.trim()
@@ -282,20 +311,38 @@ object ContentFilter {
         return dynamicList.any { it.equals(trimmed, ignoreCase = true) }
     }
 
+    private fun isVideoKeyBlocked(
+        context: Context,
+        aid: Long = 0,
+        bvid: String = "",
+        title: String = "",
+        coverUrl: String = ""
+    ): Boolean {
+        val blockedKeys = getBlockedVideoKeys(context)
+        if (blockedKeys.isEmpty()) return false
+        return buildVideoBlockKeys(aid, bvid, title, coverUrl).any(blockedKeys::contains)
+    }
+
     fun isVideoBlocked(
         context: Context,
         typeName: String?,
         title: String? = "",
         teenageMode: Int = 0,
         desc: String? = "",
-        authorName: String? = ""
+        authorName: String? = "",
+        aid: Long = 0,
+        bvid: String = "",
+        coverUrl: String = ""
     ): Boolean {
-        if (!isMinorProtectionEnabled(context)) return false
+        if (isVideoKeyBlocked(context, aid, bvid, title.orEmpty(), coverUrl)) {
+            return true
+        }
         if (teenageMode != 0) return true
         val safeAuthorName = authorName.orEmpty()
         if (safeAuthorName.isNotEmpty() && isUpNameBlocked(context, safeAuthorName)) {
             return true
         }
+        if (!isMinorProtectionEnabled(context)) return false
         val trimmedTypeName = typeName.orEmpty().trim()
         if (trimmedTypeName.isNotEmpty() && VIDEO_BLOCKED_TYPE_NAMES.any { it.equals(trimmedTypeName, ignoreCase = true) }) {
             return true
@@ -321,10 +368,10 @@ object ContentFilter {
     }
 
     fun isLiveRoomBlocked(context: Context, areaName: String, parentAreaName: String, anchorName: String = "", title: String = ""): Boolean {
-        if (!isMinorProtectionEnabled(context)) return false
         if (anchorName.isNotEmpty() && isUpNameBlocked(context, anchorName)) {
             return true
         }
+        if (!isMinorProtectionEnabled(context)) return false
         if (areaName.trim().isNotEmpty() && LIVE_BLOCKED_AREAS.any { it.equals(areaName.trim(), ignoreCase = true) }) {
             return true
         }
@@ -345,27 +392,67 @@ object ContentFilter {
     }
 
     fun filterVideos(context: Context, videos: List<VideoModel>): List<VideoModel> {
-        if (!isMinorProtectionEnabled(context)) return videos
         return videos.filter { video ->
-            !isVideoBlocked(context, video.typeName, video.title, video.teenageMode, video.desc, video.authorName)
+            !isVideoBlocked(
+                context = context,
+                typeName = video.typeName,
+                title = video.title,
+                teenageMode = video.teenageMode,
+                desc = video.desc,
+                authorName = video.authorName,
+                aid = video.aid,
+                bvid = video.bvid,
+                coverUrl = video.coverUrl
+            )
         }
     }
 
     fun filterLiveRooms(context: Context, rooms: List<LiveRoomItem>): List<LiveRoomItem> {
-        if (!isMinorProtectionEnabled(context)) return rooms
         return rooms.filter { room ->
             !isLiveRoomBlocked(context, room.areaV2Name.ifEmpty { room.areaName }, room.parentAreaName, room.uname, room.title)
         }
     }
 
     fun isSearchItemBlocked(context: Context, item: SearchItemModel): Boolean {
-        if (!isMinorProtectionEnabled(context)) return false
         val authorName = item.author.ifBlank { item.uname }
-        return isVideoBlocked(context, "", item.title, authorName = authorName)
+        return isVideoBlocked(
+            context = context,
+            typeName = "",
+            title = item.title,
+            desc = item.desc,
+            authorName = authorName,
+            aid = item.aid,
+            bvid = item.bvid,
+            coverUrl = item.pic.ifBlank { item.cover }
+        )
     }
 
     fun filterSearchItems(context: Context, items: List<SearchItemModel>): List<SearchItemModel> {
-        if (!isMinorProtectionEnabled(context)) return items
         return items.filter { !isSearchItemBlocked(context, it) }
+    }
+
+    private fun buildVideoBlockKeys(
+        aid: Long = 0,
+        bvid: String = "",
+        title: String = "",
+        coverUrl: String = ""
+    ): Set<String> {
+        val keys = linkedSetOf<String>()
+        val normalizedBvid = normalizeVideoKeyPart(bvid)
+        if (normalizedBvid.isNotEmpty()) {
+            keys.add("bvid:$normalizedBvid")
+        }
+        if (aid > 0L) {
+            keys.add("aid:$aid")
+        }
+        val normalizedTitle = normalizeVideoKeyPart(title)
+        if (normalizedTitle.isNotEmpty()) {
+            keys.add("title:$normalizedTitle|cover:${normalizeVideoKeyPart(coverUrl)}")
+        }
+        return keys
+    }
+
+    private fun normalizeVideoKeyPart(value: String): String {
+        return value.trim().lowercase()
     }
 }

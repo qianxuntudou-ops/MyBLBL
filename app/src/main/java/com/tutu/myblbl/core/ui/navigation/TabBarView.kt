@@ -11,6 +11,7 @@ import android.widget.FrameLayout
 import androidx.appcompat.widget.AppCompatImageView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.core.ui.image.AvatarBadgeView
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 
@@ -31,7 +32,7 @@ class TabBarView @JvmOverloads constructor(
     private val buttonLive: AppCompatImageView
     private val buttonMe: AppCompatImageView
     private val buttonSetting: AppCompatImageView
-    private val imageAvatar: AppCompatImageView
+    private val imageAvatar: AvatarBadgeView
 
     private val tabButtons = mutableListOf<AppCompatImageView>()
     private var currentSelectedIndex = -1
@@ -193,6 +194,10 @@ class TabBarView @JvmOverloads constructor(
             placeholder = R.drawable.default_avatar,
             error = R.drawable.default_avatar
         )
+    }
+
+    fun setAvatarBadge(officialVerifyType: Int, vipStatus: Int = 0, vipType: Int = 0, vipAvatarSubscript: Int = 0) {
+        imageAvatar.setBadge(officialVerifyType, vipStatus, vipType, vipAvatarSubscript)
     }
 
     fun getCurrentSelectedIndex(): Int = currentSelectedIndex

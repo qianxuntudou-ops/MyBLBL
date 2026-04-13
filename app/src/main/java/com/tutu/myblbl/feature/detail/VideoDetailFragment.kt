@@ -375,6 +375,9 @@ class VideoDetailFragment : BaseFragment<FragmentVideoDetailBinding>() {
                 placeholder = R.drawable.default_avatar,
                 error = R.drawable.default_avatar
             )
+            headBinding.imageAvatar.setBadge(
+                officialVerifyType = owner.officialVerify?.type ?: -1
+            )
         }
 
         val descText = buildString {

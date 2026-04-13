@@ -72,6 +72,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     private var pendingHistoryAnchorOffset = 0
     private var pendingHistoryReturnRestore = false
     private var pendingHistoryScrollToTop = false
+    private var lastKnownLoggedIn = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -148,6 +149,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     }
 
     override fun initData() {
+        lastKnownLoggedIn = viewModel.isLoggedIn()
         restoreCachedContent()
         loadData()
     }
@@ -156,6 +158,15 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         super.onResume()
         if (pendingRestoreFocus) {
             restoreContentFocus()
+        }
+        if (type == TYPE_HISTORY || type == TYPE_LATER) {
+            val isLoggedIn = viewModel.isLoggedIn()
+            if (isLoggedIn && !lastKnownLoggedIn) {
+                lastKnownLoggedIn = isLoggedIn
+                refresh()
+            } else {
+                lastKnownLoggedIn = isLoggedIn
+            }
         }
     }
 
@@ -274,7 +285,17 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     private fun bindHistoryData(videos: List<HistoryVideoModel>) {
         swipeRefreshLayout?.isRefreshing = false
         val adapter = historyAdapter ?: return
-        val filtered = videos.filter { !ContentFilter.isVideoBlocked(requireContext(), it.tagName, it.title, authorName = it.authorName) }
+        val filtered = videos.filter {
+            !ContentFilter.isVideoBlocked(
+                context = requireContext(),
+                typeName = it.tagName,
+                title = it.title,
+                authorName = it.authorName,
+                aid = it.history?.oid ?: 0L,
+                bvid = it.bvid,
+                coverUrl = it.cover
+            )
+        }
         val shouldRestoreFocus = pendingHistoryReturnRestore && filtered.isNotEmpty()
         val shouldScrollToTop = pendingHistoryScrollToTop && filtered.isNotEmpty()
         adapter.setData(filtered) {
@@ -595,7 +616,19 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                     FileCacheManager.get<List<HistoryVideoModel>>(HISTORY_CACHE_KEY, cacheType).orEmpty()
                 }.getOrElse { emptyList() }
                 if (cachedVideos.isNotEmpty()) {
-                    historyAdapter?.setData(cachedVideos.filter { !ContentFilter.isVideoBlocked(requireContext(), it.tagName, it.title, authorName = it.authorName) })
+                    historyAdapter?.setData(
+                        cachedVideos.filter {
+                            !ContentFilter.isVideoBlocked(
+                                context = requireContext(),
+                                typeName = it.tagName,
+                                title = it.title,
+                                authorName = it.authorName,
+                                aid = it.history?.oid ?: 0L,
+                                bvid = it.bvid,
+                                coverUrl = it.cover
+                            )
+                        }
+                    )
                     showContent()
                 }
             }

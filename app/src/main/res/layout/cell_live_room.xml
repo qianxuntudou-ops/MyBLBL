@@ -108,7 +108,7 @@
         app:layout_constraintStart_toStartOf="@+id/imageView"
         app:layout_constraintTop_toBottomOf="@+id/imageView" />
 
-    <androidx.appcompat.widget.AppCompatImageView
+    <com.tutu.myblbl.core.ui.image.AvatarBadgeView
         android:id="@+id/image_avatar"
         android:layout_width="@dimen/px40"
         android:layout_height="@dimen/px40"

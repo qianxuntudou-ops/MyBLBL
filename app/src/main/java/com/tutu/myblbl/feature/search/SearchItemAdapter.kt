@@ -62,6 +62,9 @@ class SearchItemAdapter(
             bvid = item.bvid,
             title = decodeHtml(item.title),
             pic = item.pic.ifBlank { item.cover },
+            goto = if (searchType == SearchType.LiveRoom || item.roomId > 0L) "live" else "av",
+            roomId = item.roomId,
+            isLive = searchType == SearchType.LiveRoom || item.roomId > 0L,
             owner = Owner(
                 mid = item.mid.toLongOrNull() ?: 0L,
                 name = item.author.ifBlank { item.uname }
@@ -164,6 +167,7 @@ class SearchItemAdapter(
             binding.imageAvatar.visibility = if (ownerName.isNotBlank()) View.VISIBLE else View.GONE
             binding.textDuration.text = item.duration
             binding.progressBar.visibility = View.GONE
+            binding.textChargeBadge.visibility = View.GONE
 
             ImageLoader.loadVideoCover(
                 imageView = binding.imageView,
@@ -204,6 +208,9 @@ class SearchItemAdapter(
                     .placeholder(R.drawable.default_avatar)
                     .circleCrop()
                     .into(binding.imageAvatar)
+                binding.imageAvatar.setBadge(
+                    officialVerifyType = item.officialVerify?.type ?: -1
+                )
             }
         }
     }
@@ -246,6 +253,9 @@ class SearchItemAdapter(
                 .placeholder(R.drawable.default_avatar)
                 .circleCrop()
                 .into(binding.imageView)
+            binding.imageView.setBadge(
+                officialVerifyType = item.officialVerify?.type ?: -1
+            )
         }
     }
 

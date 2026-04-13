@@ -13,6 +13,7 @@ import com.tutu.myblbl.model.video.detail.VideoDetailModel
 import com.tutu.myblbl.model.video.VideoPvModel
 import com.tutu.myblbl.model.player.PlayInfoModel
 import com.tutu.myblbl.network.api.ApiService
+import com.tutu.myblbl.network.WbiGenerator
 import com.tutu.myblbl.network.response.BaseBaseResponse
 import com.tutu.myblbl.network.security.NetworkSecurityGateway
 import com.tutu.myblbl.network.session.NetworkSessionGateway
@@ -29,6 +30,11 @@ class VideoRepository(
 
     companion object {
         private const val TAG = "VideoRepository"
+        private const val FEEDBACK_APP_ID = "100"
+        private const val FEEDBACK_PLATFORM = "5"
+        private const val FEEDBACK_SPMID = "333.1007.0.0"
+        private const val FEEDBACK_PAGE = "1"
+        private val FEEDBACK_RETRY_CODES = setOf(-352, -401)
     }
 
     suspend fun getRecommendList(
@@ -161,7 +167,7 @@ class VideoRepository(
             }
         }
 
-    suspend fun addWatchLater(aid: Long, bvid: String?, csrf: String): Result<BaseBaseResponse> =
+    suspend fun addWatchLater(aid: Long?, bvid: String?, csrf: String): Result<BaseBaseResponse> =
         runCatching {
             sessionGateway.syncAuthState(
                 apiService.addWatchLater(aid, bvid, csrf),
@@ -169,33 +175,107 @@ class VideoRepository(
             )
         }
 
-    suspend fun removeWatchLater(aid: Long, csrf: String): Result<BaseBaseResponse> =
+    suspend fun removeWatchLater(aid: Long?, bvid: String?, csrf: String): Result<BaseBaseResponse> =
         runCatching {
+            val resolvedAid = resolveWatchLaterAid(aid, bvid)
+                ?: error("缺少稍后再看视频标识")
             sessionGateway.syncAuthState(
-                apiService.removeWatchLater(aid, csrf),
+                apiService.removeWatchLater(resolvedAid, csrf),
                 source = "video.removeWatchLater"
             )
         }
 
-    suspend fun checkWatchLater(aid: Long): Result<Boolean> =
+    suspend fun checkWatchLater(aid: Long?, bvid: String?): Result<Boolean> =
         runCatching {
             val response = sessionGateway.syncAuthState(
                 apiService.getLaterWatch(),
                 source = "video.checkWatchLater"
             )
             if (response.isSuccess) {
-                response.data?.list?.any { it.aid == aid } == true
+                response.data?.list?.any { item ->
+                    matchesWatchLaterItem(item, aid, bvid)
+                } == true
             } else {
                 false
             }
         }
 
-    suspend fun dislikeFeed(aid: Long, reasonId: Int, csrf: String): Result<BaseBaseResponse> =
+    private suspend fun resolveWatchLaterAid(aid: Long?, bvid: String?): Long? {
+        if ((aid ?: 0L) > 0L) {
+            return aid
+        }
+        if (bvid.isNullOrBlank()) {
+            return null
+        }
+        val response = sessionGateway.syncAuthState(
+            apiService.getLaterWatch(),
+            source = "video.resolveWatchLaterAid"
+        )
+        if (!response.isSuccess) {
+            return null
+        }
+        return response.data?.list
+            ?.firstOrNull { matchesWatchLaterItem(it, aid, bvid) }
+            ?.aid
+            ?.takeIf { it > 0L }
+    }
+
+    private fun matchesWatchLaterItem(item: VideoModel, aid: Long?, bvid: String?): Boolean {
+        val targetAid = aid ?: 0L
+        return when {
+            targetAid > 0L && item.aid == targetAid -> true
+            !bvid.isNullOrBlank() && item.bvid.equals(bvid, ignoreCase = true) -> true
+            else -> false
+        }
+    }
+
+    suspend fun dislikeFeed(video: VideoModel, reasonId: Int, csrf: String): Result<BaseBaseResponse> =
         runCatching {
-            sessionGateway.syncAuthState(
-                apiService.dislikeFeed(aid, reasonId, csrf),
-                source = "video.dislikeFeed"
+            securityGateway.prewarmWebSession()
+            val firstParams = buildFeedbackWbiParams()
+            val firstForm = buildDislikeForm(video = video, reasonId = reasonId, csrf = csrf)
+            AppLog.d(
+                TAG,
+                "dislikeFeed request(first): url=/x/web-interface/feedback/dislike, reasonId=$reasonId, loggedIn=${sessionGateway.isLoggedIn()}, hasCsrf=${csrf.isNotBlank()}, goto=${video.goto}, id=${resolveFeedbackTargetId(video)}, mid=${video.owner?.mid ?: 0L}, trackId=${video.trackId}, wts=${firstParams["wts"]}, hasWRid=${!firstParams["w_rid"].isNullOrBlank()}, form=$firstForm"
             )
+            val firstResponse = sessionGateway.syncAuthState(
+                apiService.dislikeFeed(
+                    params = firstParams,
+                    form = firstForm
+                ),
+                source = "video.dislikeFeed.first"
+            )
+            AppLog.d(
+                TAG,
+                "dislikeFeed response(first): code=${firstResponse.code}, message=${firstResponse.message}, msg=${firstResponse.msg}, success=${firstResponse.isSuccess}"
+            )
+            if (firstResponse.code in FEEDBACK_RETRY_CODES) {
+                AppLog.e(
+                    TAG,
+                    "dislikeFeed first attempt hit risk control/auth: aid=${video.aid}, bvid=${video.bvid}, code=${firstResponse.code}"
+                )
+                securityGateway.prewarmWebSession(forceUaRefresh = true)
+                val secondParams = buildFeedbackWbiParams()
+                val secondForm = buildDislikeForm(video = video, reasonId = reasonId, csrf = csrf)
+                AppLog.d(
+                    TAG,
+                    "dislikeFeed request(second): url=/x/web-interface/feedback/dislike, reasonId=$reasonId, loggedIn=${sessionGateway.isLoggedIn()}, hasCsrf=${csrf.isNotBlank()}, goto=${video.goto}, id=${resolveFeedbackTargetId(video)}, mid=${video.owner?.mid ?: 0L}, trackId=${video.trackId}, wts=${secondParams["wts"]}, hasWRid=${!secondParams["w_rid"].isNullOrBlank()}, form=$secondForm"
+                )
+                sessionGateway.syncAuthState(
+                    apiService.dislikeFeed(
+                        params = secondParams,
+                        form = secondForm
+                    ),
+                    source = "video.dislikeFeed.second"
+                ).also { secondResponse ->
+                    AppLog.d(
+                        TAG,
+                        "dislikeFeed response(second): code=${secondResponse.code}, message=${secondResponse.message}, msg=${secondResponse.msg}, success=${secondResponse.isSuccess}"
+                    )
+                }
+            } else {
+                firstResponse
+            }
         }
 
     private fun BaseResponse<ListDataModel<VideoModel>>.mapListData(): BaseResponse<List<VideoModel>> {
@@ -205,5 +285,38 @@ class VideoRepository(
             msg = msg,
             data = data?.list.orEmpty()
         )
+    }
+
+    private fun buildFeedbackWbiParams(): Map<String, String> {
+        val (imgKey, subKey) = sessionGateway.getWbiKeys()
+        return WbiGenerator.generateWbiParams(emptyMap(), imgKey, subKey)
+    }
+
+    private fun buildDislikeForm(
+        video: VideoModel,
+        reasonId: Int,
+        csrf: String
+    ): Map<String, String> {
+        return linkedMapOf(
+            "app_id" to FEEDBACK_APP_ID,
+            "platform" to FEEDBACK_PLATFORM,
+            "from_spmid" to "",
+            "spmid" to FEEDBACK_SPMID,
+            "goto" to video.goto.ifBlank { "av" },
+            "id" to resolveFeedbackTargetId(video).toString(),
+            "mid" to (video.owner?.mid ?: 0L).toString(),
+            "track_id" to video.trackId,
+            "feedback_page" to FEEDBACK_PAGE,
+            "reason_id" to reasonId.toString(),
+            "csrf" to csrf
+        )
+    }
+
+    private fun resolveFeedbackTargetId(video: VideoModel): Long {
+        return when {
+            video.aid > 0L -> video.aid
+            video.roomId > 0L -> video.roomId
+            else -> 0L
+        }
     }
 }

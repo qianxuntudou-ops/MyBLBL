@@ -5,7 +5,7 @@ import com.tutu.myblbl.BuildConfig
 
 object AppLog {
 
-    private const val ENABLE_DEBUG_LOGS = false
+    private const val ENABLE_DEBUG_LOGS = true
 
     fun d(tag: String, message: String) {
         if (!BuildConfig.DEBUG || !ENABLE_DEBUG_LOGS) return

@@ -6,6 +6,7 @@ import com.google.gson.annotations.JsonAdapter
 import com.google.gson.annotations.SerializedName
 import com.tutu.myblbl.model.adapter.FlexibleBooleanAdapter
 import com.tutu.myblbl.model.series.UgcSeriesModel
+import com.tutu.myblbl.model.user.OfficialVerifySimple
 import java.io.Serializable
 
 data class VideoModel(
@@ -62,6 +63,12 @@ data class VideoModel(
     
     @SerializedName("cid")
     val cid: Long = 0,
+
+    @SerializedName("goto")
+    val goto: String = "av",
+
+    @SerializedName("track_id")
+    val trackId: String = "",
     
     @SerializedName("tname")
     val typeName: String = "",
@@ -120,8 +127,28 @@ data class VideoModel(
     val historyProgress: Long = 0,
     val historyViewAt: Long = 0,
     val historyBadge: String = "",
-    val historyBusiness: String = ""
+    val historyBusiness: String = "",
+
+    @SerializedName("rights")
+    val rights: VideoRights? = null,
+
+    @SerializedName("is_upower_exclusive")
+    @JsonAdapter(FlexibleBooleanAdapter::class)
+    val isUpowerExclusive: Boolean = false,
+
+    @SerializedName("is_chargeable_season")
+    @JsonAdapter(FlexibleBooleanAdapter::class)
+    val isChargeableSeason: Boolean = false,
+
+    @SerializedName("elec_arc_type")
+    val elecArcType: Int = 0,
+
+    @SerializedName("is_charging_arc")
+    @JsonAdapter(FlexibleBooleanAdapter::class)
+    val isChargingArc: Boolean = false
 ) : Serializable {
+    val isChargingExclusive: Boolean
+        get() = isUpowerExclusive || isChargingArc || elecArcType == 1 || rights?.elec == 1
     val coverUrl: String
         get() = pic.ifEmpty { cover }
 
@@ -201,7 +228,10 @@ data class Owner(
     val name: String = "",
     
     @SerializedName("face")
-    val face: String = ""
+    val face: String = "",
+
+    @SerializedName("official_verify")
+    val officialVerify: OfficialVerifySimple? = null
 ) : Serializable
 
 data class Bangumi(
@@ -245,6 +275,11 @@ data class Stat(
     
     @SerializedName("dislike")
     val dislike: Long = 0
+) : Serializable
+
+data class VideoRights(
+    @SerializedName("elec")
+    val elec: Int = 0
 ) : Serializable
 
 data class Dimension(

@@ -213,7 +213,7 @@ class PlayerActionDialog(
             scope.launch {
                 runCatching {
                     if (isInWatchLater) {
-                        videoRepository.removeWatchLater(aid)
+                        videoRepository.removeWatchLater(aid, bvid)
                     } else {
                         videoRepository.addWatchLater(aid, bvid)
                     }
@@ -266,7 +266,7 @@ class PlayerActionDialog(
                         renderState()
                     }
                 }
-            runCatching { videoRepository.checkWatchLater(aid) }
+            runCatching { videoRepository.checkWatchLater(aid, bvid) }
                 .onSuccess { isInList ->
                     isInWatchLater = isInList
                     renderState()

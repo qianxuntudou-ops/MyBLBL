@@ -294,6 +294,7 @@ class VideoAdapter(
             binding.textDuration.text = NumberUtils.formatDuration(video.durationValue.coerceAtLeast(0L))
             binding.textPlayCount.text = NumberUtils.formatCount(video.viewCount)
             binding.textDanmakuCount.text = NumberUtils.formatCount(video.danmakuCount)
+            binding.textChargeBadge.visibility = if (video.isChargingExclusive) View.VISIBLE else View.GONE
         }
 
         private fun bindHistory(video: VideoModel) {
@@ -321,6 +322,7 @@ class VideoAdapter(
                 video.historyBadge
             }
             binding.textViewOwner.text = formatHistoryTime(video.historyViewAt)
+            binding.textChargeBadge.visibility = if (video.isChargingExclusive) View.VISIBLE else View.GONE
         }
 
         private fun resolveDisplayTitle(video: VideoModel): String {

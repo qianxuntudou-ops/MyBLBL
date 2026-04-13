@@ -102,6 +102,18 @@ class UserInfoDialog(context: Context) : AppCompatDialog(context, R.style.Dialog
             placeholder = R.drawable.default_avatar,
             error = R.drawable.default_avatar
         )
+        if (info != null) {
+            val oType = info.officialVerify?.type ?: info.official?.let { if (it.role > 0) it.type else -1 } ?: -1
+            val vStatus = info.vipStatus.coerceAtLeast(info.vip?.vipStatus ?: 0)
+            val vType = info.vipType.coerceAtLeast(info.vip?.vipType ?: 0)
+            binding.imageAvatar.setBadge(
+                officialVerifyType = oType,
+                vipStatus = vStatus,
+                vipType = vType
+            )
+        } else {
+            binding.imageAvatar.setBadge(officialVerifyType = -1)
+        }
         binding.textName.text = info?.uname.orEmpty().ifBlank { "Nickname" }
         binding.textVip.text = info?.vipLabel?.text
             .orEmpty()

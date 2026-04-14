@@ -12,6 +12,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.flexbox.FlexboxLayout
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellSeriesLaneBinding
@@ -95,6 +96,10 @@ class VideoDetailFragment : BaseFragment<FragmentVideoDetailBinding>() {
     private var isFavorited = false
     private var isCoined = false
 
+    private val episodeViewPool = RecyclerView.RecycledViewPool().apply {
+        setMaxRecycledViews(0, 10)
+    }
+
     private var actionDialog: PlayerActionDialog? = null
     private var ownerDetailDialog: OwnerDetailDialog? = null
 
@@ -177,6 +182,7 @@ class VideoDetailFragment : BaseFragment<FragmentVideoDetailBinding>() {
         pagesAdapter = EpisodeListAdapter()
         pagesBinding.recyclerView.layoutManager =
             LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        pagesBinding.recyclerView.setRecycledViewPool(episodeViewPool)
         pagesBinding.recyclerView.adapter = pagesAdapter
         val currentBvid = videoView?.bvid ?: videoModel?.bvid ?: ""
         val currentAid = videoView?.aid ?: videoModel?.aid ?: 0L
@@ -219,6 +225,7 @@ class VideoDetailFragment : BaseFragment<FragmentVideoDetailBinding>() {
         ugcEpisodeAdapter = EpisodeListAdapter()
         ugcSeasonBinding.recyclerView.layoutManager =
             LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        ugcSeasonBinding.recyclerView.setRecycledViewPool(episodeViewPool)
         ugcSeasonBinding.recyclerView.adapter = ugcEpisodeAdapter
         bindUgcEpisodes()
         ugcEpisodeAdapter?.setOnItemClickListener { _, model ->

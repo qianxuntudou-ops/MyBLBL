@@ -14,7 +14,7 @@ import androidx.appcompat.widget.LinearLayoutCompat
 import androidx.core.content.ContextCompat
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
-import org.koin.core.context.GlobalContext
+import org.koin.mp.KoinPlatform
 
 class KeyboardView @JvmOverloads constructor(
     context: Context,
@@ -64,7 +64,7 @@ class KeyboardView @JvmOverloads constructor(
         T9CandidateSet(center = "9", top = "X", left = "W", right = "Y", bottom = "Z")
     )
 
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val appSettings: AppSettingsDataStore get() = KoinPlatform.getKoin().get()
     private val focusInterpolator = OvershootInterpolator()
     private var keySelectListener: KeySelectListener? = null
     private var dispatchKeyDel = true

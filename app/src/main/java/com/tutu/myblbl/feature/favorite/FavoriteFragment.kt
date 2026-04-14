@@ -36,7 +36,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
-import org.koin.core.context.GlobalContext
 
 class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
     companion object {
@@ -65,7 +64,7 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
     private var hasRequestedInitialFocus = false
     private var coverHydrationJob: Job? = null
     private var isLoadingFolders = false
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val appSettings: AppSettingsDataStore by inject()
 
     override fun initArguments() {
         embedded = arguments?.getBoolean(ARG_EMBEDDED, false) == true

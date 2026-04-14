@@ -4,7 +4,7 @@ import android.content.Context
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.model.video.quality.AudioQuality
 import com.tutu.myblbl.model.video.quality.VideoCodecEnum
-import org.koin.core.context.GlobalContext
+import org.koin.mp.KoinPlatform
 
 data class PlayerSettings(
     val defaultVideoQualityId: Int? = VideoQualityDefaults.DEFAULT_VIDEO_QUALITY_ID,
@@ -31,7 +31,7 @@ private object VideoQualityDefaults {
 
 object PlayerSettingsStore {
 
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val appSettings: AppSettingsDataStore get() = KoinPlatform.getKoin().get()
 
     private const val KEY_DEFAULT_VIDEO_QUALITY = "default_video_quality"
     private const val KEY_DEFAULT_AUDIO_TRACK = "default_audio_track"

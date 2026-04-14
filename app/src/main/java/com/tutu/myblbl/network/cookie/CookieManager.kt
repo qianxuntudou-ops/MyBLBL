@@ -7,7 +7,7 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import java.util.concurrent.ConcurrentHashMap
-import org.koin.core.context.GlobalContext
+import org.koin.mp.KoinPlatform
 
 class CookieManager : CookieJar {
 
@@ -17,7 +17,7 @@ class CookieManager : CookieJar {
         }
     }
     
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val appSettings: AppSettingsDataStore get() = KoinPlatform.getKoin().get()
     private val cookieCache = ConcurrentHashMap<String, MutableList<Cookie>>()
     
     companion object {

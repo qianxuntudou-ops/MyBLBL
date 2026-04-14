@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.koin.core.context.GlobalContext
+import org.koin.mp.KoinPlatform
 
 object FileCacheManager {
 
@@ -21,7 +21,7 @@ object FileCacheManager {
     private const val CACHE_SIZE_1_GB: Long = 1024L * 1024L * 1024L
     private const val MAX_FILE_COUNT = Int.MAX_VALUE
 
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val appSettings: AppSettingsDataStore get() = KoinPlatform.getKoin().get()
 
     private val cacheDir: File by lazy {
         File(MyBLBLApplication.instance.cacheDir, "BBLLCache").also {

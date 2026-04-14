@@ -9,7 +9,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import androidx.viewbinding.ViewBinding
-import org.koin.core.context.GlobalContext
+import org.koin.android.ext.android.inject
 
 abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
 
@@ -17,8 +17,7 @@ abstract class BaseActivity<VB : ViewBinding> : AppCompatActivity() {
 
     abstract fun getViewBinding(): VB
 
-    private val appSettings: AppSettingsDataStore
-        get() = GlobalContext.get().get()
+    protected val appSettings: AppSettingsDataStore by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         applyTheme()

@@ -5,7 +5,7 @@ import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.model.live.LiveRoomItem
 import com.tutu.myblbl.model.search.SearchItemModel
 import com.tutu.myblbl.model.video.VideoModel
-import org.koin.core.context.GlobalContext
+import org.koin.mp.KoinPlatform
 
 object ContentFilter {
 
@@ -13,7 +13,7 @@ object ContentFilter {
     private const val KEY_BLOCKED_UP_NAMES = "blocked_up_names"
     private const val KEY_BLOCKED_VIDEO_KEYS = "blocked_video_keys"
 
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val appSettings: AppSettingsDataStore get() = KoinPlatform.getKoin().get()
 
     private val VIDEO_BLOCKED_TYPE_NAMES = setOf(
         "ASMR",

@@ -28,7 +28,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
-import org.koin.core.context.GlobalContext
 
 class PlayerActionDialog(
     context: Context,
@@ -38,7 +37,7 @@ class PlayerActionDialog(
 ) : AppCompatDialog(context, R.style.DialogTheme), KoinComponent {
 
     private val binding = DialogActionBinding.inflate(LayoutInflater.from(context))
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val appSettings: AppSettingsDataStore by inject()
     private val videoRepository: VideoRepository by inject()
     private val favoriteRepository: FavoriteRepository by inject()
     private val sessionGateway: NetworkSessionGateway by inject()

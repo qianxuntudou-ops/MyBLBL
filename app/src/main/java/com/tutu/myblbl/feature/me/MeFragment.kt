@@ -28,7 +28,6 @@ import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
-import org.koin.core.context.GlobalContext
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
@@ -39,7 +38,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
         fun newInstance(): MeFragment = MeFragment()
     }
 
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val appSettings: AppSettingsDataStore by inject()
     private val appEventHub: AppEventHub by inject()
     private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private val sessionGateway: NetworkSessionGateway by inject()

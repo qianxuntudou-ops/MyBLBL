@@ -13,7 +13,7 @@ import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import com.tutu.myblbl.MyBLBLApplication
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
-import org.koin.core.context.GlobalContext
+import org.koin.mp.KoinPlatform
 import java.io.Serializable
 
 private const val VALUE_ON = "开"
@@ -24,7 +24,7 @@ private const val VALUE_FILTER_LEVEL_3 = "3"
 private val DEFAULT_START_PAGE_OPTIONS = arrayOf("推荐", "热门", "番剧", "影视")
 
 private val appSettings: AppSettingsDataStore
-    get() = GlobalContext.get().get()
+    get() = KoinPlatform.getKoin().get()
 
 fun Context.toast(message: String, duration: Int = Toast.LENGTH_SHORT) {
     Toast.makeText(this, message, duration).show()

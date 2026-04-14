@@ -44,13 +44,10 @@ import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
-import org.koin.core.context.GlobalContext
 import java.lang.ref.WeakReference
 
 @OptIn(UnstableApi::class)
 class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickListener {
-
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
 
     private data class FocusRestoreAnchor(
         val viewRef: WeakReference<View>

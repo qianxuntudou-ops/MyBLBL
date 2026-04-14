@@ -2,7 +2,7 @@ package com.tutu.myblbl.network.ua
 
 import android.content.Context
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
-import org.koin.core.context.GlobalContext
+import org.koin.mp.KoinPlatform
 import java.util.Locale
 import kotlin.random.Random
 
@@ -12,7 +12,7 @@ class DesktopUserAgentStore(
     private val preferenceKey: String
 ) {
 
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val appSettings: AppSettingsDataStore get() = KoinPlatform.getKoin().get()
 
     private var currentUserAgent: String = defaultUserAgent
 

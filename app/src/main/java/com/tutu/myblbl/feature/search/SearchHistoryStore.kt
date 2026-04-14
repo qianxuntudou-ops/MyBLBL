@@ -3,7 +3,7 @@ package com.tutu.myblbl.feature.search
 import android.content.Context
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import org.json.JSONArray
-import org.koin.core.context.GlobalContext
+import org.koin.mp.KoinPlatform
 
 class SearchHistoryStore(
     context: Context
@@ -15,7 +15,7 @@ class SearchHistoryStore(
         private const val MAX_RECENT_CHARS = 90
     }
 
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val appSettings: AppSettingsDataStore get() = KoinPlatform.getKoin().get()
 
     fun load(): List<String> {
         val value = appSettings.getCachedString(KEY_RECENT_SEARCH)

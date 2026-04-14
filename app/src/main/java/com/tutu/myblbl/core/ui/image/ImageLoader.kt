@@ -27,14 +27,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import org.koin.core.context.GlobalContext
+import org.koin.mp.KoinPlatform
 
 object ImageLoader {
 
     private const val KEY_IMAGE_QUALITY = "image_quality"
     private const val KEY_IMAGE_QUALITY_LEVEL = "imageQualityLevel"
 
-    private val appSettings: AppSettingsDataStore get() = GlobalContext.get().get()
+    private val appSettings: AppSettingsDataStore get() = KoinPlatform.getKoin().get()
 
     @Volatile
     private var cachedImageQualityLevel: Int? = null

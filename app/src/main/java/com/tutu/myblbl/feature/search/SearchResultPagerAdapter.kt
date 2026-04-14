@@ -50,13 +50,24 @@ class SearchResultPagerAdapter(
 
     fun getPageType(position: Int): SearchType? = currentList.getOrNull(position)?.type
 
-    fun setPages(categories: List<SearchCategoryItem>) {
+    fun setPages(
+        categories: List<SearchCategoryItem>,
+        initialItems: Map<SearchType, List<SearchItemModel>> = emptyMap(),
+        initialLoading: Map<SearchType, Boolean> = emptyMap(),
+        initialHasMore: Map<SearchType, Boolean> = emptyMap()
+    ) {
         val existing = currentList.associateBy { it.type }
         val newPages = categories.map { category ->
+            val existingItems = existing[category.type]?.items
+            val items = initialItems[category.type]?.toMutableList()
+                ?: existingItems
+                ?: mutableListOf()
             SearchResultPage(
                 type = category.type,
                 title = category.showText,
-                items = existing[category.type]?.items ?: mutableListOf()
+                items = items,
+                loading = initialLoading[category.type] ?: false,
+                hasMore = initialHasMore[category.type] ?: true
             )
         }
         holders.clear()

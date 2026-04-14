@@ -526,7 +526,11 @@ class SearchNewFragment :
     }
 
     private fun applySearchCategories(categories: List<SearchCategoryItem>) {
-        resultPagerAdapter.setPages(categories)
+        val pageStates = viewModel.searchPageStates.value
+        val initialItems = pageStates.mapValues { (_, state) -> state.items }
+        val initialLoading = pageStates.mapValues { (_, state) -> state.loading }
+        val initialHasMore = pageStates.mapValues { (_, state) -> state.hasMore }
+        resultPagerAdapter.setPages(categories, initialItems, initialLoading, initialHasMore)
         tabMediator?.detach()
         tabMediator = TabLayoutMediator(binding.tabSearchResult, binding.viewPagerResult) { tab, position ->
             tab.text = resultPagerAdapter.getPageTitle(position)
@@ -538,9 +542,6 @@ class SearchNewFragment :
             onNavigateDown = { focusCurrentResultContent() },
             onNavigateRight = ::focusOrderButton
         )
-        viewModel.searchPageStates.value.forEach { (type, state) ->
-            resultPagerAdapter.submitState(type, state.items, state.loading, state.hasMore)
-        }
         val hasCategories = categories.isNotEmpty()
         binding.tabSearchResult.isVisible = hasCategories
         binding.viewPagerResult.isVisible = hasCategories

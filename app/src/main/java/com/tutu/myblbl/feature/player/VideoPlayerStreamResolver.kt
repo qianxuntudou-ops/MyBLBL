@@ -449,9 +449,9 @@ internal class VideoPlayerStreamResolver(
 
         override fun getRetryDelayMsFor(
             errorInfo: LoadErrorHandlingPolicy.LoadErrorInfo
-        ): Long = C.TIME_UNSET
+        ): Long = 1000L
 
-        override fun getMinimumLoadableRetryCount(dataType: Int): Int = 0
+        override fun getMinimumLoadableRetryCount(dataType: Int): Int = 2
     }
 
     private fun createProgressiveSource(url: String, mimeType: String): MediaSource {

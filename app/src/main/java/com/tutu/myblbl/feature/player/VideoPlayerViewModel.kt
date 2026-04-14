@@ -2153,13 +2153,17 @@ class VideoPlayerViewModel(
         val data = currentSubtitleData?.body.orEmpty()
         if ((_selectedSubtitleIndex.value ?: -1) < 0 || data.isEmpty()) {
             currentSubtitleCueIndex = 0
-            _currentSubtitleText.value = null
+            if (_currentSubtitleText.value != null) {
+                _currentSubtitleText.value = null
+            }
             return
         }
         val positionSeconds = positionMs / 1000f
         val cue = data.findCueAt(positionSeconds)
         val subtitleText = cue?.content
-        _currentSubtitleText.value = subtitleText
+        if (_currentSubtitleText.value != subtitleText) {
+            _currentSubtitleText.value = subtitleText
+        }
     }
 
     private fun List<SubtitleItem>.findCueAt(positionSeconds: Float): SubtitleItem? {

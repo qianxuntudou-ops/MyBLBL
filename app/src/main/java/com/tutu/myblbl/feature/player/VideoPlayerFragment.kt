@@ -198,9 +198,6 @@ class VideoPlayerFragment : Fragment() {
                         playerView.resumeDanmaku()
                     }
                     hideNextPreview()
-                    if (::playerSettings.isInitialized) {
-                        playerView.setPlaySpeed(playerSettings.defaultPlaybackSpeed)
-                    }
                 }
                 Player.STATE_ENDED -> {
                     viewModel.setLoading(false)
@@ -646,10 +643,6 @@ class VideoPlayerFragment : Fragment() {
                         currentPlayer.seekTo(playbackRequest.seekPositionMs)
                         currentPlayer.prepare()
                         currentPlayer.playWhenReady = playbackRequest.playWhenReady
-
-                        if (::playerSettings.isInitialized) {
-                            playerView.setPlaySpeed(playerSettings.defaultPlaybackSpeed)
-                        }
                     }
                 }
 

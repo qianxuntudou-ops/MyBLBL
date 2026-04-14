@@ -116,23 +116,28 @@ class SpecialDanmakuOverlayView @JvmOverloads constructor(
         }
 
         val currentPositionMs = currentPlaybackPositionMs()
-        items.forEach { model ->
+        val maxDurationMs = items.maxOfOrNull { it.durationMs } ?: 0L
+        val windowStart = currentPositionMs - maxDurationMs
+        val searchStart = binarySearchStart(currentPositionMs)
+        for (i in searchStart until items.size) {
+            val model = items[i]
+            if (model.progress.toLong() > currentPositionMs) break
             val localTimeMs = currentPositionMs - model.progress.toLong()
             if (localTimeMs < 0L || localTimeMs > model.durationMs) {
-                return@forEach
+                continue
             }
             val state = resolveState(model, localTimeMs)
             if (state.alpha <= 0f) {
-                return@forEach
+                continue
             }
             if (state.y > visibleAreaRatio) {
-                return@forEach
+                continue
             }
             if (!allowTop && state.y <= 0.2f) {
-                return@forEach
+                continue
             }
             if (!allowBottom && state.y >= 0.8f) {
-                return@forEach
+                continue
             }
             drawModel(canvas, model, state)
         }
@@ -140,6 +145,22 @@ class SpecialDanmakuOverlayView @JvmOverloads constructor(
         if (isPlaying && enabled) {
             postInvalidateOnAnimation()
         }
+    }
+
+    private fun binarySearchStart(currentPositionMs: Long): Int {
+        var low = 0
+        var high = items.size - 1
+        var result = items.size
+        while (low <= high) {
+            val mid = (low + high) ushr 1
+            if (items[mid].progress.toLong() + items[mid].durationMs >= currentPositionMs) {
+                result = mid
+                high = mid - 1
+            } else {
+                low = mid + 1
+            }
+        }
+        return result
     }
 
     private fun drawModel(canvas: Canvas, model: SpecialDanmakuModel, state: ResolvedState) {

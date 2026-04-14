@@ -102,8 +102,8 @@ class MyPlayerDanmakuController(
         } else {
             rawDanmakuData + sortedData
         }
-        rawDanmakuSignature = rawDanmakuData.fastRawSignature()
         rawDanmakuCount = rawDanmakuData.size
+        rawDanmakuSignature = rawDanmakuData.fastRawSignature()
         if (mergeDuplicate) {
             rebuildAndApplyData()
             return

@@ -104,7 +104,7 @@ internal class RenderSystem(context: DanmakuContext) : DanmakuEntitySystem(conte
           drawState.measureGeneration == config.measureGeneration &&
           drawState.layoutGeneration == config.layoutGeneration
       }
-      .mapNotNullTo(ArrayList(entities.size())) { entity ->
+      .mapNotNullTo(ArrayList(maxOf(entities.size(), 16))) { entity ->
         val item = entity.dataComponent?.item ?: return@mapNotNullTo null
         val drawState = item.drawState
         val cache = item.drawState.drawingCache

@@ -320,6 +320,7 @@ internal class DataSystem(context: DanmakuContext) :
     if (shouldSort) {
       synchronized(this) {
         sortedData.sortWith(comparator)
+        trimElapsedItems()
       }
       shouldSort = false
     }
@@ -328,6 +329,28 @@ internal class DataSystem(context: DanmakuContext) :
         currentData.data.sortWith(comparator)
       }
       currentData.shouldSort = false
+    }
+  }
+
+  private fun trimElapsedItems() {
+    if (sortedData.size <= 200) return
+    val threshold = startTimeMills - 30_000L
+    if (threshold <= 0L) return
+    val iterator = sortedData.iterator()
+    var removed = 0
+    while (iterator.hasNext()) {
+      val item = iterator.next()
+      if (item.timePosition < threshold) {
+        idSet.remove(item.data.danmakuId)
+        iterator.remove()
+        removed++
+      } else {
+        break
+      }
+    }
+    if (removed > 0) {
+      currentData.startIndex = (currentData.startIndex - removed).coerceAtLeast(0)
+      currentData.endIndex = (currentData.endIndex - removed).coerceAtLeast(0)
     }
   }
 

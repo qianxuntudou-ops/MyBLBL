@@ -1764,25 +1764,21 @@ class VideoPlayerViewModel(
             val fullSpecialDanmaku = mutableListOf<SpecialDanmakuModel>().apply { addAll(initialPayload.specialItems) }
             val remainingIndices = (2..segmentCount).toList()
             coroutineScope {
-                remainingIndices.chunked(3).forEach { chunk ->
-                    val batchResults = chunk.map { segmentIndex ->
-                        async(Dispatchers.IO) {
-                            loadDanmakuSegmentPayload(
-                                cid = cid,
-                                aid = aid,
-                                segmentIndices = listOf(segmentIndex)
-                            )
-                        }
-                    }.awaitAll()
-                    val chunkDanmaku = buildList {
-                        batchResults.forEach { addAll(it.regularItems) }
+                val deferredResults = remainingIndices.map { segmentIndex ->
+                    async(Dispatchers.IO) {
+                        segmentIndex to loadDanmakuSegmentPayload(
+                            cid = cid,
+                            aid = aid,
+                            segmentIndices = listOf(segmentIndex)
+                        )
                     }
-                    val chunkSpecialDanmaku = buildList {
-                        batchResults.forEach { addAll(it.specialItems) }
-                    }
-                    if (!isActiveDanmakuRequest(loadGeneration) || (chunkDanmaku.isEmpty() && chunkSpecialDanmaku.isEmpty())) {
-                        return@forEach
-                    }
+                }
+                deferredResults.forEach { deferred ->
+                    if (!isActiveDanmakuRequest(loadGeneration)) return@coroutineScope
+                    val (segmentIndex, payload) = deferred.await()
+                    val chunkDanmaku = payload.regularItems
+                    val chunkSpecialDanmaku = payload.specialItems
+                    if (chunkDanmaku.isEmpty() && chunkSpecialDanmaku.isEmpty()) return@forEach
                     if (chunkDanmaku.isNotEmpty()) {
                         fullDanmaku.addAll(chunkDanmaku)
                         publishDanmaku(chunkDanmaku, replace = false)

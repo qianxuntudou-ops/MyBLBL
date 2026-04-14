@@ -7,6 +7,11 @@ import android.util.LruCache
 import com.kuaishou.akdanmaku.data.DanmakuVipGradientStyle
 import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.core.common.log.AppLog
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import java.util.concurrent.ConcurrentHashMap
 import okhttp3.Request
 
@@ -23,14 +28,19 @@ object VipDanmakuTextureCache {
     }
     private val loadingKeys = ConcurrentHashMap<String, Boolean>()
 
+    private val loadingScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     fun preloadStyles(styles: Collection<DanmakuVipGradientStyle>) {
-        styles.asSequence()
-            // Prioritize stroke texture so colorful outline appears quickly.
+        val urls = styles.asSequence()
             .flatMap { sequenceOf(it.strokeTextureUrl, it.fillTextureUrl) }
             .map(::normalizeUrl)
             .filter { it.isNotBlank() }
             .distinct()
-            .forEach(::loadBitmap)
+            .toList()
+        if (urls.isEmpty()) return
+        loadingScope.async {
+            urls.map { url -> async { loadBitmap(url) } }.awaitAll()
+        }
     }
 
     fun getBitmap(url: String): Bitmap? {

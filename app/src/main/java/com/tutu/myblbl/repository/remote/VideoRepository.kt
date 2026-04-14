@@ -28,6 +28,25 @@ class VideoRepository(
     private val cookieManager: CookieManager
 ) {
 
+    private var watchLaterCache: List<VideoModel>? = null
+    private var watchLaterCacheTimeMs: Long = 0L
+    private val watchLaterCacheTtlMs = 5L * 60L * 1000L
+
+    private suspend fun getWatchLaterList(): List<VideoModel> {
+        val now = System.currentTimeMillis()
+        val cached = watchLaterCache
+        if (cached != null && now - watchLaterCacheTimeMs < watchLaterCacheTtlMs) {
+            return cached
+        }
+        val response = sessionGateway.syncAuthState(
+            apiService.getLaterWatch(),
+            source = "video.getWatchLaterList"
+        )
+        val list = if (response.isSuccess) response.data?.list.orEmpty() else emptyList()
+        watchLaterCache = list
+        watchLaterCacheTimeMs = now
+        return list
+    }
     companion object {
         private const val TAG = "VideoRepository"
         private const val FEEDBACK_APP_ID = "100"
@@ -187,16 +206,9 @@ class VideoRepository(
 
     suspend fun checkWatchLater(aid: Long?, bvid: String?): Result<Boolean> =
         runCatching {
-            val response = sessionGateway.syncAuthState(
-                apiService.getLaterWatch(),
-                source = "video.checkWatchLater"
-            )
-            if (response.isSuccess) {
-                response.data?.list?.any { item ->
-                    matchesWatchLaterItem(item, aid, bvid)
-                } == true
-            } else {
-                false
+            val list = getWatchLaterList()
+            list.any { item ->
+                matchesWatchLaterItem(item, aid, bvid)
             }
         }
 
@@ -207,15 +219,9 @@ class VideoRepository(
         if (bvid.isNullOrBlank()) {
             return null
         }
-        val response = sessionGateway.syncAuthState(
-            apiService.getLaterWatch(),
-            source = "video.resolveWatchLaterAid"
-        )
-        if (!response.isSuccess) {
-            return null
-        }
-        return response.data?.list
-            ?.firstOrNull { matchesWatchLaterItem(it, aid, bvid) }
+        val list = getWatchLaterList()
+        return list
+            .firstOrNull { matchesWatchLaterItem(it, aid, bvid) }
             ?.aid
             ?.takeIf { it > 0L }
     }

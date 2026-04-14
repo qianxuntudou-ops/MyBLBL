@@ -16,9 +16,11 @@ import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
@@ -107,7 +109,9 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.videos.collectLatest { rawVideos ->
-                    val videos = ContentFilter.filterVideos(requireContext(), rawVideos)
+                    val videos = withContext(Dispatchers.Default) {
+                        ContentFilter.filterVideos(requireContext(), rawVideos)
+                    }
                     if (waitingForFirstLoad && videos.isEmpty()) {
                         return@collectLatest
                     }

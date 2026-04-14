@@ -33,6 +33,10 @@ object PlayerSettingsStore {
 
     private val appSettings: AppSettingsDataStore get() = KoinPlatform.getKoin().get()
 
+    @Volatile
+    private var cachedSettings: PlayerSettings? = null
+    private var lastSettingsSnapshot: String? = null
+
     private const val KEY_DEFAULT_VIDEO_QUALITY = "default_video_quality"
     private const val KEY_DEFAULT_AUDIO_TRACK = "default_audio_track"
     private const val KEY_DEFAULT_PLAY_SPEED = "default_play_speed"
@@ -51,8 +55,41 @@ object PlayerSettingsStore {
 
     fun load(context: Context): PlayerSettings {
         fun readSetting(key: String): String? = appSettings.getCachedString(key)
-
-        return PlayerSettings(
+        val snapshot = buildString {
+            append(readSetting(KEY_DEFAULT_VIDEO_QUALITY).orEmpty())
+            append("|")
+            append(readSetting(KEY_DEFAULT_AUDIO_TRACK).orEmpty())
+            append("|")
+            append(readSetting(KEY_DEFAULT_PLAY_SPEED).orEmpty())
+            append("|")
+            append(readSetting(KEY_VIDEO_CODEC).orEmpty())
+            append("|")
+            append(readSetting(KEY_AFTER_PLAY).orEmpty())
+            append("|")
+            append(readSetting(KEY_PLAY_FINISH_EXIT_PLAYER).orEmpty())
+            append("|")
+            append(readSetting(KEY_SHOW_SUBTITLE_DEFAULT).orEmpty())
+            append("|")
+            append(readSetting(KEY_SUBTITLE_TEXT_SIZE).orEmpty())
+            append("|")
+            append(readSetting(KEY_SHOW_RE_FF).orEmpty())
+            append("|")
+            append(readSetting(KEY_SHOW_DEBUG).orEmpty())
+            append("|")
+            append(readSetting(KEY_SIMPLE_KEY_PRESS).orEmpty())
+            append("|")
+            append(readSetting(KEY_SHOW_BOTTOM_PROGRESS_BAR).orEmpty())
+            append("|")
+            append(readSetting(KEY_SHOW_NEXT_PREVIOUS).orEmpty())
+            append("|")
+            append(readSetting(KEY_SHOW_DM_SWITCH).orEmpty())
+            append("|")
+            append(readSetting(KEY_FF_SEEK_SECOND).orEmpty())
+        }
+        if (snapshot == lastSettingsSnapshot) {
+            return cachedSettings!!
+        }
+        val settings = PlayerSettings(
             defaultVideoQualityId = parseVideoQualityId(
                 readSetting(KEY_DEFAULT_VIDEO_QUALITY)
             ),
@@ -114,6 +151,9 @@ object PlayerSettingsStore {
                 ?.coerceIn(5, 60)
                 ?: 10
         )
+        cachedSettings = settings
+        lastSettingsSnapshot = snapshot
+        return settings
     }
 
     private fun parseVideoQualityId(value: String?): Int? {

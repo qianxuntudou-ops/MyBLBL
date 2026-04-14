@@ -7,6 +7,9 @@ import com.tutu.myblbl.model.video.quality.VideoCodecEnum
 
 object VideoCodecSupport {
 
+    @Volatile
+    private var cachedHardwareCodecs: Set<VideoCodecEnum>? = null
+
     private val codecPriorityOrder = listOf(
         VideoCodecEnum.AV1,
         VideoCodecEnum.HEVC,
@@ -14,7 +17,8 @@ object VideoCodecSupport {
     )
 
     fun getHardwareSupportedCodecs(): Set<VideoCodecEnum> {
-        return runCatching {
+        cachedHardwareCodecs?.let { return it }
+        val result = runCatching {
             MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
                 .asSequence()
                 .filter { !it.isEncoder }
@@ -26,6 +30,8 @@ object VideoCodecSupport {
                 }
                 .toSet()
         }.getOrDefault(emptySet())
+        cachedHardwareCodecs = result
+        return result
     }
 
     fun buildSupportSummary(supportedCodecs: Collection<VideoCodecEnum>): String {

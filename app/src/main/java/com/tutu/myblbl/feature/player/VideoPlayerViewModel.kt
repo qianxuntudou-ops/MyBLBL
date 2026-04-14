@@ -208,7 +208,11 @@ class VideoPlayerViewModel(
         logTag = TAG
     )
 
-    private val subtitleCache = mutableMapOf<String, SubtitleData>()
+    private val subtitleCache = object : LinkedHashMap<String, SubtitleData>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, SubtitleData>): Boolean {
+            return size > 8
+        }
+    }
 
     private val _videoInfo = MutableStateFlow<VideoDetailModel?>(null)
     val videoInfo: StateFlow<VideoDetailModel?> = _videoInfo
@@ -341,9 +345,9 @@ class VideoPlayerViewModel(
     private var preloadedPlayback: PreloadedPlayback? = null
     private var preloadingIdentity: PlayRequestIdentity? = null
     private var preloadJob: Job? = null
-    private val hardwareSupportedVideoCodecs by lazy(LazyThreadSafetyMode.NONE) {
-        VideoCodecSupport.getHardwareSupportedCodecs()
-    }
+    private val hardwareSupportedVideoCodecs: Set<VideoCodecEnum>
+        get() = VideoCodecSupport.getHardwareSupportedCodecs()
+
 
     data class SavedPlayerSnapshot(
         val aid: Long,

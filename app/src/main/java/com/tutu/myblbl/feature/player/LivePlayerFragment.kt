@@ -101,11 +101,16 @@ class LivePlayerFragment : Fragment() {
                     "(KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
             )
             .setDefaultRequestProperties(liveHeaders)
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(5_000, 50_000, 600, 1200)
+            .build()
         player = ExoPlayer.Builder(requireContext())
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .setLoadControl(loadControl)
             .build()
             .also {
                 PlayerPlaybackPolicy.apply(it)
+                PlayerAudioNormalizer.attach(it)
                 it.addListener(playerListener)
             }
         binding.playerView.setPlayer(player)

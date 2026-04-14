@@ -616,9 +616,8 @@ class VideoPlayerFragment : Fragment() {
                     viewModel.videoInfo.collect { info ->
                         latestVideoInfo = info
                         sessionCoordinator.updateVideoInfo(info)
-                        updatePlaybackPreload()
+                        schedulePreloadAndHeaderRefresh()
                         updatePrimaryActionVisibility()
-                        renderPlayerHeader()
                     }
                 }
 
@@ -762,19 +761,17 @@ class VideoPlayerFragment : Fragment() {
                 launch {
                     viewModel.episodes.collect { episodes ->
                         sessionCoordinator.updateEpisodes(episodes)
-                        updatePlaybackPreload()
+                        schedulePreloadAndHeaderRefresh()
                         playerView.showHideEpisodeButton(episodes.isNotEmpty())
                         updateEpisodeNavigationVisibility()
-                        renderPlayerHeader()
                     }
                 }
 
                 launch {
                     viewModel.selectedEpisodeIndex.collect { index ->
                         sessionCoordinator.updateSelectedEpisodeIndex(index)
-                        updatePlaybackPreload()
+                        schedulePreloadAndHeaderRefresh()
                         updateEpisodeNavigationVisibility()
-                        renderPlayerHeader()
                     }
                 }
 
@@ -782,7 +779,7 @@ class VideoPlayerFragment : Fragment() {
                     viewModel.relatedVideos.collect { rawRelated ->
                         val related = ContentFilter.filterVideos(requireContext(), rawRelated)
                         sessionCoordinator.updateRelatedVideos(related)
-                        updatePlaybackPreload()
+                        schedulePreloadAndHeaderRefresh()
                         relatedAdapter.setData(related)
                         playerView.showHideRelatedButton(related.isNotEmpty())
                     }
@@ -823,6 +820,18 @@ class VideoPlayerFragment : Fragment() {
         }
     }
 
+    private var preloadHeaderRefreshPosted = false
+
+    private fun schedulePreloadAndHeaderRefresh() {
+        if (preloadHeaderRefreshPosted) return
+        preloadHeaderRefreshPosted = true
+        view?.post {
+            preloadHeaderRefreshPosted = false
+            updatePlaybackPreload()
+            renderPlayerHeader()
+        }
+    }
+
     private fun syncPlaybackEnvironment() {
         val currentPlayer = player
         val keepScreenOn = currentPlayer != null &&
@@ -844,9 +853,12 @@ class VideoPlayerFragment : Fragment() {
             TAG,
             "playback stall detected: position=$positionMs, stalledMs=$stalledMs, isPlaying=${currentPlayer.isPlaying}, bufferedPosition=${currentPlayer.bufferedPosition}"
         )
-        currentPlayer.seekTo(positionMs.coerceAtLeast(0L))
+        val snapshotPosition = currentPlayer.currentPosition
+        currentPlayer.stop()
+        currentPlayer.prepare()
+        currentPlayer.seekTo(snapshotPosition.coerceAtLeast(0L))
         currentPlayer.play()
-        playerView.syncDanmakuPosition(positionMs, forceSeek = true)
+        playerView.syncDanmakuPosition(snapshotPosition, forceSeek = true)
         progressCoordinator.restart()
     }
 

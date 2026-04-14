@@ -531,6 +531,7 @@ internal class VideoPlayerStreamResolver(
         videoMimeType: String,
         audioMimeType: String
     ): MediaSource {
+        val buildStartMs = System.currentTimeMillis()
         val normalizedVideoUrls = videoUrls
             .map(urlNormalizer)
             .filter { it.isNotBlank() }
@@ -543,12 +544,14 @@ internal class VideoPlayerStreamResolver(
             TAG,
             "createMediaSource: using merged progressive sources, videoCandidates=${normalizedVideoUrls.size}, audioCandidates=${normalizedAudioUrls.size}"
         )
-        return createProgressivePairSource(
+        val source = createProgressivePairSource(
             videoUrls = normalizedVideoUrls,
             audioUrls = normalizedAudioUrls,
             videoMimeType = videoMimeType,
             audioMimeType = audioMimeType
         )
+        AppLog.d(TAG, "progressiveMediaSource:build:done cost=${System.currentTimeMillis() - buildStartMs}ms")
+        return source
     }
 
     private fun createProgressivePairSource(

@@ -1042,6 +1042,7 @@ class VideoPlayerViewModel(
         suppressUiSignals: Boolean = false
     ): PreparedPlayback? {
         val requestStartMs = System.currentTimeMillis()
+        AppLog.d(TAG, "playurl:start cid=${identity.cid}")
         val preferredQualityId = qualityCandidates.firstOrNull()
             ?: requestedQualityId
             ?: selectedQualityId
@@ -1112,6 +1113,8 @@ class VideoPlayerViewModel(
         if (selectionSnapshot.selectedQualityId != resolvedQualityId) {
             selectionSnapshot = selectionSnapshot.copy(selectedQualityId = resolvedQualityId)
         }
+        AppLog.d(TAG, "playurl:done cost=${System.currentTimeMillis() - requestStartMs}ms cid=${identity.cid}")
+        AppLog.d(TAG, "progressiveMediaSource:build:start cid=${identity.cid}")
         val mediaSourceSelection = streamResolver.buildMediaSource(
             playInfo = initialPlayInfo,
             selectedQualityId = resolvedQualityId,
@@ -1139,6 +1142,7 @@ class VideoPlayerViewModel(
 
         val resumeHintPositionMs = startPosition.takeIf { shouldResume && !replaceInPlace }
         val seekToStart = if (resumeHintPositionMs != null) 0L else startPosition
+        AppLog.d(TAG, "playerPrepare:start cid=${identity.cid} totalCost=${System.currentTimeMillis() - requestStartMs}ms")
         return PreparedPlayback(
             identity = identity,
             playInfo = initialPlayInfo,

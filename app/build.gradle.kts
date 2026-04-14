@@ -1,6 +1,11 @@
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import java.io.File
 
@@ -73,19 +78,6 @@ android {
         }
     }
 
-    applicationVariants.all {
-        val variant = this
-        variant.outputs
-            .map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
-            .forEach { output ->
-                val appName = "MyBili"
-                val versionName = variant.versionName
-                val buildType = variant.buildType.name
-                val outputFileName = "${appName}-v${versionName}-${buildType}.apk"
-                output.outputFileName = outputFileName
-            }
-    }
-    
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -127,6 +119,75 @@ android {
             "ObsoleteSdkInt"
         )
         fatal += setOf("NotSibling")
+    }
+}
+
+abstract class RenameApkTask : DefaultTask() {
+    @get:InputDirectory
+    abstract val apkDirectory: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val renamedApkDirectory: DirectoryProperty
+
+    @get:Input
+    abstract val appName: Property<String>
+
+    @get:Input
+    abstract val buildType: Property<String>
+
+    @get:Input
+    abstract val versionName: Property<String>
+
+    @TaskAction
+    fun rename() {
+        val sourceApks = apkDirectory.get().asFileTree
+            .matching { include("**/*.apk") }
+            .files
+            .sortedBy { it.name }
+
+        if (sourceApks.isEmpty()) {
+            error("No APK outputs found in ${apkDirectory.get().asFile}")
+        }
+
+        val outputDir = renamedApkDirectory.get().asFile.apply { mkdirs() }
+        outputDir.listFiles()?.forEach { file ->
+            if (file.isFile && file.extension.equals("apk", ignoreCase = true)) {
+                file.delete()
+            }
+        }
+
+        sourceApks.forEachIndexed { index, apk ->
+            val suffix = if (sourceApks.size == 1) "" else "-${index + 1}"
+            val outputFile = File(
+                outputDir,
+                "${appName.get()}-v${versionName.get()}-${buildType.get()}$suffix.apk"
+            )
+            apk.copyTo(outputFile, overwrite = true)
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        val capitalizedVariantName = variant.name.replaceFirstChar { firstChar ->
+            if (firstChar.isLowerCase()) {
+                firstChar.titlecase()
+            } else {
+                firstChar.toString()
+            }
+        }
+        val renameTask = tasks.register("rename${capitalizedVariantName}Apk", RenameApkTask::class) {
+            apkDirectory.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.APK))
+            renamedApkDirectory.set(layout.buildDirectory.dir("outputs/renamed_apk/${variant.name}"))
+            appName.set("MyBili")
+            buildType.set(variant.buildType)
+            versionName.set(variant.outputs.single().versionName)
+        }
+        tasks.register("assemble${capitalizedVariantName}Renamed") {
+            group = "build"
+            description = "Builds the ${variant.name} APK and copies it to the renamed output directory."
+            dependsOn(renameTask)
+        }
     }
 }
 

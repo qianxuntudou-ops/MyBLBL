@@ -61,7 +61,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         private const val SETTINGS_OVERLAY_TAG = "settings"
         private const val SETTINGS_OVERLAY_EXIT_ANIM_MS = 275L
         private const val SEARCH_TAB_INDEX = 5
-        private const val STATE_CURRENT_TAB_INDEX = "main_current_tab_index"
     }
 
     private val fragments = mutableListOf<Fragment>()
@@ -89,7 +88,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             return
         }
         restoredFromSavedState = savedInstanceState != null
-        restoredTabIndex = savedInstanceState?.getInt(STATE_CURRENT_TAB_INDEX, -1) ?: -1
+        restoredTabIndex = mainNavigationViewModel.getSavedTabIndex()
         super.onCreate(savedInstanceState)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -217,6 +216,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         }
 
         currentFragmentIndex = index
+        mainNavigationViewModel.onTabSelected(index)
     }
 
     override fun onTabSelected(index: Int) {
@@ -657,7 +657,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putInt(STATE_CURRENT_TAB_INDEX, currentFragmentIndex)
+        mainNavigationViewModel.onTabSelected(currentFragmentIndex)
         super.onSaveInstanceState(outState)
     }
 }

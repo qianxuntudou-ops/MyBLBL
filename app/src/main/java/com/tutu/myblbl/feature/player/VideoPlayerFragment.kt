@@ -277,6 +277,19 @@ class VideoPlayerFragment : Fragment() {
                     seekPositionMs = launchContext.seekPositionMs,
                     startEpisodeIndex = launchContext.startEpisodeIndex
                 )
+            } else {
+                val snapshot = viewModel.consumeSavedSnapshot()
+                if (snapshot != null) {
+                    viewModel.loadVideoInfo(
+                        aid = snapshot.aid,
+                        bvid = snapshot.bvid,
+                        cid = snapshot.cid,
+                        seasonId = snapshot.seasonId,
+                        epId = snapshot.epId,
+                        seekPositionMs = snapshot.seekPositionMs,
+                        startEpisodeIndex = snapshot.episodeIndex
+                    )
+                }
             }
         }
     }
@@ -1152,6 +1165,7 @@ class VideoPlayerFragment : Fragment() {
         val (snapshotPositionMs, snapshotPlayWhenReady) = capturePlaybackSnapshot()
         postPlaybackProgressEvent(snapshotPositionMs)
         viewModel.reportPlaybackHeartbeat()
+        viewModel.savePlayerSnapshot()
         resumePlaybackWhenStarted = snapshotPlayWhenReady
         player?.playWhenReady = false
         playerView.pauseDanmaku()

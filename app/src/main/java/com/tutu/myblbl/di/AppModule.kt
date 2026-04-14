@@ -32,6 +32,7 @@ import com.tutu.myblbl.feature.me.MeListViewModel
 import com.tutu.myblbl.feature.me.MeViewModel
 import com.tutu.myblbl.feature.search.SearchViewModel
 import com.tutu.myblbl.feature.player.LivePlayerViewModel
+import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.feature.player.VideoPlayerViewModel
 import com.tutu.myblbl.feature.series.SeriesDetailViewModel
 import com.tutu.myblbl.network.cookie.CookieManager
@@ -78,7 +79,8 @@ val repositoryModule = module {
 val viewModelModule = module {
     viewModel { RecommendViewModel(get()) }
     viewModel { HotViewModel(get()) }
-    viewModel { VideoPlayerViewModel(get(), get(), get(), get(), get(), get(), get(named("noCookie")), androidContext()) }
+    viewModel { MainNavigationViewModel(get()) }
+    viewModel { VideoPlayerViewModel(get(), get(), get(), get(), get(), get(), get(named("noCookie")), androidContext(), get()) }
     viewModel { CategoryViewModel(get()) }
     viewModel { DynamicViewModel(get()) }
     viewModel { LiveViewModel(get()) }

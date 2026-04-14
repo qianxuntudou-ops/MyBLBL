@@ -3,6 +3,7 @@
 package com.tutu.myblbl.feature.player
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -64,7 +65,8 @@ class VideoPlayerViewModel(
     private val securityGateway: NetworkSecurityGateway,
     private val appSettings: AppSettingsDataStore,
     private val noCookieApiService: ApiService,
-    context: Context
+    context: Context,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     enum class EpisodeCatalogSource {
@@ -79,6 +81,17 @@ class VideoPlayerViewModel(
         private const val MAX_PLAYINFO_REFRESH_RETRY = 2
         private val verboseDanmakuCandidateLog =
             java.lang.Boolean.getBoolean("myblbl.verbose_danmaku_candidate_log")
+
+        const val SAVED_AID = "saved_player_aid"
+        const val SAVED_BVID = "saved_player_bvid"
+        const val SAVED_CID = "saved_player_cid"
+        const val SAVED_EP_ID = "saved_player_ep_id"
+        const val SAVED_SEASON_ID = "saved_player_season_id"
+        const val SAVED_EPISODE_INDEX = "saved_player_episode_index"
+        const val SAVED_SEEK_POSITION_MS = "saved_player_seek_position_ms"
+        const val SAVED_QUALITY_ID = "saved_player_quality_id"
+        const val SAVED_AUDIO_QUALITY_ID = "saved_player_audio_quality_id"
+        const val SAVED_SUBTITLE_INDEX = "saved_player_subtitle_index"
     }
 
     data class PlayableEpisode(
@@ -332,6 +345,62 @@ class VideoPlayerViewModel(
         VideoCodecSupport.getHardwareSupportedCodecs()
     }
 
+    data class SavedPlayerSnapshot(
+        val aid: Long,
+        val bvid: String,
+        val cid: Long,
+        val epId: Long,
+        val seasonId: Long,
+        val episodeIndex: Int,
+        val seekPositionMs: Long,
+        val qualityId: Int,
+        val audioQualityId: Int,
+        val subtitleIndex: Int
+    )
+
+    fun savePlayerSnapshot() {
+        val aid = currentAid ?: 0L
+        val bvid = currentBvid.orEmpty()
+        val cid = currentCid
+        if (cid <= 0L && aid <= 0L && bvid.isBlank()) return
+        savedStateHandle[SAVED_AID] = aid
+        savedStateHandle[SAVED_BVID] = bvid
+        savedStateHandle[SAVED_CID] = cid
+        savedStateHandle[SAVED_EP_ID] = currentEpId ?: 0L
+        savedStateHandle[SAVED_SEASON_ID] = currentSeasonId ?: 0L
+        savedStateHandle[SAVED_EPISODE_INDEX] = _selectedEpisodeIndex.value ?: 0
+        savedStateHandle[SAVED_SEEK_POSITION_MS] = pendingSeekPositionMs.coerceAtLeast(0L)
+        savedStateHandle[SAVED_QUALITY_ID] = selectedQualityId ?: 0
+        savedStateHandle[SAVED_AUDIO_QUALITY_ID] = selectedAudioId ?: 0
+        savedStateHandle[SAVED_SUBTITLE_INDEX] = _selectedSubtitleIndex.value ?: -1
+    }
+
+    fun consumeSavedSnapshot(): SavedPlayerSnapshot? {
+        val aid = savedStateHandle.remove<Long>(SAVED_AID) ?: return null
+        val bvid = savedStateHandle.remove<String>(SAVED_BVID).orEmpty()
+        val cid = savedStateHandle.remove<Long>(SAVED_CID) ?: 0L
+        if (cid <= 0L && aid <= 0L && bvid.isBlank()) return null
+        val epId = savedStateHandle.remove<Long>(SAVED_EP_ID) ?: 0L
+        val seasonId = savedStateHandle.remove<Long>(SAVED_SEASON_ID) ?: 0L
+        val episodeIndex = savedStateHandle.remove<Int>(SAVED_EPISODE_INDEX) ?: 0
+        val seekPositionMs = savedStateHandle.remove<Long>(SAVED_SEEK_POSITION_MS) ?: 0L
+        val qualityId = savedStateHandle.remove<Int>(SAVED_QUALITY_ID) ?: 0
+        val audioQualityId = savedStateHandle.remove<Int>(SAVED_AUDIO_QUALITY_ID) ?: 0
+        val subtitleIndex = savedStateHandle.remove<Int>(SAVED_SUBTITLE_INDEX) ?: -1
+        return SavedPlayerSnapshot(
+            aid = aid,
+            bvid = bvid,
+            cid = cid,
+            epId = epId,
+            seasonId = seasonId,
+            episodeIndex = episodeIndex,
+            seekPositionMs = seekPositionMs,
+            qualityId = qualityId,
+            audioQualityId = audioQualityId,
+            subtitleIndex = subtitleIndex
+        )
+    }
+
     fun loadVideoInfo(
         aid: Long? = null,
         bvid: String? = null,
@@ -427,6 +496,7 @@ class VideoPlayerViewModel(
     fun playEpisode(index: Int) {
         val episode = _episodes.value.orEmpty().getOrNull(index) ?: return
         reportPlaybackHeartbeat()
+        savePlayerSnapshot()
         val targetBvid = episode.bvid.takeIf { it.isNotBlank() }
         val targetSeasonId = episode.seasonId.takeIf { it > 0L }
         val targetEpId = episode.epId.takeIf { it > 0L }
@@ -523,6 +593,7 @@ class VideoPlayerViewModel(
     ) {
         selectedQualityId = quality.id
         _selectedQuality.value = quality
+        savePlayerSnapshot()
         capturePlaybackSnapshot(currentPositionMs, playWhenReady)
         loadPlayUrl(preferLastPlayTime = false, replaceInPlace = true)
     }
@@ -534,6 +605,7 @@ class VideoPlayerViewModel(
     ) {
         selectedAudioId = quality.id
         _selectedAudioQuality.value = quality
+        savePlayerSnapshot()
         capturePlaybackSnapshot(currentPositionMs, playWhenReady)
         rebuildPlayback()
     }
@@ -551,6 +623,7 @@ class VideoPlayerViewModel(
 
     fun selectSubtitle(index: Int) {
         _selectedSubtitleIndex.value = index
+        savedStateHandle[SAVED_SUBTITLE_INDEX] = index
         if (index < 0) {
             currentSubtitleData = null
             currentSubtitleCueIndex = 0

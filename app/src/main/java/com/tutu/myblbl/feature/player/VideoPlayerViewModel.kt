@@ -1148,15 +1148,19 @@ class VideoPlayerViewModel(
             ?: selectedQualityId
             ?: 80
 
-        val cachedPlayInfo = identity.bvid
-            ?.takeIf { !replaceInPlace && it.isNotBlank() && identity.epId == null }
-            ?.let { bvid -> VideoPlayerPlayInfoCache.get(bvid = bvid, cid = identity.cid) }
-            ?.takeIf(::hasPlayableMedia)
+        val cachedPlayInfo = if (preferLastPlayTime) {
+            null
+        } else {
+            identity.bvid
+                ?.takeIf { !replaceInPlace && it.isNotBlank() && identity.epId == null }
+                ?.let { bvid -> VideoPlayerPlayInfoCache.get(bvid = bvid, cid = identity.cid) }
+                ?.takeIf(::hasPlayableMedia)
+        }
 
         if (cachedPlayInfo != null) {
             AppLog.d(TAG, "playurlCache:hit bvid=${identity.bvid} cid=${identity.cid}")
         } else {
-            AppLog.d(TAG, "playurlCache:miss bvid=${identity.bvid} cid=${identity.cid} hasBvid=${!identity.bvid.isNullOrBlank()} replaceInPlace=$replaceInPlace")
+            AppLog.d(TAG, "playurlCache:miss bvid=${identity.bvid} cid=${identity.cid} hasBvid=${!identity.bvid.isNullOrBlank()} replaceInPlace=$replaceInPlace preferLastPlayTime=$preferLastPlayTime")
         }
 
         val (initialPlayInfo, effectiveRequestedQualityId) = if (cachedPlayInfo != null) {

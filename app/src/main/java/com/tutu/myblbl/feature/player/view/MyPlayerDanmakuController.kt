@@ -498,7 +498,8 @@ class MyPlayerDanmakuController(
     }
 
     private fun hasPreparedData(): Boolean {
-        return danmakuData.isNotEmpty() || rawDanmakuData.isNotEmpty()
+        if (rawDanmakuData.isEmpty()) return false
+        return danmakuData.isNotEmpty()
     }
 
     private fun List<DmModel>.mergeDuplicateDanmaku(enabled: Boolean): List<DmModel> {

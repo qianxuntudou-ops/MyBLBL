@@ -29,6 +29,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
+import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.time.TimeUtils
 import com.tutu.myblbl.core.ui.base.BaseActivity
@@ -44,6 +45,7 @@ import com.tutu.myblbl.feature.player.VideoPlayerAutoPlayController
 import com.tutu.myblbl.feature.player.VideoPlayerOverlayController
 import com.tutu.myblbl.feature.player.VideoPlayerProgressCoordinator
 import com.tutu.myblbl.feature.player.VideoPlayerResumeHintController
+import com.tutu.myblbl.feature.player.VideoPlayerViewModel
 import com.tutu.myblbl.feature.player.settings.PlayerSettings
 import com.tutu.myblbl.feature.player.settings.PlayerSettingsStore
 import com.tutu.myblbl.feature.player.view.InteractionVideoHandleView
@@ -180,7 +182,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     override fun getViewBinding(): FragmentVideoPlayerBinding =
         FragmentVideoPlayerBinding.inflate(layoutInflater)
 
-    private val viewModel: com.tutu.myblbl.feature.player.VideoPlayerViewModel by viewModel()
+    private val viewModel: VideoPlayerViewModel by viewModel()
 
     private var player: ExoPlayer? = null
     private val overlayCoordinator = PlayerOverlayCoordinator()
@@ -358,6 +360,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
 
     private fun startPlayback(launchContext: PlayerLaunchContext) {
         player?.stop()
+        playerView.pauseDanmaku()
+        playerView.setDanmakuData(emptyList())
+        playerView.setSpecialDanmakuData(emptyList())
         viewModel.loadVideoInfo(
             aid = launchContext.aid,
             bvid = launchContext.bvid,
@@ -504,13 +509,13 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         playerView.onResumeProgressCancelled = { cancelResume() }
         playerView.showSettingButton(false)
         playerView.showHideNextPrevious(false)
-        playerView.showSettingButton(true)
-        playerView.showHideActionButton(true)
+        playerView.showHideFfRe(playerSettings.showRewindFastForward)
+        playerView.showHideActionButton(false)
         playerView.showHideEpisodeButton(false)
         playerView.showHideRelatedButton(false)
-        playerView.showHideDmSwitchButton(true)
+        playerView.showHideDmSwitchButton(false)
         playerView.showHideLiveSettingButton(false)
-        playerView.showHideSubtitleButton(true)
+        playerView.showHideSubtitleButton(false)
         playerView.setShowHideOwnerInfo(false)
         playerView.setRepeatMode(Player.REPEAT_MODE_OFF)
         applyPlayerSettings(playerSettings)
@@ -598,6 +603,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         })
     }
 
+    private var preloadHeaderRefreshPosted = false
+
     private fun setupObservers() {
         lifecycleScope.launch {
             viewModel.playbackRequest.collect { request ->
@@ -635,50 +642,172 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         }
 
         lifecycleScope.launch {
+            viewModel.riskControlVVoucher.collect { vVoucher ->
+                if (vVoucher.isNullOrBlank()) return@collect
+                viewModel.consumeRiskControlVVoucher() ?: return@collect
+                AppLog.w(TAG, "risk-control v_voucher received, launching GaiaVgateActivity")
+                val intent = Intent(this@PlayerActivity, GaiaVgateActivity::class.java).apply {
+                    putExtra(GaiaVgateActivity.EXTRA_V_VOUCHER, vVoucher)
+                }
+                gaiaVgateLauncher.launch(intent)
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.riskControlTryLookBypass.collect { bypassed ->
+                if (bypassed != true) return@collect
+                if (riskControlUserHintShown.compareAndSet(false, true)) {
+                    Toast.makeText(this@PlayerActivity, RISK_CONTROL_USER_HINT, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
+        lifecycleScope.launch {
             viewModel.videoInfo.collect { info ->
                 latestVideoInfo = info
                 sessionCoordinator.updateVideoInfo(info)
                 schedulePreloadAndHeaderRefresh()
+                updatePrimaryActionVisibility()
             }
         }
 
-        lifecycleScope.launch { viewModel.isLoading.collect { loading -> latestLoadingState = loading; syncPlaybackEnvironment() } }
-        lifecycleScope.launch { viewModel.error.collect { error -> latestErrorMessage = error; if (error != null) syncPlaybackEnvironment() } }
-        lifecycleScope.launch { viewModel.currentPosition.collect { positionMs -> latestPlaybackPositionMs = positionMs } }
-        lifecycleScope.launch { viewModel.duration.collect { durationMs -> latestPlaybackDurationMs = durationMs } }
+        lifecycleScope.launch {
+            viewModel.isLoading.collect { loading ->
+                latestLoadingState = loading
+                renderDebugState()
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.error.collect { error ->
+                latestErrorMessage = error
+                if (!error.isNullOrBlank()) {
+                    AppLog.e(TAG, "viewModel error: $error")
+                }
+                playerView.setCustomErrorMessage(error)
+                renderDebugState()
+            }
+        }
+
+        lifecycleScope.launch { viewModel.currentPosition.collect { positionMs -> latestPlaybackPositionMs = positionMs.coerceAtLeast(0L); renderBottomProgressBar() } }
+        lifecycleScope.launch { viewModel.duration.collect { durationMs -> latestPlaybackDurationMs = durationMs.coerceAtLeast(0L); renderBottomProgressBar() } }
+
         lifecycleScope.launch {
             viewModel.currentSubtitleText.collect { subtitle ->
-                textSubtitle.text = subtitle
-                textSubtitle.isVisible = subtitle != null
+                val visible = !subtitle.isNullOrBlank()
+                textSubtitle.isVisible = visible
+                textSubtitle.text = subtitle.orEmpty()
+                if (::playerSettings.isInitialized) {
+                    textSubtitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, playerSettings.subtitleTextSizePx.toFloat())
+                }
             }
         }
-        lifecycleScope.launch { viewModel.qualities.collect { qualities -> playerView.setQualities(qualities) } }
-        lifecycleScope.launch { viewModel.audioQualities.collect { qualities -> playerView.setAudiosSelect(qualities) } }
-        lifecycleScope.launch { viewModel.videoCodecs.collect { codecs -> playerView.setVideoCodec(codecs) } }
-        lifecycleScope.launch { viewModel.selectedVideoCodec.collect { codec -> codec?.let(playerView::selectVideoCodec) } }
+
+        lifecycleScope.launch {
+            viewModel.qualities.collect { qualities -> playerView.setQualities(qualities) }
+        }
+        lifecycleScope.launch {
+            viewModel.selectedQuality.collect { quality -> quality?.let(playerView::selectQuality) }
+        }
+        lifecycleScope.launch {
+            viewModel.audioQualities.collect { qualities -> playerView.setAudiosSelect(qualities) }
+        }
+        lifecycleScope.launch {
+            viewModel.selectedAudioQuality.collect { quality -> quality?.let(playerView::selectAudio) }
+        }
+        lifecycleScope.launch {
+            viewModel.videoCodecs.collect { codecs -> playerView.setVideoCodec(codecs) }
+        }
+        lifecycleScope.launch {
+            viewModel.selectedVideoCodec.collect { codec -> codec?.let(playerView::selectVideoCodec) }
+        }
+
+        lifecycleScope.launch {
+            viewModel.subtitles.collect { subtitles ->
+                playerView.setSubtitles(subtitles)
+                playerView.showHideSubtitleButton(subtitles.isNotEmpty())
+            }
+        }
+        lifecycleScope.launch {
+            viewModel.selectedSubtitleIndex.collect { index ->
+                playerView.selectSubtitle(index)
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.danmakuUpdates.collect { update ->
+                if (update.replace) {
+                    playerView.setDanmakuData(update.items)
+                } else {
+                    playerView.appendDanmakuData(update.items)
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.danmaku.collect {
+                updateDanmakuSwitchVisibility()
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.specialDanmaku.collect { data ->
+                playerView.setSpecialDanmakuData(data)
+                updateDanmakuSwitchVisibility()
+            }
+        }
+
         lifecycleScope.launch {
             viewModel.episodes.collect { episodes ->
-                playerView.showHideEpisodeButton(episodes.size > 1)
+                sessionCoordinator.updateEpisodes(episodes)
+                schedulePreloadAndHeaderRefresh()
+                playerView.showHideEpisodeButton(episodes.isNotEmpty())
+                updateEpisodeNavigationVisibility()
             }
         }
         lifecycleScope.launch {
-            viewModel.relatedVideos.collect { related ->
-                playerView.showHideRelatedButton(related.isNotEmpty())
-                relatedAdapter.setData(related)
+            viewModel.selectedEpisodeIndex.collect { index ->
+                sessionCoordinator.updateSelectedEpisodeIndex(index)
+                schedulePreloadAndHeaderRefresh()
+                updateEpisodeNavigationVisibility()
             }
         }
+
+        lifecycleScope.launch {
+            viewModel.relatedVideos.collect { rawRelated ->
+                val related = ContentFilter.filterVideos(this@PlayerActivity, rawRelated)
+                sessionCoordinator.updateRelatedVideos(related)
+                schedulePreloadAndHeaderRefresh()
+                relatedAdapter.setData(related)
+                playerView.showHideRelatedButton(related.isNotEmpty())
+            }
+        }
+
         lifecycleScope.launch {
             viewModel.resumeHint.collect { hint -> resumeHintController.onHintChanged(hint) }
         }
+
         lifecycleScope.launch {
             viewModel.interactionModel.collect { model ->
-                interactionView.visibility = if (model != null) View.VISIBLE else View.GONE
-                model?.let { interactionView.setModel(it) }
+                if (model == null) {
+                    interactionView.visibility = View.GONE
+                    interactionView.removeAllViews()
+                } else {
+                    interactionView.visibility = View.VISIBLE
+                    interactionView.setModel(model)
+                }
             }
         }
+
         lifecycleScope.launch {
             viewModel.videoSnapshot.collect { snapshot ->
                 snapshot?.let { playerView.setSeekPreviewSnapshot(it) }
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.currentCidLive.collect { cid ->
+                interactionView.setCurrentCid(cid)
             }
         }
     }
@@ -725,6 +854,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         playerView.destroy()
         playerView.stopDanmaku()
         PlayerInstancePool.softDetach(player)
+        lastKeepScreenOnState = false
+        ViewUtils.keepScreenOn(this, false)
+        viewRelated.clearAnimation()
         player = null
         progressCoordinator.reset()
         super.onDestroy()
@@ -744,24 +876,112 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     }
 
     private fun schedulePreloadAndHeaderRefresh() {
-        updatePlaybackPreload()
+        if (preloadHeaderRefreshPosted) return
+        preloadHeaderRefreshPosted = true
+        binding.root.post {
+            preloadHeaderRefreshPosted = false
+            updatePlaybackPreload()
+            renderPlayerHeader()
+        }
     }
 
-    private fun updatePrimaryActionVisibility() {}
+    private fun updatePrimaryActionVisibility() {
+        val view = latestVideoInfo?.view
+        val hasOwner = view?.owner?.mid?.let { it > 0L } == true
+        val hasVideoIdentity = (view?.aid ?: 0L) > 0L || !view?.bvid.isNullOrBlank()
+        playerView.setShowHideOwnerInfo(hasOwner)
+        playerView.showHideActionButton(hasVideoIdentity)
+        playerView.showSettingButton(hasVideoIdentity)
+    }
+
+    private fun updateDanmakuSwitchVisibility() {
+        val hasDanmaku = viewModel.danmaku.value.orEmpty().isNotEmpty() ||
+            viewModel.specialDanmaku.value.orEmpty().isNotEmpty()
+        playerView.showHideDmSwitchButton(playerSettings.showDanmakuSwitch && hasDanmaku)
+    }
+
+    private fun updateEpisodeNavigationVisibility() {
+        val episodes = sessionCoordinator.getEpisodes()
+        val showNavigation = playerSettings.showNextPrevious && episodes.size > 1
+        playerView.showHideNextPrevious(showNavigation)
+        playerView.setEpisodeNavigationEnabled(
+            previousEnabled = showNavigation && viewModel.hasPreviousEpisode(),
+            nextEnabled = showNavigation && viewModel.hasNextEpisode()
+        )
+    }
+
+    private fun renderPlayerHeader() {
+        val video = latestVideoInfo?.view ?: return
+        val selectedEpisode = sessionCoordinator.getSelectedEpisode()
+        playerView.setTitle(buildHeaderTitle(video.title, selectedEpisode))
+        val metaParts = buildList {
+            video.owner?.name?.takeIf { it.isNotBlank() }?.let(::add)
+            video.stat?.view?.takeIf { it > 0 }?.let { add("${formatCount(it)}播放") }
+            if (video.pubDate > 0) {
+                add(TimeUtils.formatTime(video.pubDate))
+            }
+        }
+        playerView.setSubTitle(metaParts.joinToString(" · "))
+    }
+
+    private fun buildHeaderTitle(
+        videoTitle: String,
+        selectedEpisode: VideoPlayerViewModel.PlayableEpisode?
+    ): String {
+        val episodeTitle = selectedEpisode?.title?.trim().orEmpty()
+        if (episodeTitle.isBlank() || episodeTitle == videoTitle) {
+            return videoTitle
+        }
+        return "$episodeTitle ｜ $videoTitle"
+    }
+
+    private fun renderDebugState() {
+        if (!::playerSettings.isInitialized || !playerSettings.showDebugInfo) {
+            viewDebug.isVisible = false
+            textDebug.text = ""
+            return
+        }
+        when {
+            !latestErrorMessage.isNullOrBlank() -> {
+                viewDebug.isVisible = true
+                textDebug.text = latestErrorMessage
+            }
+            latestLoadingState -> {
+                viewDebug.isVisible = true
+                textDebug.text = getString(R.string.loading)
+            }
+            else -> {
+                viewDebug.isVisible = false
+                textDebug.text = ""
+            }
+        }
+    }
+
+    private fun formatCount(count: Long): String {
+        return when {
+            count >= 100000000L -> String.format(Locale.getDefault(), "%.1f亿", count / 100000000.0)
+            count >= 10000L -> String.format(Locale.getDefault(), "%.1f万", count / 10000.0)
+            else -> count.toString()
+        }
+    }
 
     private fun syncPlaybackEnvironment() {
-        val currentPlayer = player ?: return
-        val isPlaying = currentPlayer.isPlaying
-        val keepScreenOn = isPlaying || currentPlayer.playbackState == Player.STATE_BUFFERING
-        if (lastKeepScreenOnState != keepScreenOn) {
-            lastKeepScreenOnState = keepScreenOn
-            ViewUtils.keepScreenOn(this, keepScreenOn)
+        if (suppressPlaybackEnvironmentSync) {
+            return
         }
-        renderControllerChrome(if (playerView.isControllerFullyVisible()) View.VISIBLE else View.GONE)
-        renderBottomProgressBar()
+        val currentPlayer = player
+        val keepScreenOn = currentPlayer != null &&
+            currentPlayer.playWhenReady &&
+            currentPlayer.playbackState != Player.STATE_IDLE &&
+            currentPlayer.playbackState != Player.STATE_ENDED
+        if (lastKeepScreenOnState == keepScreenOn) {
+            return
+        }
+        lastKeepScreenOnState = keepScreenOn
+        ViewUtils.keepScreenOn(this, keepScreenOn)
     }
 
-    private fun renderControllerChrome(visibility: Int) {
+    private fun renderControllerChrome(visibility: Int = latestControllerVisibility) {
         latestControllerVisibility = visibility
         if (visibility == View.VISIBLE) {
             clearBottomProgressSeekPreview()
@@ -783,7 +1003,15 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     }
 
     private fun clearBottomProgressSeekPreview() {
+        if (!bottomProgressSeekPreviewActive &&
+            bottomProgressSeekPreviewPositionMs == 0L &&
+            bottomProgressSeekPreviewDurationMs == 0L
+        ) {
+            return
+        }
         bottomProgressSeekPreviewActive = false
+        bottomProgressSeekPreviewPositionMs = 0L
+        bottomProgressSeekPreviewDurationMs = 0L
     }
 
     private fun renderBottomProgressBar() {
@@ -796,8 +1024,14 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         if (!shouldShow) return
         val durationMs = if (bottomProgressSeekPreviewActive) bottomProgressSeekPreviewDurationMs else latestPlaybackDurationMs
         val positionMs = if (bottomProgressSeekPreviewActive) bottomProgressSeekPreviewPositionMs else latestPlaybackPositionMs
-        bottomProgressBar.progress = positionMs.toInt()
-        bottomProgressBar.max = durationMs.coerceAtLeast(1L).toInt()
+        val safeDuration = durationMs.coerceAtLeast(0L)
+            .coerceAtMost(Int.MAX_VALUE.toLong())
+            .toInt()
+        val safePosition = positionMs.coerceAtLeast(0L)
+            .coerceAtMost(safeDuration.toLong())
+            .toInt()
+        bottomProgressBar.max = safeDuration
+        bottomProgressBar.progress = safePosition
     }
 
     private fun capturePlaybackSnapshot(): Pair<Long, Boolean> {
@@ -834,13 +1068,22 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     }
 
     private fun resumePlaybackIfNeeded(reason: String) {
-        if (player?.playbackState == Player.STATE_READY && resumePlaybackWhenStarted) {
-            player?.playWhenReady = true
+        val currentPlayer = player ?: return
+        if (!resumePlaybackWhenStarted) {
+            return
         }
+        if (currentPlayer.playbackState == Player.STATE_ENDED) {
+            return
+        }
+        if (currentPlayer.playbackState == Player.STATE_IDLE) {
+            currentPlayer.prepare()
+        }
+        currentPlayer.playWhenReady = true
+        currentPlayer.play()
     }
 
     private fun restartProgressUpdates() { progressCoordinator.restart() }
-    private fun stopProgressUpdates() { progressCoordinator.stop() }
+    private fun stopProgressUpdates() { progressCoordinator.stop(); autoPlayController.cancelPendingAction() }
 
     private fun recoverFromPlaybackStall(positionMs: Long, stalledMs: Long) {
         val currentPlayer = player ?: return
@@ -890,7 +1133,16 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private fun showVideoInfoDialog() { overlayUiController.showVideoInfoDialog() }
 
     private fun applyPlayerSettings(settings: PlayerSettings) {
+        playerView.setPlaySpeed(settings.defaultPlaybackSpeed)
+        playerView.setSeekSecond(settings.fastSeekSeconds)
+        playerView.setSimpleKeyPressEnabled(settings.simpleKeyPress)
+        playerView.setPersistentBottomProgressEnabled(settings.showBottomProgressBar)
         playerView.showHideFfRe(settings.showRewindFastForward)
+        textSubtitle.setTextSize(TypedValue.COMPLEX_UNIT_PX, settings.subtitleTextSizePx.toFloat())
+        renderDebugState()
+        updateEpisodeNavigationVisibility()
+        updateDanmakuSwitchVisibility()
+        renderControllerChrome()
     }
 
     private inline fun <reified T : Serializable> Intent.serializableExtraCompat(key: String): T? {

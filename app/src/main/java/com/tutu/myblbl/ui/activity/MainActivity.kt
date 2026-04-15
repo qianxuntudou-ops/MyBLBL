@@ -80,6 +80,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState == null && shouldFinishDuplicateLauncherLaunch()) {
+            super.onCreate(savedInstanceState)
             AppLog.d(TAG, "ignore duplicate launcher launch and keep existing task")
             finish()
             return

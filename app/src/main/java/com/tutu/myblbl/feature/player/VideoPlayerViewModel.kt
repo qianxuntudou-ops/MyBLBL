@@ -811,8 +811,10 @@ class VideoPlayerViewModel(
                 hardwareSupportedCodecs = hardwareSupportedVideoCodecs
             )
             if (dashRoutePlan != null && dashRoutePlan.routes.isNotEmpty()) {
+                val route = dashRoutePlan.routes.first()
+                val sessionExpiryMs = resolveSessionExpiryMs(route)
                 try {
-                    dashMediaSource = dashMediaSourceFactory.createMediaSource(dashRoutePlan.routes.first())
+                    dashMediaSource = dashMediaSourceFactory.createMediaSource(route)
                     currentDashSession = VideoPlaybackSession(
                         identity = currentDashSession?.identity ?: SessionIdentity(
                             aid = currentAid,
@@ -825,11 +827,11 @@ class VideoPlayerViewModel(
                         requestedCodec = selectionSnapshot.selectedCodec,
                         actualQualityId = selectionSnapshot.selectedQualityId,
                         actualAudioId = dashRoutePlan.selectedAudioId,
-                        actualCodec = dashRoutePlan.routes.first().codec,
+                        actualCodec = route.codec,
                         playInfo = playInfo,
                         routePlan = dashRoutePlan,
-                        currentRoute = dashRoutePlan.routes.first(),
-                        expiresAtMs = 0L
+                        currentRoute = route,
+                        expiresAtMs = sessionExpiryMs
                     )
                 } catch (_: Exception) {
                     dashMediaSource = null
@@ -1173,6 +1175,7 @@ class VideoPlayerViewModel(
             if (dashRoutePlan != null && dashRoutePlan.routes.isNotEmpty()) {
                 val firstRoute = dashRoutePlan.routes.first()
                 AppLog.d(TAG, "dashRoute:resolved cid=${identity.cid} codec=${firstRoute.codec} routes=${dashRoutePlan.routes.size}")
+                val sessionExpiryMs = resolveSessionExpiryMs(firstRoute)
                 try {
                     dashMediaSource = dashMediaSourceFactory.createMediaSource(firstRoute)
                     currentDashSession = VideoPlaybackSession(
@@ -1191,7 +1194,7 @@ class VideoPlayerViewModel(
                         playInfo = initialPlayInfo,
                         routePlan = dashRoutePlan,
                         currentRoute = firstRoute,
-                        expiresAtMs = 0L
+                        expiresAtMs = sessionExpiryMs
                     )
                     AppLog.d(TAG, "dashMediaSource:created cid=${identity.cid}")
                 } catch (e: Exception) {
@@ -2493,6 +2496,21 @@ class VideoPlayerViewModel(
             rawUrl.startsWith("http://") || rawUrl.startsWith("https://") -> rawUrl
             else -> "https://$rawUrl"
         }
+    }
+
+    private fun extractUrlExpiryMs(url: String): Long {
+        val uri = android.net.Uri.parse(url)
+        val expiresParam = uri.getQueryParameter("expires")
+            ?: uri.getQueryParameter("deadline")
+            ?: return 0L
+        val expiresSeconds = expiresParam.toLongOrNull() ?: return 0L
+        return expiresSeconds * 1000L
+    }
+
+    private fun resolveSessionExpiryMs(route: DashRoute): Long {
+        val videoExpiry = extractUrlExpiryMs(route.videoRepresentation.baseUrl)
+        val audioExpiry = route.audioRepresentation?.baseUrl?.let(::extractUrlExpiryMs) ?: Long.MAX_VALUE
+        return minOf(videoExpiry, audioExpiry).takeIf { it > 0L } ?: 0L
     }
 
     private fun DetailSubtitleItem.toSubtitleInfoModel(): SubtitleInfoModel {

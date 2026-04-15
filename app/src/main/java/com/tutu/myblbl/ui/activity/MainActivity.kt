@@ -437,16 +437,17 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         launchContext: PlayerLaunchContext,
         addToBackStack: Boolean = true
     ) {
-        openFragmentWithReferenceBehavior(
-            fragment = VideoPlayerFragment.newInstance(launchContext),
-            tag = buildVideoPlayerTag(
-                aid = launchContext.aid,
-                bvid = launchContext.bvid,
-                cid = launchContext.cid,
-                epId = launchContext.epId,
-                seasonId = launchContext.seasonId
-            ),
-            addToBackStack = addToBackStack
+        PlayerActivity.start(
+            context = this,
+            aid = launchContext.aid,
+            bvid = launchContext.bvid,
+            cid = launchContext.cid,
+            epId = launchContext.epId,
+            seasonId = launchContext.seasonId,
+            seekPositionMs = launchContext.seekPositionMs,
+            initialVideo = launchContext.initialVideo,
+            playQueue = launchContext.playQueue,
+            startEpisodeIndex = launchContext.startEpisodeIndex
         )
     }
 

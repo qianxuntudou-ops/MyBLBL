@@ -96,10 +96,6 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 playQueue = playQueue,
                 startEpisodeIndex = startEpisodeIndex
             )
-            findMainActivityHost(context)?.let { hostActivity ->
-                hostActivity.openVideoPlayer(launchContext = launchContext)
-                return
-            }
             context.startActivity(Intent(context, PlayerActivity::class.java).apply {
                 if (context !is Activity) {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -158,23 +154,6 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 else -> items.filterNot { isSameVideo(it, current) }
             }
             return ArrayList(queueSource.filter(::isPlayableVideo))
-        }
-
-        private fun findMainActivityHost(context: Context): MainActivity? {
-            var current: Context? = context
-            while (current != null) {
-                when (current) {
-                    is MainActivity -> {
-                        if (!current.isFinishing && !current.isDestroyed) {
-                            return current
-                        }
-                        return null
-                    }
-                    is ContextWrapper -> current = current.baseContext
-                    else -> return null
-                }
-            }
-            return null
         }
 
         private fun isPlayableVideo(video: VideoModel): Boolean {

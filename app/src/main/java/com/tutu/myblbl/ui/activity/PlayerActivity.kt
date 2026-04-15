@@ -100,6 +100,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 if (context !is Activity) {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 putExtra(EXTRA_LAUNCH_CONTEXT, launchContext)
             })
         }
@@ -313,11 +314,23 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         }
     }
 
+    private var initialized = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent) {
         val launchContext = intent.serializableExtraCompat<PlayerLaunchContext>(EXTRA_LAUNCH_CONTEXT)
             ?: PlayerLaunchContext.create()
-        AppLog.d(TAG, "onCreate: aid=${launchContext.aid}, bvid=${launchContext.bvid}, cid=${launchContext.cid}")
+        AppLog.d(TAG, "handleIntent: aid=${launchContext.aid}, bvid=${launchContext.bvid}, cid=${launchContext.cid}")
         if (
             launchContext.aid <= 0L &&
             launchContext.bvid.isBlank() &&
@@ -328,48 +341,31 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             return
         }
 
-        initViews()
-        playerSettings = PlayerSettingsStore.load(this)
-        consumeLaunchContext(launchContext)
-        setupAdapters()
-        setupOverlayController()
-        setupPlayer()
-        setupBackHandler()
-        setupObservers()
-
-        resolveLaunchContext(launchContext)?.let { lc ->
-            if (
-                lc.aid > 0L ||
-                lc.bvid.isNotBlank() ||
-                lc.epId > 0L ||
-                lc.seasonId > 0L
-            ) {
-                viewModel.loadVideoInfo(
-                    aid = lc.aid,
-                    bvid = lc.bvid,
-                    cid = lc.cid,
-                    seasonId = lc.seasonId,
-                    epId = lc.epId,
-                    seekPositionMs = lc.seekPositionMs,
-                    startEpisodeIndex = lc.startEpisodeIndex
-                )
-            } else {
-                val snapshot = viewModel.consumeSavedSnapshot()
-                if (snapshot != null) {
-                    viewModel.loadVideoInfo(
-                        aid = snapshot.aid,
-                        bvid = snapshot.bvid,
-                        cid = snapshot.cid,
-                        seasonId = snapshot.seasonId,
-                        epId = snapshot.epId,
-                        seekPositionMs = snapshot.seekPositionMs,
-                        startEpisodeIndex = snapshot.episodeIndex,
-                        preferredQualityId = snapshot.qualityId,
-                        preferredAudioQualityId = snapshot.audioQualityId
-                    )
-                }
-            }
+        if (!initialized) {
+            initialized = true
+            initViews()
+            playerSettings = PlayerSettingsStore.load(this)
+            setupAdapters()
+            setupOverlayController()
+            setupPlayer()
+            setupBackHandler()
+            setupObservers()
         }
+
+        startPlayback(launchContext)
+    }
+
+    private fun startPlayback(launchContext: PlayerLaunchContext) {
+        player?.stop()
+        viewModel.loadVideoInfo(
+            aid = launchContext.aid,
+            bvid = launchContext.bvid,
+            cid = launchContext.cid,
+            seasonId = launchContext.seasonId,
+            epId = launchContext.epId,
+            seekPositionMs = launchContext.seekPositionMs,
+            startEpisodeIndex = launchContext.startEpisodeIndex
+        )
     }
 
     private fun initViews() {
@@ -411,19 +407,6 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 viewRelated.getLocationOnScreen(location)
                 event.rawY < location[1]
             } else false
-        }
-    }
-
-    private fun consumeLaunchContext(launchContext: PlayerLaunchContext) {
-        val playQueue = launchContext.playQueue
-        if (playQueue.isNotEmpty()) {
-            sessionCoordinator.replacePlayQueue(playQueue)
-        }
-    }
-
-    private fun resolveLaunchContext(lc: PlayerLaunchContext): PlayerLaunchContext? {
-        return lc.takeIf {
-            it.aid > 0L || it.bvid.isNotBlank() || it.epId > 0L || it.seasonId > 0L
         }
     }
 
@@ -738,7 +721,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         player?.removeListener(playerListener)
         playerView.destroy()
         playerView.stopDanmaku()
-        PlayerInstancePool.releaseNow("activity_destroy")
+        PlayerInstancePool.softDetach(player)
         player = null
         progressCoordinator.reset()
         super.onDestroy()

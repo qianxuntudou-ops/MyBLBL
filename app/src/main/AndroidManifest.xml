@@ -49,6 +49,7 @@
         <activity
             android:name=".ui.activity.PlayerActivity"
             android:exported="false"
+            android:launchMode="singleTop"
             android:screenOrientation="landscape"
             android:configChanges="screenSize|orientation|keyboardHidden"
             android:theme="@style/Theme.MyBLBL"

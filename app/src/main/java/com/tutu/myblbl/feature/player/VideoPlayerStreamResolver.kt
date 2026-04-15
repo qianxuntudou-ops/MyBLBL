@@ -414,8 +414,8 @@ internal class VideoPlayerStreamResolver(
     ): MediaSourceSelection {
         AppLog.d(TAG, "buildMediaSourceForRoute: fallback progressive path")
         val mediaSource = createMediaSource(
-            videoUrls = prioritizeUrl(route.videoUrls, videoUrl),
-            audioUrls = prioritizeUrl(route.audioUrls, audioUrl),
+            videoUrls = CdnLatencyProfile.sortUrlsByLatency(prioritizeUrl(route.videoUrls, videoUrl)),
+            audioUrls = CdnLatencyProfile.sortUrlsByLatency(prioritizeUrl(route.audioUrls, audioUrl)),
             videoMimeType = route.videoDescriptor.mimeType,
             audioMimeType = route.audioDescriptor?.mimeType.orEmpty()
         )

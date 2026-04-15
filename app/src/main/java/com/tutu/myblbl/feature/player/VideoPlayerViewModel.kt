@@ -351,6 +351,7 @@ class VideoPlayerViewModel(
     private var preloadedPlayback: PreloadedPlayback? = null
     private var preloadingIdentity: PlayRequestIdentity? = null
     private var preloadJob: Job? = null
+    private var hasReachedFirstFrame: Boolean = false
     private var pendingPlayerExtrasCid: Long = 0L
     private var pendingDanmakuRequest: PendingDanmakuRequest? = null
     private var loadedPlayerExtrasCid: Long = 0L
@@ -459,6 +460,8 @@ class VideoPlayerViewModel(
         lastReportedHeartbeatPositionSec = -1L
         resetFallbackState()
         clearPreloadedPlayback(cancelJob = true)
+        hasReachedFirstFrame = false
+        currentDashSession = null
         val loadGeneration = ++videoLoadGeneration
         _selectedSubtitleIndex.value = -1
         _currentSubtitleText.value = null
@@ -699,6 +702,7 @@ class VideoPlayerViewModel(
     }
 
     fun preloadPlayback(target: PlaybackPreloadTarget?) {
+        if (!hasReachedFirstFrame) return
         val identity = target?.toPlayRequestIdentity()
         val currentIdentity = currentPlayRequestIdentity()
         if (identity == null || identity == currentIdentity) {
@@ -1304,6 +1308,7 @@ class VideoPlayerViewModel(
     }
 
     fun onPlaybackFirstFrame() {
+        hasReachedFirstFrame = true
         val cid = currentCid.takeIf { it > 0L } ?: return
         if (pendingPlayerExtrasCid == cid && loadedPlayerExtrasCid != cid) {
             pendingPlayerExtrasCid = 0L

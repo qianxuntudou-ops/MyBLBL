@@ -3,7 +3,7 @@ package com.tutu.myblbl.feature.player
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
-import androidx.fragment.app.Fragment
+import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.tutu.myblbl.R
@@ -11,7 +11,7 @@ import com.tutu.myblbl.core.common.log.AppLog
 
 @UnstableApi
 class VideoPlayerResumeHintController(
-    private val fragment: Fragment,
+    private val activity: AppCompatActivity,
     private val playerProvider: () -> Player?,
     private val onCancelResume: () -> Unit,
     private val onClearResumeHint: () -> Unit
@@ -61,8 +61,8 @@ class VideoPlayerResumeHintController(
 
         resumeHintToast?.cancel()
         resumeHintToast = Toast.makeText(
-            fragment.requireContext(),
-            fragment.getString(R.string.tip_play_from_history),
+activity,
+                activity.getString(R.string.tip_play_from_history),
             Toast.LENGTH_LONG
         ).also { it.show() }
 

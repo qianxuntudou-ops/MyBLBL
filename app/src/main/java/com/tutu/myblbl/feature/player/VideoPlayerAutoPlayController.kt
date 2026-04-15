@@ -8,12 +8,12 @@ import android.view.animation.AnimationUtils
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.view.isVisible
-import androidx.fragment.app.Fragment
+import androidx.appcompat.app.AppCompatActivity
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.ui.image.ImageLoader
 
 class VideoPlayerAutoPlayController(
-    private val fragment: Fragment,
+    private val activity: AppCompatActivity,
     private val viewNext: View,
     private val imageNext: AppCompatImageView,
     private val textNext: TextView,
@@ -57,7 +57,7 @@ class VideoPlayerAutoPlayController(
         }
         viewNext.clearAnimation()
         viewNext.visibility = View.VISIBLE
-        AnimationUtils.loadAnimation(fragment.requireContext(), R.anim.slide_in_to_right).apply {
+        AnimationUtils.loadAnimation(activity, R.anim.slide_in_to_right).apply {
             viewNext.startAnimation(this)
         }
     }
@@ -71,7 +71,7 @@ class VideoPlayerAutoPlayController(
             return
         }
         viewNext.clearAnimation()
-        AnimationUtils.loadAnimation(fragment.requireContext(), R.anim.slide_out_to_right).apply {
+        AnimationUtils.loadAnimation(activity, R.anim.slide_out_to_right).apply {
             setAnimationListener(object : Animation.AnimationListener {
                 override fun onAnimationStart(animation: Animation?) = Unit
 

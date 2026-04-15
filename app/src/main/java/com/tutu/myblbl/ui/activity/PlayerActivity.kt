@@ -6,20 +6,68 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import androidx.annotation.OptIn
-import androidx.fragment.app.commit
+import android.os.SystemClock
+import android.util.TypedValue
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.ProgressBar
+import android.widget.TextClock
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.widget.AppCompatImageView
+import androidx.core.view.isVisible
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
-import com.tutu.myblbl.core.ui.base.BaseActivity
-import com.tutu.myblbl.databinding.ActivityPlayerBinding
-import com.tutu.myblbl.model.video.VideoModel
-import com.tutu.myblbl.feature.player.PlayerLaunchContext
-import com.tutu.myblbl.feature.player.VideoPlayerFragment
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.core.common.time.TimeUtils
+import com.tutu.myblbl.core.ui.base.BaseActivity
+import com.tutu.myblbl.core.ui.system.ViewUtils
+import com.tutu.myblbl.databinding.FragmentVideoPlayerBinding
+import com.tutu.myblbl.event.AppEventHub
+import com.tutu.myblbl.feature.player.CdnLatencyProfile
+import com.tutu.myblbl.feature.player.PlayerInstancePool
+import com.tutu.myblbl.feature.player.PlayerLaunchContext
+import com.tutu.myblbl.feature.player.PlayerOverlayCoordinator
+import com.tutu.myblbl.feature.player.PlayerSessionCoordinator
+import com.tutu.myblbl.feature.player.VideoPlayerAutoPlayController
+import com.tutu.myblbl.feature.player.VideoPlayerOverlayController
+import com.tutu.myblbl.feature.player.VideoPlayerProgressCoordinator
+import com.tutu.myblbl.feature.player.VideoPlayerResumeHintController
+import com.tutu.myblbl.feature.player.settings.PlayerSettings
+import com.tutu.myblbl.feature.player.settings.PlayerSettingsStore
+import com.tutu.myblbl.feature.player.view.InteractionVideoHandleView
+import com.tutu.myblbl.feature.player.view.MyPlayerView
+import com.tutu.myblbl.feature.player.view.OnPlayerSettingChange
+import com.tutu.myblbl.feature.player.view.OnVideoSettingChangeListener
+import com.tutu.myblbl.model.video.VideoModel
+import com.tutu.myblbl.model.video.detail.VideoDetailModel
+import com.tutu.myblbl.model.video.quality.AudioQuality
+import com.tutu.myblbl.model.video.quality.VideoCodecEnum
+import com.tutu.myblbl.model.video.quality.VideoQuality
+import com.tutu.myblbl.ui.adapter.VideoAdapter
+import kotlinx.coroutines.launch
+import org.koin.android.ext.android.inject
+import org.koin.androidx.viewmodel.ext.android.viewModel
 import java.io.Serializable
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
-@OptIn(UnstableApi::class)
-class PlayerActivity : BaseActivity<ActivityPlayerBinding>() {
+private const val RISK_CONTROL_USER_HINT = "账号被风控了，请到设置中完成验证"
+private val riskControlUserHintShown = AtomicBoolean(false)
+
+@UnstableApi
+class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
 
     companion object {
         private const val TAG = "PlayerActivity"
@@ -122,7 +170,6 @@ class PlayerActivity : BaseActivity<ActivityPlayerBinding>() {
                         }
                         return null
                     }
-
                     is ContextWrapper -> current = current.baseContext
                     else -> return null
                 }
@@ -148,34 +195,737 @@ class PlayerActivity : BaseActivity<ActivityPlayerBinding>() {
         }
     }
 
-    override fun getViewBinding(): ActivityPlayerBinding =
-        ActivityPlayerBinding.inflate(layoutInflater)
+    private val appEventHub: AppEventHub by inject()
+
+    override fun getViewBinding(): FragmentVideoPlayerBinding =
+        FragmentVideoPlayerBinding.inflate(layoutInflater)
+
+    private val viewModel: com.tutu.myblbl.feature.player.VideoPlayerViewModel by viewModel()
+
+    private var player: ExoPlayer? = null
+    private val overlayCoordinator = PlayerOverlayCoordinator()
+
+    private lateinit var playerView: MyPlayerView
+    private lateinit var bottomProgressBar: ProgressBar
+    private lateinit var textClock: TextClock
+    private lateinit var textSubtitle: TextView
+    private lateinit var viewDebug: View
+    private lateinit var textDebug: TextView
+    private lateinit var viewNext: View
+    private lateinit var viewRelated: View
+    private lateinit var recyclerViewRelated: RecyclerView
+    private lateinit var textMoreTitle: TextView
+    private lateinit var buttonCloseRelated: View
+    private lateinit var imageNext: AppCompatImageView
+    private lateinit var textNext: TextView
+    private lateinit var interactionView: InteractionVideoHandleView
+
+    private lateinit var relatedAdapter: VideoAdapter
+    private lateinit var autoPlayController: VideoPlayerAutoPlayController
+    private lateinit var overlayUiController: VideoPlayerOverlayController
+    private lateinit var resumeHintController: VideoPlayerResumeHintController
+
+    private var latestErrorMessage: String? = null
+    private var latestLoadingState: Boolean = false
+    private var latestVideoInfo: VideoDetailModel? = null
+    private lateinit var playerSettings: PlayerSettings
+    private var latestControllerVisibility: Int = View.GONE
+    private var latestPlaybackPositionMs: Long = 0L
+    private var latestPlaybackDurationMs: Long = 0L
+    private var bottomProgressSeekPreviewActive: Boolean = false
+    private var bottomProgressSeekPreviewPositionMs: Long = 0L
+    private var bottomProgressSeekPreviewDurationMs: Long = 0L
+    private val sessionCoordinator = PlayerSessionCoordinator()
+    private var resumePlaybackWhenStarted: Boolean = false
+    private var startupTrace: StartupTrace? = null
+    private var startupTraceSequence: Int = 0
+    private var suppressPlaybackEnvironmentSync: Boolean = false
+    private var lastKeepScreenOnState: Boolean? = null
+
+    private val gaiaVgateLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            val gaiaVtoken = result.data?.getStringExtra(GaiaVgateActivity.EXTRA_GAIA_VTOKEN)
+            if (!gaiaVtoken.isNullOrBlank()) {
+                viewModel.onGaiaVgateResult(gaiaVtoken)
+            }
+        }
+    }
+
+    private val resumePlaybackRunnable = Runnable {
+        resumePlaybackIfNeeded(reason = "delayed_resume")
+    }
+
+    private val progressCoordinator = VideoPlayerProgressCoordinator(
+        playerProvider = { player },
+        publishProgressStateProvider = { bottomProgressBar.isVisible },
+        onProgressPublished = { positionMs, durationMs, publishProgressState ->
+            viewModel.updatePlaybackPosition(positionMs, durationMs, publishProgressState)
+        },
+        onPlaybackPositionChanged = { positionMs ->
+            playerView.syncDanmakuPosition(positionMs)
+            interactionView.onPositionUpdate(positionMs)
+        },
+        onPlaybackStalled = { positionMs, stalledMs ->
+            recoverFromPlaybackStall(positionMs, stalledMs)
+        }
+    )
+
+    private fun cancelResume(): Boolean = resumeHintController.cancelResume()
+
+    private val playerListener = object : Player.Listener {
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            when (playbackState) {
+                Player.STATE_BUFFERING -> {
+                    viewModel.setLoading(true)
+                    playerView.pauseDanmaku()
+                }
+                Player.STATE_READY -> {
+                    startupTrace
+                        ?.takeIf { !it.readyLogged }
+                        ?.also {
+                            it.readyLogged = true
+                            AppLog.d(TAG, "startup trace #${it.sequence}: ready in ${SystemClock.elapsedRealtime() - it.startedAtMs}ms")
+                        }
+                    viewModel.setLoading(false)
+                    if (player?.playWhenReady == true) {
+                        playerView.resumeDanmaku()
+                    }
+                    hideNextPreview()
+                }
+                Player.STATE_ENDED -> {
+                    viewModel.setLoading(false)
+                    playerView.stopDanmaku()
+                    handlePlaybackEnded()
+                }
+                Player.STATE_IDLE -> {
+                    viewModel.setLoading(false)
+                    playerView.pauseDanmaku()
+                }
+            }
+            syncPlaybackEnvironment()
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            startupTrace = null
+            viewModel.setLoading(false)
+            viewModel.handlePlaybackError(error, player?.currentPosition ?: 0L)
+            AppLog.e(TAG, "player error: ${error.message}", error)
+            playerView.pauseDanmaku()
+            syncPlaybackEnvironment()
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) {
+                playerView.resumeDanmaku()
+                progressCoordinator.restart()
+            } else {
+                playerView.pauseDanmaku()
+                progressCoordinator.stop()
+                progressCoordinator.syncNow(publishProgressState = true)
+            }
+            syncPlaybackEnvironment()
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            resumePlaybackWhenStarted = playWhenReady
+            syncPlaybackEnvironment()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val launchContext = intent.serializableExtraCompat<PlayerLaunchContext>(EXTRA_LAUNCH_CONTEXT)
             ?: PlayerLaunchContext.create()
-        AppLog.d(
-            TAG,
-            "onCreate: aid=${launchContext.aid}, bvid=${launchContext.bvid}, cid=${launchContext.cid}, epId=${launchContext.epId}, seasonId=${launchContext.seasonId}, seek=${launchContext.seekPositionMs}, queue=${launchContext.playQueue.size}, startEpisode=${launchContext.startEpisodeIndex}"
-        )
+        AppLog.d(TAG, "onCreate: aid=${launchContext.aid}, bvid=${launchContext.bvid}, cid=${launchContext.cid}")
         if (
             launchContext.aid <= 0L &&
             launchContext.bvid.isBlank() &&
             launchContext.epId <= 0L &&
             launchContext.seasonId <= 0L
         ) {
-            return finish()
+            finish()
+            return
         }
 
-        if (savedInstanceState == null) {
-            supportFragmentManager.commit {
-                replace(
-                    R.id.player_container,
-                    VideoPlayerFragment.newInstance(launchContext)
+        initViews()
+        playerSettings = PlayerSettingsStore.load(this)
+        consumeLaunchContext(launchContext)
+        setupAdapters()
+        setupOverlayController()
+        setupPlayer()
+        setupBackHandler()
+        setupObservers()
+
+        resolveLaunchContext(launchContext)?.let { lc ->
+            if (
+                lc.aid > 0L ||
+                lc.bvid.isNotBlank() ||
+                lc.epId > 0L ||
+                lc.seasonId > 0L
+            ) {
+                viewModel.loadVideoInfo(
+                    aid = lc.aid,
+                    bvid = lc.bvid,
+                    cid = lc.cid,
+                    seasonId = lc.seasonId,
+                    epId = lc.epId,
+                    seekPositionMs = lc.seekPositionMs,
+                    startEpisodeIndex = lc.startEpisodeIndex
                 )
+            } else {
+                val snapshot = viewModel.consumeSavedSnapshot()
+                if (snapshot != null) {
+                    viewModel.loadVideoInfo(
+                        aid = snapshot.aid,
+                        bvid = snapshot.bvid,
+                        cid = snapshot.cid,
+                        seasonId = snapshot.seasonId,
+                        epId = snapshot.epId,
+                        seekPositionMs = snapshot.seekPositionMs,
+                        startEpisodeIndex = snapshot.episodeIndex,
+                        preferredQualityId = snapshot.qualityId,
+                        preferredAudioQualityId = snapshot.audioQualityId
+                    )
+                }
             }
         }
+    }
+
+    private fun initViews() {
+        playerView = binding.playerView
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            playerView.defaultFocusHighlightEnabled = false
+        }
+        bottomProgressBar = binding.bottomProgressBar
+        textClock = binding.textClock
+        textSubtitle = binding.textSubtitle
+        viewDebug = binding.viewDebug
+        textDebug = binding.textDebug
+        viewNext = binding.viewNext
+        viewRelated = binding.viewRelated
+        recyclerViewRelated = binding.recyclerViewRelated
+        textMoreTitle = binding.root.findViewById(R.id.title_more)
+        buttonCloseRelated = binding.root.findViewById(R.id.button_close_related)
+        imageNext = binding.root.findViewById(R.id.imageView_next)
+        textNext = binding.root.findViewById(R.id.text_next)
+        interactionView = binding.interactionView
+
+        viewDebug.visibility = View.GONE
+        viewRelated.visibility = View.GONE
+        viewNext.visibility = View.GONE
+        textSubtitle.visibility = View.GONE
+        interactionView.visibility = View.GONE
+        interactionView.setCallback(object : InteractionVideoHandleView.InteractionCallback {
+            override fun onPauseVideo() { player?.pause() }
+            override fun onJumpToCid(cid: Long, edgeId: Long) {
+                player?.pause()
+                viewModel.playInteractionChoice(cid, edgeId)
+            }
+            override fun onGetPlayerView(): View? = playerView
+        })
+        buttonCloseRelated.setOnClickListener { hideContentPanel() }
+        playerView.setTouchInterceptListener { event ->
+            if (event.action == MotionEvent.ACTION_DOWN && viewRelated.isVisible) {
+                val location = IntArray(2)
+                viewRelated.getLocationOnScreen(location)
+                event.rawY < location[1]
+            } else false
+        }
+    }
+
+    private fun consumeLaunchContext(launchContext: PlayerLaunchContext) {
+        val playQueue = launchContext.playQueue
+        if (playQueue.isNotEmpty()) {
+            sessionCoordinator.replacePlayQueue(playQueue)
+        }
+    }
+
+    private fun resolveLaunchContext(lc: PlayerLaunchContext): PlayerLaunchContext? {
+        return lc.takeIf {
+            it.aid > 0L || it.bvid.isNotBlank() || it.epId > 0L || it.seasonId > 0L
+        }
+    }
+
+    private fun setupAdapters() {
+        relatedAdapter = VideoAdapter(
+            itemWidthPx = (resources.displayMetrics.widthPixels / 5).coerceAtLeast(1)
+        )
+        relatedAdapter.setOnItemClickListener { _, item ->
+            hideContentPanel()
+            hideNextPreview()
+            sessionCoordinator.replacePlayQueue(buildPlayQueue(relatedAdapter.getItemsSnapshot(), item))
+            sessionCoordinator.updateCurrentVideo(item)
+            viewModel.playRelatedVideo(item)
+        }
+    }
+
+    private fun setupOverlayController() {
+        autoPlayController = VideoPlayerAutoPlayController(
+            activity = this,
+            viewNext = viewNext,
+            imageNext = imageNext,
+            textNext = textNext,
+            canExecutePendingAction = { player?.playbackState == Player.STATE_ENDED }
+        )
+        overlayUiController = VideoPlayerOverlayController(
+            activity = this,
+            playerView = playerView,
+            overlayCoordinator = overlayCoordinator,
+            sessionCoordinator = sessionCoordinator,
+            playerProvider = { player },
+            latestVideoInfoProvider = { latestVideoInfo },
+            relatedAdapter = relatedAdapter,
+            viewRelated = viewRelated,
+            recyclerViewRelated = recyclerViewRelated,
+            textMoreTitle = textMoreTitle,
+            onPlayEpisode = { index -> viewModel.playEpisode(index) },
+            onPlayRelatedVideo = { video, playQueue ->
+                sessionCoordinator.replacePlayQueue(playQueue)
+                sessionCoordinator.updateCurrentVideo(video)
+                updatePlaybackPreload()
+                viewModel.playRelatedVideo(video)
+            },
+            onOpenFragmentFromHost = { _, _ -> },
+            onHideNextPreview = { autoPlayController.hideNextPreview() },
+            isViewActive = { true }
+        )
+        resumeHintController = VideoPlayerResumeHintController(
+            activity = this,
+            playerProvider = { player },
+            onCancelResume = { viewModel.cancelResumeProgress() },
+            onClearResumeHint = { viewModel.clearResumeHint() }
+        )
+    }
+
+    private fun setupPlayer() {
+        player = PlayerInstancePool.acquire(this).also {
+            it.playWhenReady = false
+            if (::playerSettings.isInitialized) {
+                it.playbackParameters = PlaybackParameters(playerSettings.defaultPlaybackSpeed)
+            }
+            it.addListener(playerListener)
+        }
+        playerView.setPlayer(player)
+        playerView.setRenderEventListener(object : MyPlayerView.RenderEventListener {
+            override fun onRenderedFirstFrame() {
+                viewModel.onPlaybackFirstFrame()
+                startupTrace
+                    ?.takeIf { !it.firstFrameLogged }
+                    ?.also {
+                        it.firstFrameLogged = true
+                        AppLog.d(TAG, "startup trace #${it.sequence}: first frame in ${SystemClock.elapsedRealtime() - it.startedAtMs}ms")
+                    }
+            }
+        })
+        playerView.setControllerVisibilityListener(object : MyPlayerView.ControllerVisibilityListener {
+            override fun onVisibilityChanged(visibility: Int) {
+                renderControllerChrome(visibility)
+                if (visibility != View.VISIBLE) {
+                    progressCoordinator.syncNow(publishProgressState = true)
+                }
+            }
+        })
+        playerView.setSeekPreviewListener(object : MyPlayerView.SeekPreviewListener {
+            override fun onSeekPreviewStateChanged(active: Boolean, positionMs: Long, durationMs: Long) {
+                bottomProgressSeekPreviewActive = active
+                bottomProgressSeekPreviewPositionMs = positionMs
+                bottomProgressSeekPreviewDurationMs = durationMs
+                renderBottomProgressBar()
+            }
+        })
+        playerView.setControllerAutoShow(false)
+        playerView.hideController()
+        playerView.onResumeProgressCancelled = { cancelResume() }
+        playerView.showSettingButton(false)
+        playerView.showHideNextPrevious(false)
+        playerView.showHideFfRe(playerSettings.showRewindFastForward)
+        playerView.showHideActionButton(false)
+        playerView.showHideEpisodeButton(false)
+        playerView.showHideRelatedButton(false)
+        playerView.showHideDmSwitchButton(false)
+        playerView.showHideLiveSettingButton(false)
+        playerView.showHideSubtitleButton(false)
+        playerView.setShowHideOwnerInfo(false)
+        playerView.setRepeatMode(Player.REPEAT_MODE_OFF)
+        applyPlayerSettings(playerSettings)
+        syncPlaybackEnvironment()
+        playerView.setOnPlayerSettingChange(object : OnPlayerSettingChange {
+            override fun onVideoQualityChange(quality: VideoQuality) {
+                val snapshot = capturePlaybackSnapshot()
+                viewModel.selectVideoQuality(quality = quality, currentPositionMs = snapshot.first, playWhenReady = snapshot.second)
+                playerView.showHideSettingView(false)
+            }
+            override fun onAudioQualityChange(quality: AudioQuality) {
+                val snapshot = capturePlaybackSnapshot()
+                viewModel.selectAudioQuality(quality = quality, currentPositionMs = snapshot.first, playWhenReady = snapshot.second)
+                playerView.showHideSettingView(false)
+            }
+            override fun onPlaybackSpeedChange(speed: Float) { playerView.setPlaySpeed(speed) }
+            override fun onSubtitleChange(position: Int) {
+                viewModel.selectSubtitle(position)
+                playerView.showHideSettingView(false)
+            }
+            override fun onVideoCodecChange(codec: VideoCodecEnum) {
+                val snapshot = capturePlaybackSnapshot()
+                viewModel.selectVideoCodec(codec = codec, currentPositionMs = snapshot.first, playWhenReady = snapshot.second)
+                playerView.showHideSettingView(false)
+            }
+            override fun onAspectRatioChange(ratio: Int) {}
+        })
+        playerView.setOnVideoSettingChangeListener(object : OnVideoSettingChangeListener {
+            override fun onPrevious() { viewModel.playPrevious() }
+            override fun onNext() { viewModel.playNext() }
+            override fun onClose() { finish() }
+            override fun onChooseEpisode() { showChooseEpisodeDialog() }
+            override fun onRelated() { showRelatedPanel() }
+            override fun onUpInfo() { showOwnerDetailDialog() }
+            override fun onMore() { showPlayerActionDialog() }
+            override fun onVideoInfo() { showVideoInfoDialog() }
+            override fun onSubtitle() {
+                if (viewModel.subtitles.value.orEmpty().isNotEmpty()) {
+                    playerView.showSubtitleSettingView()
+                }
+            }
+            override fun onRepeat() {
+                val currentPlayer = player ?: return
+                currentPlayer.repeatMode = if (currentPlayer.repeatMode == Player.REPEAT_MODE_ONE) {
+                    Player.REPEAT_MODE_OFF
+                } else {
+                    Player.REPEAT_MODE_ONE
+                }
+                playerView.setRepeatMode(currentPlayer.repeatMode)
+                Toast.makeText(this@PlayerActivity, if (currentPlayer.repeatMode == Player.REPEAT_MODE_ONE) "单集循环" else "顺序播放", Toast.LENGTH_SHORT).show()
+            }
+            override fun onDmEnableChange(enabled: Boolean) { playerView.setDanmakuEnabled(enabled) }
+        })
+        renderControllerChrome(View.GONE)
+    }
+
+    private fun setupBackHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (overlayCoordinator.hasVisiblePanel()) {
+                    overlayCoordinator.handleBackPress(
+                        nowMs = System.currentTimeMillis(),
+                        isSettingShowing = playerView.isSettingViewShowing(),
+                        hideSetting = { playerView.showHideSettingView(false) },
+                        isControllerFullyVisible = playerView.isControllerFullyVisible(),
+                        hideController = { playerView.hideController() },
+                        hidePanel = { hideContentPanel() },
+                        exitPlayer = { finish() },
+                        showExitPrompt = {
+                            Toast.makeText(this@PlayerActivity, "再按一次退出", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                    return
+                }
+                if (playerView.isSettingViewShowing()) {
+                    playerView.showHideSettingView(false)
+                    return
+                }
+                if (playerView.isControllerFullyVisible()) {
+                    playerView.hideController()
+                    return
+                }
+                finish()
+            }
+        })
+    }
+
+    private fun setupObservers() {
+        lifecycleScope.launch {
+            viewModel.playbackRequest.collect { request ->
+                val currentPlayer = player ?: return@collect
+                val playbackRequest = request ?: return@collect
+                viewModel.setErrorMessage(null)
+                resumePlaybackWhenStarted = playbackRequest.playWhenReady
+                if (playbackRequest.replaceInPlace) {
+                    playerView.showController()
+                    playerView.removeControllerHideCallbacks()
+                }
+                progressCoordinator.reset()
+                if (!playbackRequest.replaceInPlace) {
+                    playerView.prepareForPlaybackTransition()
+                }
+                startupTrace = StartupTrace(
+                    sequence = ++startupTraceSequence,
+                    startedAtMs = SystemClock.elapsedRealtime()
+                )
+                AppLog.d(TAG, "startup trace #$startupTraceSequence: apply playback request replaceInPlace=${playbackRequest.replaceInPlace}")
+                playerView.syncDanmakuPosition(playbackRequest.seekPositionMs, forceSeek = true)
+                suppressPlaybackEnvironmentSync = true
+                try {
+                    currentPlayer.playWhenReady = false
+                    currentPlayer.stop()
+                    currentPlayer.setMediaSource(playbackRequest.mediaSource)
+                    currentPlayer.seekTo(playbackRequest.seekPositionMs)
+                    currentPlayer.prepare()
+                    currentPlayer.playWhenReady = playbackRequest.playWhenReady
+                } finally {
+                    suppressPlaybackEnvironmentSync = false
+                }
+                syncPlaybackEnvironment()
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.videoInfo.collect { info ->
+                latestVideoInfo = info
+                sessionCoordinator.updateVideoInfo(info)
+                schedulePreloadAndHeaderRefresh()
+            }
+        }
+
+        lifecycleScope.launch { viewModel.isLoading.collect { loading -> latestLoadingState = loading; syncPlaybackEnvironment() } }
+        lifecycleScope.launch { viewModel.error.collect { error -> latestErrorMessage = error; if (error != null) syncPlaybackEnvironment() } }
+        lifecycleScope.launch { viewModel.currentPosition.collect { positionMs -> latestPlaybackPositionMs = positionMs } }
+        lifecycleScope.launch { viewModel.duration.collect { durationMs -> latestPlaybackDurationMs = durationMs } }
+        lifecycleScope.launch {
+            viewModel.currentSubtitleText.collect { subtitle ->
+                textSubtitle.text = subtitle
+                textSubtitle.isVisible = subtitle != null
+            }
+        }
+        lifecycleScope.launch { viewModel.qualities.collect { qualities -> playerView.setQualities(qualities) } }
+        lifecycleScope.launch { viewModel.audioQualities.collect { qualities -> playerView.setAudiosSelect(qualities) } }
+        lifecycleScope.launch { viewModel.videoCodecs.collect { codecs -> playerView.setVideoCodec(codecs) } }
+        lifecycleScope.launch { viewModel.selectedVideoCodec.collect { codec -> codec?.let(playerView::selectVideoCodec) } }
+        lifecycleScope.launch {
+            viewModel.episodes.collect { episodes ->
+                playerView.showHideEpisodeButton(episodes.size > 1)
+            }
+        }
+        lifecycleScope.launch {
+            viewModel.relatedVideos.collect { related ->
+                playerView.showHideRelatedButton(related.isNotEmpty())
+                relatedAdapter.setData(related)
+            }
+        }
+        lifecycleScope.launch {
+            viewModel.resumeHint.collect { hint -> resumeHintController.onHintChanged(hint) }
+        }
+        lifecycleScope.launch {
+            viewModel.interactionModel.collect { model ->
+                interactionView.visibility = if (model != null) View.VISIBLE else View.GONE
+                model?.let { interactionView.setModel(it) }
+            }
+        }
+        lifecycleScope.launch {
+            viewModel.videoSnapshot.collect { snapshot ->
+                snapshot?.let { playerView.setSeekPreviewSnapshot(it) }
+            }
+        }
+    }
+
+    // --- Lifecycle ---
+
+    override fun onStart() {
+        super.onStart()
+        resumePlaybackIfNeeded(reason = "onStart")
+        if (resumePlaybackWhenStarted) {
+            playerView.resumeDanmaku()
+        } else {
+            playerView.pauseDanmaku()
+        }
+        syncPlaybackEnvironment()
+        if (player != null) {
+            restartProgressUpdates()
+        }
+        playerView.removeCallbacks(resumePlaybackRunnable)
+        playerView.postDelayed(resumePlaybackRunnable, 250L)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        playerView.removeCallbacks(resumePlaybackRunnable)
+        progressCoordinator.syncNow()
+        val (snapshotPositionMs, snapshotPlayWhenReady) = capturePlaybackSnapshot()
+        postPlaybackProgressEvent(snapshotPositionMs)
+        viewModel.reportPlaybackHeartbeat()
+        viewModel.savePlayerSnapshot()
+        resumePlaybackWhenStarted = snapshotPlayWhenReady
+        player?.playWhenReady = false
+        playerView.pauseDanmaku()
+        stopProgressUpdates()
+        syncPlaybackEnvironment()
+    }
+
+    override fun onDestroy() {
+        playerView.removeCallbacks(resumePlaybackRunnable)
+        stopProgressUpdates()
+        resumeHintController.release()
+        player?.removeListener(playerListener)
+        playerView.destroy()
+        playerView.stopDanmaku()
+        PlayerInstancePool.releaseNow("activity_destroy")
+        player = null
+        progressCoordinator.reset()
+        super.onDestroy()
+    }
+
+    // --- Helper methods (delegated from Fragment logic) ---
+
+    private data class StartupTrace(
+        val sequence: Int,
+        val startedAtMs: Long,
+        var firstFrameLogged: Boolean = false,
+        var readyLogged: Boolean = false
+    )
+
+    private fun updatePlaybackPreload() {
+        viewModel.preloadPlayback(sessionCoordinator.buildPreloadTarget())
+    }
+
+    private fun schedulePreloadAndHeaderRefresh() {
+        updatePlaybackPreload()
+    }
+
+    private fun updatePrimaryActionVisibility() {}
+
+    private fun syncPlaybackEnvironment() {
+        val currentPlayer = player ?: return
+        val isPlaying = currentPlayer.isPlaying
+        val keepScreenOn = isPlaying || currentPlayer.playbackState == Player.STATE_BUFFERING
+        if (lastKeepScreenOnState != keepScreenOn) {
+            lastKeepScreenOnState = keepScreenOn
+            ViewUtils.keepScreenOn(this, keepScreenOn)
+        }
+        renderControllerChrome(if (playerView.isControllerFullyVisible()) View.VISIBLE else View.GONE)
+        renderBottomProgressBar()
+    }
+
+    private fun renderControllerChrome(visibility: Int) {
+        latestControllerVisibility = visibility
+        if (visibility == View.VISIBLE) {
+            clearBottomProgressSeekPreview()
+        }
+        val subtitleBottomMarginRes = if (visibility == View.VISIBLE) {
+            R.dimen.px300
+        } else {
+            R.dimen.px60
+        }
+        (textSubtitle.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            val targetMargin = resources.getDimensionPixelSize(subtitleBottomMarginRes)
+            if (params.bottomMargin != targetMargin) {
+                params.bottomMargin = targetMargin
+                textSubtitle.layoutParams = params
+            }
+        }
+        renderBottomProgressBar()
+        textClock.visibility = visibility
+    }
+
+    private fun clearBottomProgressSeekPreview() {
+        bottomProgressSeekPreviewActive = false
+    }
+
+    private fun renderBottomProgressBar() {
+        if (!::playerSettings.isInitialized) {
+            bottomProgressBar.isVisible = false
+            return
+        }
+        val shouldShow = playerSettings.showBottomProgressBar && latestControllerVisibility != View.VISIBLE
+        bottomProgressBar.isVisible = shouldShow
+        if (!shouldShow) return
+        val durationMs = if (bottomProgressSeekPreviewActive) bottomProgressSeekPreviewDurationMs else latestPlaybackDurationMs
+        val positionMs = if (bottomProgressSeekPreviewActive) bottomProgressSeekPreviewPositionMs else latestPlaybackPositionMs
+        bottomProgressBar.progress = positionMs.toInt()
+        bottomProgressBar.max = durationMs.coerceAtLeast(1L).toInt()
+    }
+
+    private fun capturePlaybackSnapshot(): Pair<Long, Boolean> {
+        val positionMs = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        val playWhenReady = player?.playWhenReady ?: resumePlaybackWhenStarted
+        return positionMs to playWhenReady
+    }
+
+    private fun postPlaybackProgressEvent(positionMs: Long) {
+        val info = latestVideoInfo?.view ?: return
+        val episodes = sessionCoordinator.getEpisodes()
+        val selectedIndex = sessionCoordinator.getSelectedEpisodeIndex()
+        if (episodes.isNotEmpty() && selectedIndex in episodes.indices) {
+            val episode = episodes[selectedIndex]
+            if (episode.epId > 0L) {
+                appEventHub.dispatch(
+                    AppEventHub.Event.EpisodePlaybackProgressUpdated(
+                        episodeId = episode.epId,
+                        progressMs = positionMs.coerceAtLeast(0L).plus(1L),
+                        episodeIndex = episode.title
+                    )
+                )
+                return
+            }
+        }
+        val progressMs = positionMs.coerceAtLeast(0L).plus(1L)
+        appEventHub.dispatch(
+            AppEventHub.Event.PlaybackProgressUpdated(
+                aid = info.aid,
+                cid = info.cid,
+                progressMs = progressMs
+            )
+        )
+    }
+
+    private fun resumePlaybackIfNeeded(reason: String) {
+        if (player?.playbackState == Player.STATE_READY && resumePlaybackWhenStarted) {
+            player?.playWhenReady = true
+        }
+    }
+
+    private fun restartProgressUpdates() { progressCoordinator.restart() }
+    private fun stopProgressUpdates() { progressCoordinator.stop() }
+
+    private fun recoverFromPlaybackStall(positionMs: Long, stalledMs: Long) {
+        val currentPlayer = player ?: return
+        if (stalledMs > 3000L) {
+            currentPlayer.seekTo(positionMs + stalledMs)
+        }
+    }
+
+    private fun handlePlaybackEnded() {
+        when (
+            val plan = sessionCoordinator.buildContinuationPlan(
+                continuePlaybackAfterFinish = playerSettings.continuePlaybackAfterFinish,
+                exitPlayerWhenPlaybackFinished = playerSettings.exitPlayerWhenPlaybackFinished,
+                hasNextEpisode = viewModel.hasNextEpisode(),
+                nextEpisode = viewModel.getNextEpisode(),
+                playNextEpisode = { viewModel.playNext() },
+                playVideo = {
+                    sessionCoordinator.updateCurrentVideo(it)
+                    viewModel.playRelatedVideo(it)
+                }
+            )
+        ) {
+            is PlayerSessionCoordinator.ContinuationPlan.PlayNextEpisode -> {
+                autoPlayController.queueNextAction(plan.title, plan.coverUrl, plan.perform)
+            }
+            is PlayerSessionCoordinator.ContinuationPlan.PlayVideo -> {
+                autoPlayController.queueNextAction(plan.title, plan.coverUrl, plan.perform)
+            }
+            is PlayerSessionCoordinator.ContinuationPlan.ExitPlayer -> finish()
+            is PlayerSessionCoordinator.ContinuationPlan.ShowController -> {
+                playerView.showController()
+            }
+        }
+    }
+
+    private fun hideNextPreview() { autoPlayController.hideNextPreview() }
+
+    private fun hideContentPanel() {
+        overlayCoordinator.onRelatedPanelHidden()
+        viewRelated.visibility = View.GONE
+    }
+
+    private fun showChooseEpisodeDialog() { overlayUiController.showChooseEpisodeDialog() }
+    private fun showRelatedPanel() { overlayUiController.showRelatedPanel() }
+    private fun showOwnerDetailDialog() { overlayUiController.showOwnerDetailDialog() }
+    private fun showPlayerActionDialog() { overlayUiController.showPlayerActionDialog() }
+    private fun showVideoInfoDialog() { overlayUiController.showVideoInfoDialog() }
+
+    private fun applyPlayerSettings(settings: PlayerSettings) {
+        playerView.showHideFfRe(settings.showRewindFastForward)
     }
 
     private inline fun <reified T : Serializable> Intent.serializableExtraCompat(key: String): T? {

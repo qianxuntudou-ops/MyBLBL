@@ -7,6 +7,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatDialog
 import androidx.core.view.isVisible
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.media3.common.util.UnstableApi
 import androidx.recyclerview.widget.GridLayoutManager
@@ -24,7 +25,7 @@ import com.tutu.myblbl.feature.player.view.MyPlayerView
 
 @UnstableApi
 class VideoPlayerOverlayController(
-    private val fragment: Fragment,
+    private val activity: AppCompatActivity,
     private val playerView: MyPlayerView,
     private val overlayCoordinator: PlayerOverlayCoordinator,
     private val sessionCoordinator: PlayerSessionCoordinator,
@@ -45,14 +46,14 @@ class VideoPlayerOverlayController(
         val episodes = sessionCoordinator.getEpisodes()
         val selectedEpisodeIndex = sessionCoordinator.getSelectedEpisodeIndex()
         if (episodes.isEmpty()) {
-            Toast.makeText(fragment.requireContext(), "当前暂无可选分集", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, "当前暂无可选分集", Toast.LENGTH_SHORT).show()
             return
         }
         overlayCoordinator.rememberFocusRestoreTarget(PlayerOverlayCoordinator.FocusTarget.EPISODE_BUTTON)
         keepControllerVisibleForOverlay()
         playerProvider()?.pause()
 
-        val dialog = AppCompatDialog(fragment.requireContext(), R.style.DialogTheme)
+        val dialog = AppCompatDialog(activity, R.style.DialogTheme)
         dialog.setContentView(R.layout.dialog_choose_episode)
         dialog.setCanceledOnTouchOutside(true)
 
@@ -62,7 +63,7 @@ class VideoPlayerOverlayController(
         val catalogSource = episodes.firstOrNull()?.source ?: VideoPlayerViewModel.EpisodeCatalogSource.PAGES
         val currentVideoInfo = resolveCurrentVideoInfo()
 
-        titleView?.text = fragment.getString(R.string.choose_episode)
+        titleView?.text = activity.getString(R.string.choose_episode)
         val showMoreInfo = catalogSource == VideoPlayerViewModel.EpisodeCatalogSource.PAGES && currentVideoInfo != null
         moreInfoButton?.isVisible = showMoreInfo
         moreInfoButton?.setOnClickListener(
@@ -90,7 +91,7 @@ class VideoPlayerOverlayController(
         }
 
         recyclerView?.apply {
-            layoutManager = WrapContentGridLayoutManager(fragment.requireContext(), 2)
+            layoutManager = WrapContentGridLayoutManager(activity, 2)
             adapter = episodeDialogAdapter
             post {
                 if (selectedEpisodeIndex in episodes.indices) {
@@ -113,9 +114,9 @@ class VideoPlayerOverlayController(
     fun showRelatedPanel() {
         overlayCoordinator.onRelatedPanelShown()
         keepControllerVisibleForOverlay()
-        textMoreTitle.text = fragment.getString(R.string.related_video)
+        textMoreTitle.text = activity.getString(R.string.related_video)
         recyclerViewRelated.layoutManager =
-            GridLayoutManager(fragment.requireContext(), 1, RecyclerView.HORIZONTAL, false)
+            GridLayoutManager(activity, 1, RecyclerView.HORIZONTAL, false)
         recyclerViewRelated.adapter = relatedAdapter
         if (viewRelated.isVisible) {
             recyclerViewRelated.requestFocus()
@@ -123,7 +124,7 @@ class VideoPlayerOverlayController(
         }
         viewRelated.clearAnimation()
         viewRelated.visibility = View.VISIBLE
-        AnimationUtils.loadAnimation(fragment.requireContext(), R.anim.slide_up).apply {
+        AnimationUtils.loadAnimation(activity, R.anim.slide_up).apply {
             setAnimationListener(object : Animation.AnimationListener {
                 override fun onAnimationStart(animation: Animation?) = Unit
 
@@ -146,7 +147,7 @@ class VideoPlayerOverlayController(
             return
         }
         viewRelated.clearAnimation()
-        AnimationUtils.loadAnimation(fragment.requireContext(), R.anim.slide_down).apply {
+        AnimationUtils.loadAnimation(activity, R.anim.slide_down).apply {
             setAnimationListener(object : Animation.AnimationListener {
                 override fun onAnimationStart(animation: Animation?) = Unit
 
@@ -169,7 +170,7 @@ class VideoPlayerOverlayController(
     ) {
         val video = resolveCurrentVideoInfo()
         if (video == null) {
-            Toast.makeText(fragment.requireContext(), "当前视频信息未加载完成", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, "当前视频信息未加载完成", Toast.LENGTH_SHORT).show()
             return
         }
         if (restorePlayerFocus) {
@@ -177,7 +178,7 @@ class VideoPlayerOverlayController(
             playerView.rememberCurrentFocusTarget()
         }
         VideoInfoDialog(
-            context = fragment.requireContext(),
+            context = activity,
             coverUrl = video.coverUrl,
             title = video.title,
             description = video.desc
@@ -243,13 +244,13 @@ class VideoPlayerOverlayController(
         val aid = view?.aid ?: 0L
         val bvid = view?.bvid.orEmpty()
         if (aid <= 0L && bvid.isBlank()) {
-            Toast.makeText(fragment.requireContext(), "当前视频信息未加载完成", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, "当前视频信息未加载完成", Toast.LENGTH_SHORT).show()
             return
         }
         overlayCoordinator.rememberFocusRestoreTarget(PlayerOverlayCoordinator.FocusTarget.MORE_BUTTON)
         keepControllerVisibleForOverlay()
         PlayerActionDialog(
-            context = fragment.requireContext(),
+            context = activity,
             aid = aid,
             bvid = bvid,
             ownerMid = view?.owner?.mid ?: 0L
@@ -267,13 +268,13 @@ class VideoPlayerOverlayController(
         val view = latestVideoInfoProvider()?.view
         val owner = view?.owner
         if (owner == null || owner.mid <= 0L) {
-            Toast.makeText(fragment.requireContext(), "UP主信息未加载完成", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, "UP主信息未加载完成", Toast.LENGTH_SHORT).show()
             return
         }
         overlayCoordinator.rememberFocusRestoreTarget(PlayerOverlayCoordinator.FocusTarget.OWNER_BUTTON)
         keepControllerVisibleForOverlay()
         OwnerDetailDialog(
-            context = fragment.requireContext(),
+            context = activity,
             owner = owner,
             onOpenSpace = { mid ->
                 onOpenFragmentFromHost(UserSpaceFragment.newInstance(mid), "user_space")

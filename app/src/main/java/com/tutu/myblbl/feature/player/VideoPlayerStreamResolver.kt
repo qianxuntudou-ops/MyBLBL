@@ -87,6 +87,90 @@ internal class VideoPlayerStreamResolver(
         val routes: List<CodecRoute>
     )
 
+    fun resolveDashRoutePlan(
+        playInfo: PlayInfoModel,
+        lockedQualityId: Int,
+        selectedAudioId: Int?,
+        preferredCodec: VideoCodecEnum?,
+        hardwareSupportedCodecs: Collection<VideoCodecEnum>
+    ): DashRoutePlan? {
+        val dash = playInfo.dash ?: return null
+        val videosAtQuality = dash.video.orEmpty()
+            .filter { it.id == lockedQualityId }
+        if (videosAtQuality.isEmpty()) return null
+
+        val selectedAudio = buildAudioTracks(playInfo)
+            .firstOrNull { it.id == selectedAudioId }
+            ?: buildAudioTracks(playInfo).maxByOrNull { it.bandwidth }
+        val audioUrls = selectedAudio
+            ?.let { buildDistinctUrls(it.realBaseUrl, it.realBackupUrl) }
+            .orEmpty()
+        val audioRepresentation = selectedAudio?.let { audio ->
+            DashRepresentation(
+                id = audio.id,
+                mimeType = audio.realMimeType.ifBlank { "audio/mp4" },
+                codecs = audio.codecs,
+                bandwidth = audio.bandwidth,
+                baseUrl = audio.realBaseUrl,
+                backupUrls = audio.realBackupUrl.orEmpty(),
+                segmentBase = audio.realSegmentBase?.let { sb ->
+                    DashSegmentBase(
+                        initialization = sb.initialization.ifBlank { sb.range },
+                        indexRange = sb.realIndexRange
+                    )
+                }
+            )
+        }
+
+        val videosByCodec = videosAtQuality.groupBy { VideoCodecEnum.fromId(it.codecId) }
+        val codecOrder = orderCodecs(
+            available = videosByCodec.keys,
+            preferredCodec = preferredCodec,
+            hardwareSupportedCodecs = hardwareSupportedCodecs
+        )
+        val routes = codecOrder.mapNotNull { codec ->
+            val selectedVideo = videosByCodec[codec]
+                .orEmpty()
+                .maxByOrNull { it.bandwidth }
+                ?: return@mapNotNull null
+            val videoUrls = buildDistinctUrls(selectedVideo.realBaseUrl, selectedVideo.realBackupUrl)
+            if (videoUrls.isEmpty()) return@mapNotNull null
+            DashRoute(
+                codec = codec,
+                videoRepresentation = DashRepresentation(
+                    id = selectedVideo.id,
+                    mimeType = selectedVideo.realMimeType.ifBlank { "video/mp4" },
+                    codecs = selectedVideo.codecs,
+                    bandwidth = selectedVideo.bandwidth,
+                    width = selectedVideo.width,
+                    height = selectedVideo.height,
+                    frameRate = selectedVideo.realFrameRate,
+                    baseUrl = selectedVideo.realBaseUrl,
+                    backupUrls = selectedVideo.realBackupUrl.orEmpty(),
+                    segmentBase = selectedVideo.realSegmentBase?.let { sb ->
+                        DashSegmentBase(
+                            initialization = sb.initialization.ifBlank { sb.range },
+                            indexRange = sb.realIndexRange
+                        )
+                    }
+                ),
+                audioRepresentation = audioRepresentation,
+                videoUrls = videoUrls,
+                audioUrls = audioUrls,
+                durationMs = resolveDurationMs(playInfo),
+                minBufferTimeMs = resolveMinBufferTimeMs(playInfo)
+            )
+        }
+        if (routes.isEmpty()) return null
+        return DashRoutePlan(
+            qualityId = lockedQualityId,
+            selectedAudioId = selectedAudio?.id ?: selectedAudioId,
+            routes = routes,
+            durationMs = resolveDurationMs(playInfo),
+            minBufferTimeMs = resolveMinBufferTimeMs(playInfo)
+        )
+    }
+
     fun buildFnval(@Suppress("UNUSED_PARAMETER") qualityId: Int): Int = 4048
 
     fun buildFourk(qualityId: Int): Int {

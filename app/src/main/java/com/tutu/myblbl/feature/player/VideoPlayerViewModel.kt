@@ -185,11 +185,18 @@ class VideoPlayerViewModel(
             )
         )
 
+    var useDashPlayback: Boolean = true
+
     // Keeps stream selection and fallback policy out of the ViewModel's lifecycle code.
     private val streamResolver = VideoPlayerStreamResolver(
         dataSourceFactory = dataSourceFactory,
         urlNormalizer = ::normalizeUrl
     )
+    private val dashMediaSourceFactory = VideoPlayerDashMediaSourceFactory(
+        dataSourceFactory = dataSourceFactory,
+        manifestBuilder = VideoPlayerDashManifestBuilder
+    )
+    private var currentDashSession: VideoPlaybackSession? = null
     private val qualityPolicy = VideoPlayerQualityPolicy()
     // Keeps episode-list construction and PGC header mapping out of playback request flow.
     private val episodeCatalogBuilder = VideoPlayerEpisodeCatalogBuilder(apiService)
@@ -793,7 +800,44 @@ class VideoPlayerViewModel(
             _error.value = "当前清晰度/音轨组合不可播放"
             return
         }
-        val mediaSource = streamResolver.buildMediaSource(
+
+        var dashMediaSource: MediaSource? = null
+        if (useDashPlayback) {
+            val dashRoutePlan = streamResolver.resolveDashRoutePlan(
+                playInfo = playInfo,
+                lockedQualityId = selectionSnapshot.selectedQualityId ?: return,
+                selectedAudioId = selectionSnapshot.selectedAudioId,
+                preferredCodec = selectionSnapshot.selectedCodec,
+                hardwareSupportedCodecs = hardwareSupportedVideoCodecs
+            )
+            if (dashRoutePlan != null && dashRoutePlan.routes.isNotEmpty()) {
+                try {
+                    dashMediaSource = dashMediaSourceFactory.createMediaSource(dashRoutePlan.routes.first())
+                    currentDashSession = VideoPlaybackSession(
+                        identity = currentDashSession?.identity ?: SessionIdentity(
+                            aid = currentAid,
+                            bvid = currentBvid,
+                            cid = currentCid,
+                            epId = currentEpId
+                        ),
+                        requestedQualityId = selectionSnapshot.selectedQualityId,
+                        requestedAudioId = selectionSnapshot.selectedAudioId,
+                        requestedCodec = selectionSnapshot.selectedCodec,
+                        actualQualityId = selectionSnapshot.selectedQualityId,
+                        actualAudioId = dashRoutePlan.selectedAudioId,
+                        actualCodec = dashRoutePlan.routes.first().codec,
+                        playInfo = playInfo,
+                        routePlan = dashRoutePlan,
+                        currentRoute = dashRoutePlan.routes.first(),
+                        expiresAtMs = 0L
+                    )
+                } catch (_: Exception) {
+                    dashMediaSource = null
+                }
+            }
+        }
+
+        val mediaSource = dashMediaSource ?: streamResolver.buildMediaSource(
             playInfo = playInfo,
             selectedQualityId = selectionSnapshot.selectedQualityId,
             selectedAudioId = selectionSnapshot.selectedAudioId,
@@ -1114,13 +1158,65 @@ class VideoPlayerViewModel(
             selectionSnapshot = selectionSnapshot.copy(selectedQualityId = resolvedQualityId)
         }
         AppLog.d(TAG, "playurl:done cost=${System.currentTimeMillis() - requestStartMs}ms cid=${identity.cid}")
-        AppLog.d(TAG, "progressiveMediaSource:build:start cid=${identity.cid}")
-        val mediaSourceSelection = streamResolver.buildMediaSource(
-            playInfo = initialPlayInfo,
-            selectedQualityId = resolvedQualityId,
-            selectedAudioId = selectionSnapshot.selectedAudioId,
-            selectedCodec = selectionSnapshot.selectedCodec
-        )
+
+        AppLog.d(TAG, "useDashPlayback=$useDashPlayback cid=${identity.cid}")
+
+        var dashMediaSource: MediaSource? = null
+        if (useDashPlayback) {
+            val dashRoutePlan = streamResolver.resolveDashRoutePlan(
+                playInfo = initialPlayInfo,
+                lockedQualityId = resolvedQualityId,
+                selectedAudioId = selectionSnapshot.selectedAudioId,
+                preferredCodec = selectionSnapshot.selectedCodec,
+                hardwareSupportedCodecs = hardwareSupportedVideoCodecs
+            )
+            if (dashRoutePlan != null && dashRoutePlan.routes.isNotEmpty()) {
+                val firstRoute = dashRoutePlan.routes.first()
+                AppLog.d(TAG, "dashRoute:resolved cid=${identity.cid} codec=${firstRoute.codec} routes=${dashRoutePlan.routes.size}")
+                try {
+                    dashMediaSource = dashMediaSourceFactory.createMediaSource(firstRoute)
+                    currentDashSession = VideoPlaybackSession(
+                        identity = SessionIdentity(
+                            aid = identity.aid,
+                            bvid = identity.bvid,
+                            cid = identity.cid,
+                            epId = identity.epId
+                        ),
+                        requestedQualityId = resolvedQualityId,
+                        requestedAudioId = selectionSnapshot.selectedAudioId,
+                        requestedCodec = selectionSnapshot.selectedCodec,
+                        actualQualityId = resolvedQualityId,
+                        actualAudioId = dashRoutePlan.selectedAudioId,
+                        actualCodec = firstRoute.codec,
+                        playInfo = initialPlayInfo,
+                        routePlan = dashRoutePlan,
+                        currentRoute = firstRoute,
+                        expiresAtMs = 0L
+                    )
+                    AppLog.d(TAG, "dashMediaSource:created cid=${identity.cid}")
+                } catch (e: Exception) {
+                    AppLog.e(TAG, "dashMediaSource:failed cid=${identity.cid} error=${e.message}", e)
+                    dashMediaSource = null
+                    currentDashSession = null
+                }
+            } else {
+                AppLog.d(TAG, "dashRoute:unavailable cid=${identity.cid}, falling back to progressive")
+            }
+        }
+
+        val mediaSource: MediaSource = dashMediaSource ?: run {
+            AppLog.d(TAG, "progressiveMediaSource:build:start cid=${identity.cid}")
+            val progressiveSelection = streamResolver.buildMediaSource(
+                playInfo = initialPlayInfo,
+                selectedQualityId = resolvedQualityId,
+                selectedAudioId = selectionSnapshot.selectedAudioId,
+                selectedCodec = selectionSnapshot.selectedCodec
+            )
+            progressiveSelection?.mediaSource ?: run {
+                AppLog.e(TAG, "loadPlayUrl mediaSource missing: cid=${identity.cid}")
+                return null
+            }
+        }
 
         val useServerResume = preferLastPlayTime &&
             initialPlayInfo.lastPlayCid == identity.cid &&
@@ -1134,11 +1230,6 @@ class VideoPlayerViewModel(
         val shouldResume = rawResumePosition > 5000L
 
         val startPosition = rawResumePosition.takeIf { shouldResume } ?: 0L
-
-        val mediaSource = mediaSourceSelection?.mediaSource ?: run {
-            AppLog.e(TAG, "loadPlayUrl mediaSource missing: cid=${identity.cid}")
-            return null
-        }
 
         val resumeHintPositionMs = startPosition.takeIf { shouldResume && !replaceInPlace }
         val seekToStart = if (resumeHintPositionMs != null) 0L else startPosition

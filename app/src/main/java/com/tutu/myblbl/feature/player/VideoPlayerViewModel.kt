@@ -1322,16 +1322,18 @@ class VideoPlayerViewModel(
 
     fun handlePlaybackError(error: androidx.media3.common.PlaybackException, currentPositionMs: Long) {
         lastPlaybackPositionMs = currentPositionMs.coerceAtLeast(0L)
-        val plan = currentStreamFallbackPlan
-        if (plan == null || plan.routes.isEmpty()) {
+        val hasDashFallback = currentDashSession?.routePlan?.routes?.isNotEmpty() == true && useDashPlayback
+        val hasProgressiveFallback = currentStreamFallbackPlan?.routes?.isNotEmpty() == true
+        if (!hasDashFallback && !hasProgressiveFallback) {
             _error.value = error.message ?: "加载失败"
             return
         }
 
         val errorType = classifyPlaybackError(error)
+        val isDash = currentDashSession != null && useDashPlayback
         AppLog.d(
             TAG,
-            "handlePlaybackError: type=$errorType, code=${error.errorCode}, message=${error.message}, routeIndex=$fallbackRouteIndex, cdnIndex=$fallbackCdnIndex, attempts=$fallbackAttemptCount/$MAX_FALLBACK_ATTEMPTS"
+            "handlePlaybackError: isDash=$isDash, type=$errorType, code=${error.errorCode}, message=${error.message}, attempts=$fallbackAttemptCount/$MAX_FALLBACK_ATTEMPTS"
         )
 
         val handled = when (errorType) {
@@ -1356,7 +1358,10 @@ class VideoPlayerViewModel(
         }
 
         if (!handled) {
-            AppLog.e(TAG, "fallback exhausted: qualityLocked=${plan.qualityId}, attempts=$fallbackAttemptCount")
+            val qualityLocked = currentDashSession?.routePlan?.qualityId
+                ?: currentStreamFallbackPlan?.qualityId
+                ?: 0
+            AppLog.e(TAG, "fallback exhausted: qualityLocked=$qualityLocked, isDash=$isDash, attempts=$fallbackAttemptCount")
             _error.value = "当前清晰度下所有线路与编码器都不可用"
         }
     }
@@ -1413,6 +1418,14 @@ class VideoPlayerViewModel(
     }
 
     private fun tryNextCdnInCurrentCodec(positionMs: Long, reason: String): Boolean {
+        val dashSession = currentDashSession
+        if (dashSession != null && useDashPlayback) {
+            return tryDispatchDashPlaybackAttempt(
+                routeIndex = dashSession.fallbackRouteIndex,
+                seekPositionMs = positionMs,
+                reason = reason
+            )
+        }
         val plan = currentStreamFallbackPlan ?: return false
         if (fallbackRouteIndex !in plan.routes.indices) {
             return false
@@ -1426,6 +1439,16 @@ class VideoPlayerViewModel(
     }
 
     private fun trySwitchCodec(positionMs: Long, reason: String): Boolean {
+        val dashSession = currentDashSession
+        if (dashSession != null && useDashPlayback) {
+            val routePlan = dashSession.routePlan ?: return false
+            for (routeIndex in (dashSession.fallbackRouteIndex + 1) until routePlan.routes.size) {
+                if (tryDispatchDashPlaybackAttempt(routeIndex, positionMs, reason)) {
+                    return true
+                }
+            }
+            return false
+        }
         val plan = currentStreamFallbackPlan ?: return false
         for (routeIndex in (fallbackRouteIndex + 1) until plan.routes.size) {
             if (tryDispatchPlaybackAttempt(routeIndex, 0, positionMs, reason)) {
@@ -1440,6 +1463,18 @@ class VideoPlayerViewModel(
         positionMs: Long,
         reason: String
     ): Boolean {
+        val dashSession = currentDashSession
+        if (dashSession != null && useDashPlayback) {
+            val routePlan = dashSession.routePlan ?: return false
+            if (dashSession.actualCodec == targetCodec) {
+                return false
+            }
+            val routeIndex = routePlan.routes.indexOfFirst { it.codec == targetCodec }
+            if (routeIndex < 0) {
+                return false
+            }
+            return tryDispatchDashPlaybackAttempt(routeIndex, positionMs, reason)
+        }
         val plan = currentStreamFallbackPlan ?: return false
         if (selectedCodec == targetCodec) {
             return false
@@ -1550,6 +1585,53 @@ class VideoPlayerViewModel(
             return true
         }
         return false
+    }
+
+    private fun tryDispatchDashPlaybackAttempt(
+        routeIndex: Int,
+        seekPositionMs: Long,
+        reason: String
+    ): Boolean {
+        val session = currentDashSession ?: return false
+        val routePlan = session.routePlan ?: return false
+        if (routeIndex !in routePlan.routes.indices) {
+            return false
+        }
+        if (fallbackAttemptCount >= MAX_FALLBACK_ATTEMPTS) {
+            return false
+        }
+        val route = routePlan.routes[routeIndex]
+        val signature = "dash|${routePlan.qualityId}|${route.codec.name}|${route.videoRepresentation.baseUrl}"
+        if (!attemptedFallbackSignatures.add(signature)) {
+            return false
+        }
+        fallbackAttemptCount += 1
+        try {
+            val mediaSource = dashMediaSourceFactory.createMediaSource(route)
+            selectedCodec = route.codec
+            _selectedVideoCodec.value = route.codec
+            currentDashSession = session.copy(
+                currentRoute = route,
+                actualCodec = route.codec,
+                fallbackRouteIndex = routeIndex,
+                fallbackAttemptCount = fallbackAttemptCount
+            )
+            _error.value = null
+            _playbackRequest.value = PlaybackRequest(
+                mediaSource = mediaSource,
+                seekPositionMs = seekPositionMs,
+                playWhenReady = true,
+                replaceInPlace = true
+            )
+            AppLog.d(
+                TAG,
+                "fallback:codec: dash route=$routeIndex/${routePlan.routes.lastIndex}, codec=${route.codec}, reason=$reason, attempts=$fallbackAttemptCount/$MAX_FALLBACK_ATTEMPTS"
+            )
+            return true
+        } catch (e: Exception) {
+            AppLog.e(TAG, "fallback:codec: dash failed route=$routeIndex error=${e.message}", e)
+            return false
+        }
     }
 
     private fun initializeFallbackPlan(

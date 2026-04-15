@@ -172,6 +172,7 @@ class VideoPlayerViewModel(
     private val playerOkHttpClient = okHttpClient.newBuilder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
+        .connectionPool(okhttp3.ConnectionPool(5, 30, TimeUnit.SECONDS))
         .build()
     private val dataSourceFactory = OkHttpDataSource.Factory(playerOkHttpClient)
         .setUserAgent(

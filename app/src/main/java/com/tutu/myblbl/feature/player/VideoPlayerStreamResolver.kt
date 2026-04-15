@@ -103,7 +103,7 @@ internal class VideoPlayerStreamResolver(
             .firstOrNull { it.id == selectedAudioId }
             ?: buildAudioTracks(playInfo).maxByOrNull { it.bandwidth }
         val audioUrls = selectedAudio
-            ?.let { buildDistinctUrls(it.realBaseUrl, it.realBackupUrl) }
+            ?.let { CdnLatencyProfile.sortUrlsByLatency(buildDistinctUrls(it.realBaseUrl, it.realBackupUrl)) }
             .orEmpty()
         val audioRepresentation = selectedAudio?.let { audio ->
             DashRepresentation(
@@ -133,7 +133,9 @@ internal class VideoPlayerStreamResolver(
                 .orEmpty()
                 .maxByOrNull { it.bandwidth }
                 ?: return@mapNotNull null
-            val videoUrls = buildDistinctUrls(selectedVideo.realBaseUrl, selectedVideo.realBackupUrl)
+            val videoUrls = CdnLatencyProfile.sortUrlsByLatency(
+                buildDistinctUrls(selectedVideo.realBaseUrl, selectedVideo.realBackupUrl)
+            )
             if (videoUrls.isEmpty()) return@mapNotNull null
             DashRoute(
                 codec = codec,
@@ -145,8 +147,8 @@ internal class VideoPlayerStreamResolver(
                     width = selectedVideo.width,
                     height = selectedVideo.height,
                     frameRate = selectedVideo.realFrameRate,
-                    baseUrl = selectedVideo.realBaseUrl,
-                    backupUrls = selectedVideo.realBackupUrl.orEmpty(),
+                    baseUrl = videoUrls.first(),
+                    backupUrls = videoUrls.drop(1),
                     segmentBase = selectedVideo.realSegmentBase?.let { sb ->
                         DashSegmentBase(
                             initialization = sb.initialization.ifBlank { sb.range },
@@ -154,7 +156,12 @@ internal class VideoPlayerStreamResolver(
                         )
                     }
                 ),
-                audioRepresentation = audioRepresentation,
+                audioRepresentation = audioRepresentation?.let { audioRep ->
+                    audioRep.copy(
+                        baseUrl = audioUrls.firstOrNull() ?: audioRep.baseUrl,
+                        backupUrls = audioUrls.drop(1).ifEmpty { audioRep.backupUrls }
+                    )
+                },
                 videoUrls = videoUrls,
                 audioUrls = audioUrls,
                 durationMs = resolveDurationMs(playInfo),

@@ -60,7 +60,7 @@ object VideoPlayerDashManifestBuilder {
                     height = 0,
                     frameRate = "",
                     baseUrl = audio.baseUrl,
-                    segmentBase = audio.segmentBase
+                    segmentBase = null
                 )
             }
 

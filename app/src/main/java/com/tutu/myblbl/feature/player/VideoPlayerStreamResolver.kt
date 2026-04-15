@@ -295,6 +295,7 @@ internal class VideoPlayerStreamResolver(
         selectedAudioId: Int?,
         selectedCodec: VideoCodecEnum?
     ): MediaSourceSelection? {
+        AppLog.d(TAG, "buildMediaSource: fallback progressive path")
         val dash = playInfo.dash
         if (dash != null && !dash.video.isNullOrEmpty()) {
             val filteredByQuality = dash.video.orEmpty()
@@ -400,6 +401,7 @@ internal class VideoPlayerStreamResolver(
         durationMs: Long,
         minBufferTimeMs: Long
     ): MediaSourceSelection {
+        AppLog.d(TAG, "buildMediaSourceForRoute: fallback progressive path")
         val mediaSource = createMediaSource(
             videoUrls = prioritizeUrl(route.videoUrls, videoUrl),
             audioUrls = prioritizeUrl(route.audioUrls, audioUrl),

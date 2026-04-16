@@ -20,6 +20,7 @@ import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.network.response.ListDataModel
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.network.cookie.CookieManager
+import kotlinx.coroutines.delay
 
 class VideoRepository(
     private val apiService: ApiService,
@@ -77,6 +78,7 @@ class VideoRepository(
             val firstResponse = apiService.getRanking(rid)
             if (firstResponse.code == -352) {
                 AppLog.e(TAG, "getRanking first attempt hit risk control: rid=$rid")
+                delay(1500L)
                 securityGateway.prewarmWebSession(forceUaRefresh = true)
                 apiService.getRanking(rid).mapListData()
             } else {
@@ -174,6 +176,7 @@ class VideoRepository(
             AppLog.d(TAG, "tripleAction first response: code=${firstResponse.code}, message=${firstResponse.message}, msg=${firstResponse.msg}")
             if (firstResponse.code == -352 || firstResponse.code == -401) {
                 AppLog.e(TAG, "tripleAction first attempt hit risk control/401: aid=$avid, bvid=$bvid, code=${firstResponse.code}")
+                delay(1500L)
                 securityGateway.prewarmWebSession(forceUaRefresh = true)
                 val secondResponse = sessionGateway.syncAuthState(
                     apiService.tripleAction(avid, bvid, csrf),
@@ -260,6 +263,7 @@ class VideoRepository(
                     TAG,
                     "dislikeFeed first attempt hit risk control/auth: aid=${video.aid}, bvid=${video.bvid}, code=${firstResponse.code}"
                 )
+                delay(1500L)
                 securityGateway.prewarmWebSession(forceUaRefresh = true)
                 val secondParams = buildFeedbackWbiParams()
                 val secondForm = buildDislikeForm(video = video, reasonId = reasonId, csrf = csrf)

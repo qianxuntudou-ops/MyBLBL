@@ -29,6 +29,7 @@ object NetworkManager {
     private const val PREF_NAME = "app_settings"
     private const val KEY_CURRENT_UA = "currentUA"
     private const val AUTH_INVALID_CODE = -101
+    private const val KEY_REFRESH_TOKEN = "bili_refresh_token"
 
     private var appContext: Context? = null
 
@@ -99,7 +100,10 @@ object NetworkManager {
             cookieManager = internalCookieManager,
             userAgentProvider = { currentUserAgentValue },
             refreshUserAgent = ::refreshUserAgent,
-            syncUserSession = ::syncUserSession
+            syncUserSession = ::syncUserSession,
+            refreshTokenProvider = { getRefreshToken() },
+            refreshTokenSaver = { token -> saveRefreshToken(token) },
+            updateWbiKeys = { img, sub -> sessionStore.setWbiInfo(img, sub) }
         )
     }
 
@@ -116,6 +120,10 @@ object NetworkManager {
 
     fun getWbiKeys(): Pair<String, String> {
         return sessionStore.getWbiKeys()
+    }
+
+    fun areWbiKeysStale(): Boolean {
+        return sessionStore.areWbiKeysStale()
     }
 
     fun getCookieManager(): CookieManager = internalCookieManager
@@ -136,9 +144,34 @@ object NetworkManager {
     private fun resetSessionLifecycleState(clearCookies: Boolean, reason: String) {
         if (clearCookies) {
             internalCookieManager.clearCookies()
+            clearRefreshToken()
         }
         securityCoordinator.resetRuntimeState()
         AppLog.d(TAG, "clearUserSession: clearCookies=$clearCookies reason=$reason")
+    }
+
+    private fun getRefreshToken(): String? {
+        return runCatching {
+            KoinPlatform.getKoin().get<AppSettingsDataStore>().getCachedString(KEY_REFRESH_TOKEN)
+        }.getOrNull()
+    }
+
+    private fun saveRefreshToken(token: String) {
+        runCatching {
+            KoinPlatform.getKoin().get<AppSettingsDataStore>().putStringAsync(KEY_REFRESH_TOKEN, token)
+        }.onFailure {
+            AppLog.e(TAG, "saveRefreshToken failed: ${it.message}")
+        }
+    }
+
+    private fun clearRefreshToken() {
+        runCatching {
+            KoinPlatform.getKoin().get<AppSettingsDataStore>().putStringAsync(KEY_REFRESH_TOKEN, null)
+        }
+    }
+
+    fun saveLoginRefreshToken(token: String) {
+        saveRefreshToken(token)
     }
 
     fun getOkHttpClient(): OkHttpClient = internalOkHttpClient

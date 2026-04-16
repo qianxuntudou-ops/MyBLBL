@@ -15,6 +15,8 @@ interface NetworkSessionGateway {
 
     fun getWbiKeys(): Pair<String, String>
 
+    fun areWbiKeysStale(): Boolean
+
     fun clearUserSession(reason: String)
 
     fun handleAuthFailureCode(code: Int, source: String)
@@ -48,6 +50,8 @@ class NetworkManagerSessionGateway : NetworkSessionGateway {
     override fun getUserInfo(): UserDetailInfoModel? = NetworkManager.getUserInfo()
 
     override fun getWbiKeys(): Pair<String, String> = NetworkManager.getWbiKeys()
+
+    override fun areWbiKeysStale(): Boolean = NetworkManager.areWbiKeysStale()
 
     override fun clearUserSession(reason: String) {
         NetworkManager.clearUserSession(reason = reason)

@@ -10,17 +10,30 @@ class NetworkSessionStore(
     private val authInvalidCode: Int
 ) {
 
+    companion object {
+        private const val WBI_KEYS_STALE_MS = 24 * 60 * 60 * 1000L
+    }
+
     private var wbiImageKey: String = ""
     private var wbiSubKey: String = ""
+    private var wbiKeysUpdatedAt: Long = 0L
     private var userInfo: UserDetailInfoModel? = null
 
     fun setWbiInfo(imgKey: String, subKey: String) {
         wbiImageKey = imgKey
         wbiSubKey = subKey
+        if (imgKey.isNotBlank() && subKey.isNotBlank()) {
+            wbiKeysUpdatedAt = System.currentTimeMillis()
+        }
     }
 
     fun getWbiKeys(): Pair<String, String> {
         return Pair(wbiImageKey, wbiSubKey)
+    }
+
+    fun areWbiKeysStale(): Boolean {
+        if (wbiImageKey.isBlank() || wbiSubKey.isBlank()) return true
+        return System.currentTimeMillis() - wbiKeysUpdatedAt > WBI_KEYS_STALE_MS
     }
 
     fun getUserInfo(): UserDetailInfoModel? {
@@ -29,6 +42,7 @@ class NetworkSessionStore(
 
     fun clearUserSession() {
         userInfo = null
+        wbiKeysUpdatedAt = 0L
         setWbiInfo("", "")
     }
 

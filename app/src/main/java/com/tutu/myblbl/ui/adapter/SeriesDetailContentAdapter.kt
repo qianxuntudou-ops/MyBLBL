@@ -302,6 +302,7 @@ class SeriesDetailContentAdapter(
             binding.buttonOrder.setOnClickListener {
                 inReverseOrder = !inReverseOrder
                 adapter.reverse()
+                binding.recyclerView.post { binding.recyclerView.scrollToPosition(0) }
                 binding.textOrder.setText(
                     if (inReverseOrder) R.string.positive_sequence else R.string.negative_sequence
                 )

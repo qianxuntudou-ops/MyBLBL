@@ -591,8 +591,10 @@ class VideoPlayerPlayInfoGateway(
         fourk: Int
     ): PlayInfoResult? {
         securityGateway.prewarmWebSession()
+        ensureWbiKeys()
+        val hasWbi = hasWbiKeys()
 
-        val attempts = listOf(
+        val baseAttempts = listOf(
             "primary-drm2" to buildPgcPlayParams(
                 aid = aid,
                 bvid = bvid,
@@ -642,6 +644,15 @@ class VideoPlayerPlayInfoGateway(
                 drmTechType = 0
             )
         )
+
+        val attempts = if (hasWbi) {
+            baseAttempts.flatMap { (label, params) ->
+                val wbiParams = buildWbiParams(params)
+                listOf("$label-wbi" to wbiParams, label to params)
+            }
+        } else {
+            baseAttempts
+        }
 
         var lastResponse: Base2Response<PlayInfoModel>? = null
         attempts.forEachIndexed { index, (label, params) ->
@@ -724,11 +735,7 @@ class VideoPlayerPlayInfoGateway(
     }
 
     private suspend fun ensureWbiKeys() {
-        if (hasWbiKeys()) {
-            return
-        }
-        if (!sessionGateway.isLoggedIn()) {
-            AppLog.d(logTag, "ensureWbiKeys skipped: user not logged in")
+        if (hasWbiKeys() && !sessionGateway.areWbiKeysStale()) {
             return
         }
         val response = runCatching {
@@ -738,6 +745,12 @@ class VideoPlayerPlayInfoGateway(
         }.getOrNull() ?: return
         if (sessionGateway.syncUserSession(response, source = "ensureWbiKeys") != null) {
             AppLog.d(logTag, "ensureWbiKeys success")
+        } else if (response.code == -101) {
+            val data = response.data
+            if (data != null) {
+                sessionGateway.syncUserSession(response, source = "ensureWbiKeys")
+                AppLog.d(logTag, "ensureWbiKeys: extracted keys from unauthenticated nav response")
+            }
         } else {
             AppLog.e(logTag, "ensureWbiKeys failed: code=${response.code}, message=${response.errorMessage}")
         }

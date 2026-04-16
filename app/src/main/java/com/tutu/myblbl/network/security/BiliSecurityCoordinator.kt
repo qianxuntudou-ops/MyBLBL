@@ -5,6 +5,7 @@ package com.tutu.myblbl.network.security
 import android.util.Base64
 import com.tutu.myblbl.model.BaseResponse
 import com.tutu.myblbl.model.user.UserDetailInfoModel
+import com.tutu.myblbl.network.WbiGenerator
 import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.network.cookie.CookieManager
@@ -19,6 +20,7 @@ import javax.crypto.spec.OAEPParameterSpec
 import javax.crypto.spec.PSource
 import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -36,13 +38,18 @@ class BiliSecurityCoordinator(
     private val cookieManager: CookieManager,
     private val userAgentProvider: () -> String,
     private val refreshUserAgent: () -> String,
-    private val syncUserSession: (BaseResponse<UserDetailInfoModel>, String) -> UserDetailInfoModel?
+    private val syncUserSession: (BaseResponse<UserDetailInfoModel>, String) -> UserDetailInfoModel?,
+    private val refreshTokenProvider: () -> String?,
+    private val refreshTokenSaver: (String) -> Unit,
+    private val updateWbiKeys: (String, String) -> Unit
 ) {
 
     companion object {
         private const val PREWARM_INTERVAL_MS = 5 * 60 * 1000L
         private const val BILI_TICKET_KEY_ID = "ec02"
         private const val BILI_TICKET_HMAC_KEY = "XgwSnGZ1p"
+        private const val EXCLIMB_MAX_RETRIES = 2
+        private const val EXCLIMB_RETRY_DELAY_MS = 2000L
     }
 
     private val prewarmMutex = Mutex()
@@ -122,7 +129,6 @@ class BiliSecurityCoordinator(
         val mid = midStr.toLongOrNull()?.takeIf { it > 0 } ?: 0L
         val headers = mutableMapOf(
             "env" to "prod",
-            "app-key" to "android64",
             "x-bili-aurora-zone" to "sh001",
             "Referer" to "https://www.bilibili.com",
             "X-Blbl-Skip-Origin" to "1"
@@ -265,6 +271,16 @@ class BiliSecurityCoordinator(
                         buildCookie("bili_ticket_expires", expiresSec.toString(), expiresAt)
                     ).map { encodeCookieDirect(it) }
                 )
+
+                val nav = data.optJSONObject("nav")
+                if (nav != null) {
+                    val imgKey = WbiGenerator.extractKeyFromUrl(nav.optString("img", ""))
+                    val subKey = WbiGenerator.extractKeyFromUrl(nav.optString("sub", ""))
+                    if (imgKey.isNotBlank() && subKey.isNotBlank()) {
+                        updateWbiKeys(imgKey, subKey)
+                        AppLog.d(tag, "ensureBiliTicket: updated WBI keys from GenWebTicket response")
+                    }
+                }
             }.onFailure {
                 AppLog.w(tag, "ensureBiliTicket failed: ${it.message}")
             }
@@ -278,54 +294,66 @@ class BiliSecurityCoordinator(
             val epochDay = System.currentTimeMillis() / 86_400_000L
             if (buvidActivatedMid == mid && buvidActivatedDay == epochDay) return@withContext
 
-            runCatching {
-                val rand = ByteArray(32 + 8 + 4)
-                SecureRandom().nextBytes(rand)
-                rand[32] = 0; rand[33] = 0; rand[34] = 0; rand[35] = 0
-                rand[36] = 73; rand[37] = 69; rand[38] = 78; rand[39] = 68
-                val tail = ByteArray(4)
-                SecureRandom().nextBytes(tail)
-                System.arraycopy(tail, 0, rand, 40, 4)
-                val randPngEnd = Base64.encodeToString(rand, Base64.NO_WRAP)
-
-                val jsonData = JSONObject()
-                    .put("3064", 1)
-                    .put("39c8", "333.1387.fp.risk")
-                    .put("3c43", JSONObject().put("adca", "Linux").put("bfe9", randPngEnd.takeLast(50)))
-                    .toString()
-
-                val payload = JSONObject().put("payload", jsonData).toString()
-
-                val cookieHeader = buildList {
-                    listOf("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid", "buvid3").forEach { name ->
-                        val value = cookieManager.getCookieValue(name)?.takeIf { it.isNotBlank() } ?: return@forEach
-                        add("$name=$value")
-                    }
-                }.joinToString("; ")
-
-                val request = okhttp3.Request.Builder()
-                    .url("https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi")
-                    .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
-                    .header("Content-Type", "application/json")
-                    .header("env", "prod")
-                    .header("app-key", "android64")
-                    .header("x-bili-aurora-zone", "sh001")
-                    .header("x-bili-mid", mid.toString())
-                    .apply {
-                        genAuroraEid(mid)?.let { header("x-bili-aurora-eid", it) }
-                    }
-                    .header("Referer", "https://www.bilibili.com")
-                    .header("Cookie", cookieHeader)
-                    .build()
-
-                okHttpClient.newCall(request).execute().use { resp ->
-                    if (resp.isSuccessful) {
-                        buvidActivatedMid = mid
-                        buvidActivatedDay = epochDay
-                    }
+            var success = false
+            repeat(EXCLIMB_MAX_RETRIES) { attempt ->
+                if (success) return@repeat
+                if (attempt > 0) {
+                    delay(EXCLIMB_RETRY_DELAY_MS)
+                    AppLog.d(tag, "ensureBuvidActiveOncePerDay retry #$attempt for mid=$mid")
                 }
-            }.onFailure {
-                AppLog.w(tag, "ensureBuvidActiveOncePerDay failed: ${it.message}")
+                runCatching {
+                    val rand = ByteArray(32 + 8 + 4)
+                    SecureRandom().nextBytes(rand)
+                    rand[32] = 0; rand[33] = 0; rand[34] = 0; rand[35] = 0
+                    rand[36] = 73; rand[37] = 69; rand[38] = 78; rand[39] = 68
+                    val tail = ByteArray(4)
+                    SecureRandom().nextBytes(tail)
+                    System.arraycopy(tail, 0, rand, 40, 4)
+                    val randPngEnd = Base64.encodeToString(rand, Base64.NO_WRAP)
+
+                    val jsonData = JSONObject()
+                        .put("3064", 1)
+                        .put("39c8", "333.1387.fp.risk")
+                        .put("3c43", JSONObject().put("adca", "Linux").put("bfe9", randPngEnd.takeLast(50)))
+                        .toString()
+
+                    val payload = JSONObject().put("payload", jsonData).toString()
+
+                    val cookieHeader = buildList {
+                        listOf("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid", "buvid3").forEach { name ->
+                            val value = cookieManager.getCookieValue(name)?.takeIf { it.isNotBlank() } ?: return@forEach
+                            add("$name=$value")
+                        }
+                    }.joinToString("; ")
+
+                    val request = okhttp3.Request.Builder()
+                        .url("https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi")
+                        .post(payload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                        .header("Content-Type", "application/json")
+                        .header("env", "prod")
+                        .header("x-bili-aurora-zone", "sh001")
+                        .header("x-bili-mid", mid.toString())
+                        .apply {
+                            genAuroraEid(mid)?.let { header("x-bili-aurora-eid", it) }
+                        }
+                        .header("Referer", "https://www.bilibili.com")
+                        .header("Cookie", cookieHeader)
+                        .build()
+
+                    okHttpClient.newCall(request).execute().use { resp ->
+                        if (resp.isSuccessful) {
+                            buvidActivatedMid = mid
+                            buvidActivatedDay = epochDay
+                            success = true
+                            AppLog.d(tag, "ensureBuvidActiveOncePerDay success for mid=$mid attempt=$attempt")
+                        }
+                    }
+                }.onFailure {
+                    AppLog.w(tag, "ensureBuvidActiveOncePerDay failed (attempt=${attempt + 1}/$EXCLIMB_MAX_RETRIES): ${it.message}")
+                }
+            }
+            if (!success) {
+                AppLog.e(tag, "ensureBuvidActiveOncePerDay all $EXCLIMB_MAX_RETRIES attempts failed for mid=$mid")
             }
         }
     }
@@ -336,16 +364,23 @@ class BiliSecurityCoordinator(
         if (cookieRefreshCheckedDay == epochDay) return
 
         runCatching {
+            val oldRefreshToken = refreshTokenProvider()
+            if (oldRefreshToken.isNullOrBlank()) {
+                AppLog.w(tag, "refreshCookie: no refresh_token stored, skipping")
+                cookieRefreshCheckedDay = epochDay
+                return@runCatching
+            }
+
             val ts = System.currentTimeMillis()
             val correspondPath = getCorrespondPath(ts)
-            val url = "https://www.bilibili.com/correspond/1/$correspondPath"
-            val request = okhttp3.Request.Builder()
-                .url(url)
+            val correspondUrl = "https://www.bilibili.com/correspond/1/$correspondPath"
+            val correspondRequest = okhttp3.Request.Builder()
+                .url(correspondUrl)
                 .header("User-Agent", userAgentProvider())
                 .header("Referer", "https://www.bilibili.com")
                 .build()
             val html = withContext(Dispatchers.IO) {
-                okHttpClient.newCall(request).execute().use { resp ->
+                okHttpClient.newCall(correspondRequest).execute().use { resp ->
                     resp.body?.string().orEmpty()
                 }
             }
@@ -358,17 +393,24 @@ class BiliSecurityCoordinator(
                 return@runCatching
             }
 
-            val sessdata = cookieManager.getCookieValue("SESSDATA")?.trim().orEmpty()
-            if (sessdata.isBlank()) return@runCatching
+            val csrf = cookieManager.getCsrfToken()
+            if (csrf.isBlank()) {
+                AppLog.w(tag, "refreshCookie: no bili_jct found")
+                cookieRefreshCheckedDay = epochDay
+                return@runCatching
+            }
 
-            val refreshUrl = "https://passport.bilibili.com/x/passport-login/web/cookie/refresh" +
-                "?csrf=$refreshCsrf&refresh_csrf=$refreshCsrf&source=main_web&refresh_token="
+            val formBody = FormBody.Builder()
+                .add("csrf", csrf)
+                .add("refresh_csrf", refreshCsrf)
+                .add("source", "main_web")
+                .add("refresh_token", oldRefreshToken)
+                .build()
             val refreshRequest = okhttp3.Request.Builder()
-                .url(refreshUrl)
+                .url("https://passport.bilibili.com/x/passport-login/web/cookie/refresh")
                 .header("User-Agent", userAgentProvider())
                 .header("Referer", "https://www.bilibili.com")
-                .header("Cookie", "SESSDATA=$sessdata")
-                .post(ByteArray(0).toRequestBody("application/json".toMediaType()))
+                .post(formBody)
                 .build()
             val refreshBody = withContext(Dispatchers.IO) {
                 okHttpClient.newCall(refreshRequest).execute().use { resp ->
@@ -381,21 +423,36 @@ class BiliSecurityCoordinator(
                 cookieRefreshCheckedDay = epochDay
                 return@runCatching
             }
-            val refreshData = refreshJson.optJSONObject("data") ?: JSONObject()
-            val newSessdata = refreshData.optString("refresh_token", "").trim()
 
-            val respCookies = mutableListOf<String>()
-            if (newSessdata.isNotBlank()) {
-                respCookies.add(
-                    encodeCookieDirect(
-                        buildCookie("SESSDATA", newSessdata, System.currentTimeMillis() + 180L * 24 * 60 * 60 * 1000)
-                    )
-                )
+            val newRefreshToken = refreshJson.optJSONObject("data")
+                ?.optString("refresh_token", "").orEmpty().trim()
+            if (newRefreshToken.isNotBlank()) {
+                refreshTokenSaver(newRefreshToken)
             }
-            if (respCookies.isNotEmpty()) {
-                cookieManager.saveCookies(respCookies)
+
+            runCatching {
+                val newCsrf = cookieManager.getCsrfToken()
+                val confirmForm = FormBody.Builder()
+                    .add("csrf", newCsrf)
+                    .add("refresh_token", oldRefreshToken)
+                    .build()
+                val confirmRequest = okhttp3.Request.Builder()
+                    .url("https://passport.bilibili.com/x/passport-login/web/confirm/refresh")
+                    .header("User-Agent", userAgentProvider())
+                    .header("Referer", "https://www.bilibili.com")
+                    .post(confirmForm)
+                    .build()
+                withContext(Dispatchers.IO) {
+                    okHttpClient.newCall(confirmRequest).execute().use { resp ->
+                        AppLog.d(tag, "refreshCookie confirm: code=${resp.code}")
+                    }
+                }
+            }.onFailure {
+                AppLog.w(tag, "refreshCookie confirm failed: ${it.message}")
             }
+
             cookieRefreshCheckedDay = epochDay
+            AppLog.d(tag, "refreshCookie success")
         }.onFailure {
             AppLog.w(tag, "refreshCookie failed: ${it.message}")
         }
@@ -467,6 +524,6 @@ class BiliSecurityCoordinator(
             )
         )
         val encrypted = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
-        return Base64.encodeToString(encrypted, Base64.NO_PADDING or Base64.NO_WRAP or Base64.URL_SAFE)
+        return encrypted.joinToString("") { "%02x".format(it) }
     }
 }

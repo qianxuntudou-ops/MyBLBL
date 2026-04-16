@@ -172,9 +172,6 @@ class DynamicVideoAdapter(
         }
 
         fun bind(item: VideoModel) {
-            val d = item.dimension
-            AppLog.d("PortraitDebug", "[Dynamic] title=${item.title.take(20)} dimension=${d?.width}x${d?.height} rotate=${d?.rotate} isPortrait=${item.isPortrait}")
-
             val bangumi = item.bangumi
             val ownerName = item.authorName
             val publishText = formatPublishTime(item)

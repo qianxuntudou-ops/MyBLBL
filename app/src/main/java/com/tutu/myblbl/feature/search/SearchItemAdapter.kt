@@ -129,9 +129,6 @@ class SearchItemAdapter(
         }
 
         fun bind(item: SearchItemModel) {
-            val d = item.dimension
-            AppLog.d("PortraitDebug", "[Search] title=${item.decodedTitle.take(20)} dimension=${d?.width}x${d?.height} rotate=${d?.rotate} isPortrait=${d?.isPortrait}")
-
             binding.textView.text = item.decodedTitle
             val ownerName = item.author.ifBlank { item.uname }
             val publishText = item.pubDate.takeIf { it > 0L }?.let(TimeUtils::formatRelativeTime).orEmpty()

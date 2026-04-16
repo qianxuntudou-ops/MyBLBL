@@ -258,9 +258,6 @@ class VideoAdapter(
         fun bind(video: VideoModel) {
             currentVideo = video
 
-            val d = video.dimension
-            AppLog.d("PortraitDebug", "title=${video.title.take(20)} dimension=${d?.width}x${d?.height} rotate=${d?.rotate} isPortrait=${video.isPortrait}")
-
             binding.textView.text = resolveDisplayTitle(video)
             when (displayStyle) {
                 DisplayStyle.DEFAULT -> bindDefault(video)

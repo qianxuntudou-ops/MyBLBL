@@ -57,6 +57,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:clipToPadding="false"
-        android:paddingStart="@dimen/px120"
+        android:paddingStart="@dimen/px150"
         app:layout_constraintTop_toBottomOf="@id/top_title" />
 </androidx.constraintlayout.widget.ConstraintLayout>

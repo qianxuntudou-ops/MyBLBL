@@ -12,6 +12,7 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.FragmentSignInBinding
 import com.tutu.myblbl.event.AppEventHub
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.network.cookie.CookieManager
 import com.tutu.myblbl.repository.AuthRepository
 import com.tutu.myblbl.repository.UserRepository
@@ -135,6 +136,9 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
             if (data != null && data.isSuccess()) {
                 pollingJob?.cancel()
                 saveCookiesFromLoginUrl(data.url)
+                if (data.refreshToken.isNotBlank()) {
+                    NetworkManager.saveLoginRefreshToken(data.refreshToken)
+                }
                 Toast.makeText(requireContext(), "登录成功", Toast.LENGTH_SHORT).show()
                 onLoginSuccess()
             } else if (data != null && data.code == 86038) {

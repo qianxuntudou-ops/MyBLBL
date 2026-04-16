@@ -24,7 +24,7 @@ class AvatarBadgeView @JvmOverloads constructor(
     private var badgeDrawable: Drawable? = null
     private var badgeType: Int = BADGE_NONE
 
-    private val borderWidthPx = resources.displayMetrics.density * 2f * 2f / 3f
+    private val borderWidthPx = 1f
     private val gapPx = 1f
 
     private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {

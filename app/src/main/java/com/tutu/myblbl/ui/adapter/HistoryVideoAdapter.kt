@@ -262,9 +262,6 @@ class HistoryVideoAdapter(
         fun bind(item: HistoryVideoModel, isFocused: Boolean) {
             currentItem = item
 
-            val d = item.dimension
-            AppLog.d("PortraitDebug", "[History] title=${item.title.take(20)} dimension=${d?.width}x${d?.height} rotate=${d?.rotate} isPortrait=${item.isPortrait}")
-
             binding.root.isSelected = isFocused
             binding.textView.isSelected = isFocused
             binding.textView.text = item.title.ifBlank { item.showTitle }

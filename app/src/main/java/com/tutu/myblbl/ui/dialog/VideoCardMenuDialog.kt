@@ -8,13 +8,18 @@ import android.view.Window
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatDialog
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.core.ui.decoration.LinearSpacingItemDecoration
 import com.tutu.myblbl.databinding.DialogVideoCardMenuBinding
 import com.tutu.myblbl.event.AppEventHub
+import com.tutu.myblbl.model.favorite.FavoriteFolderModel
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.network.session.NetworkSessionGateway
+import com.tutu.myblbl.repository.FavoriteRepository
 import com.tutu.myblbl.repository.VideoRepository
+import com.tutu.myblbl.ui.adapter.FavoriteFolderDialogAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,11 +43,13 @@ class VideoCardMenuDialog(
 
     private val binding = DialogVideoCardMenuBinding.inflate(LayoutInflater.from(context))
     private val videoRepository: VideoRepository by inject()
+    private val favoriteRepository: FavoriteRepository by inject()
     private val sessionGateway: NetworkSessionGateway by inject()
     private val appEventHub: AppEventHub by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private var isInWatchLater = false
+    private var isFavorited = false
     private var isActionInProgress = false
     private val isLiveFeedbackCard = video.goto.equals("live", ignoreCase = true) ||
         video.roomId > 0L ||
@@ -58,12 +65,13 @@ class VideoCardMenuDialog(
         configureContent()
         initListeners()
         refreshWatchLaterState()
+        refreshFavoriteState()
         setOnShowListener {
             binding.root.post {
                 if (supportsWatchLater) {
                     binding.buttonWatchLater.requestFocus()
                 } else {
-                    binding.buttonDislikeVideo.requestFocus()
+                    binding.buttonFavorite.requestFocus()
                 }
             }
         }
@@ -90,6 +98,19 @@ class VideoCardMenuDialog(
             } else {
                 addWatchLater()
             }
+        }
+
+        binding.buttonFavorite.setOnClickListener {
+            if (isActionInProgress) return@setOnClickListener
+            if (!checkLogin()) return@setOnClickListener
+            setActionInProgress(true)
+            toggleFavorite()
+        }
+
+        binding.buttonFavorite.setOnLongClickListener {
+            if (!checkLogin()) return@setOnLongClickListener true
+            showFavoriteFolderDialog()
+            true
         }
 
         binding.buttonDislikeVideo.setOnClickListener {
@@ -258,6 +279,160 @@ class VideoCardMenuDialog(
         }
     }
 
+    private fun toggleFavorite() {
+        scope.launch {
+            val currentUserMid = sessionGateway.getUserInfo()?.mid?.takeIf { it > 0L }
+                ?: video.owner?.mid?.takeIf { it > 0L }
+                ?: 0L
+            if (currentUserMid <= 0L) {
+                toast("收藏夹信息未加载完成")
+                setActionInProgress(false)
+                return@launch
+            }
+            val folderResult = favoriteRepository.getFavoriteFolders(currentUserMid)
+            val folders = folderResult.getOrNull()?.data?.list.orEmpty()
+            val defaultFolder = folders.firstOrNull()
+            if (defaultFolder == null) {
+                toast("暂无可用收藏夹")
+                setActionInProgress(false)
+                return@launch
+            }
+            val folderId = defaultFolder.id.toString()
+            val result = if (isFavorited) {
+                favoriteRepository.removeFavorite(video.aid, folderId)
+            } else {
+                favoriteRepository.addFavorite(video.aid, folderId)
+            }
+            result.onSuccess { response ->
+                if (response.isSuccess) {
+                    isFavorited = !isFavorited
+                    renderFavoriteState()
+                    toast(
+                        if (isFavorited) context.getString(R.string.collection_)
+                        else context.getString(R.string.collection)
+                    )
+                    dismiss()
+                } else {
+                    toast(response.errorMessage)
+                }
+                setActionInProgress(false)
+            }.onFailure {
+                toast(it.message ?: "操作失败")
+                setActionInProgress(false)
+            }
+        }
+    }
+
+    private fun showFavoriteFolderDialog() {
+        val currentUserMid = sessionGateway.getUserInfo()?.mid?.takeIf { it > 0L }
+            ?: video.owner?.mid?.takeIf { it > 0L }
+            ?: 0L
+        if (currentUserMid <= 0L) {
+            toast("收藏夹信息未加载完成")
+            return
+        }
+        scope.launch {
+            favoriteRepository.getFavoriteFolders(currentUserMid)
+                .onSuccess { response ->
+                    if (!response.isSuccess) {
+                        toast(response.errorMessage)
+                        return@onSuccess
+                    }
+                    val folders = response.data?.list.orEmpty()
+                    if (folders.isEmpty()) {
+                        toast("暂无可用收藏夹")
+                        return@onSuccess
+                    }
+                    displayFavoriteFolderChooser(folders)
+                }
+                .onFailure { toast(it.message ?: "加载收藏夹失败") }
+        }
+    }
+
+    private fun displayFavoriteFolderChooser(folders: List<FavoriteFolderModel>) {
+        val dialog = AppCompatDialog(context, R.style.DialogTheme)
+        dialog.setContentView(R.layout.dialog_favorite_folder)
+        dialog.setCanceledOnTouchOutside(true)
+        dialog.findViewById<View>(R.id.dialog_root)?.setOnClickListener { dialog.dismiss() }
+
+        val titleView = dialog.findViewById<android.widget.TextView>(R.id.top_title)
+        val recyclerView = dialog.findViewById<RecyclerView>(R.id.recyclerView)
+        titleView?.text = if (isFavorited) context.getString(R.string.collection_)
+        else context.getString(R.string.collection)
+
+        val adapter = FavoriteFolderDialogAdapter(folders) { position ->
+            val folder = folders.getOrNull(position) ?: return@FavoriteFolderDialogAdapter
+            dialog.dismiss()
+            scope.launch {
+                val result = if (isFavorited) {
+                    favoriteRepository.removeFavorite(video.aid, folder.id.toString())
+                } else {
+                    favoriteRepository.addFavorite(video.aid, folder.id.toString())
+                }
+                result.onSuccess { response ->
+                    if (response.isSuccess) {
+                        isFavorited = !isFavorited
+                        renderFavoriteState()
+                        toast(
+                            if (isFavorited) {
+                                "已收藏到 ${folder.title}"
+                            } else {
+                                "已从 ${folder.title} 取消收藏"
+                            }
+                        )
+                    } else {
+                        toast(response.errorMessage)
+                    }
+                }.onFailure { toast(it.message ?: "操作失败") }
+            }
+        }
+
+        recyclerView?.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(context)
+        recyclerView?.adapter = adapter
+        if (recyclerView != null && recyclerView.itemDecorationCount == 0) {
+            recyclerView.addItemDecoration(
+                LinearSpacingItemDecoration(
+                    context.resources.getDimensionPixelSize(R.dimen.px2),
+                    includeBottom = true
+                )
+            )
+        }
+
+        dialog.setOnShowListener {
+            recyclerView?.post {
+                adapter.requestInitialFocus(recyclerView)
+            }
+        }
+        dialog.show()
+    }
+
+    private fun refreshFavoriteState() {
+        if (!sessionGateway.isLoggedIn()) return
+        scope.launch {
+            favoriteRepository.checkFavorite(video.aid)
+                .onSuccess { response ->
+                    if (response.isSuccess) {
+                        isFavorited = response.data?.favoured == true
+                        renderFavoriteState()
+                    }
+                }
+        }
+    }
+
+    private fun renderFavoriteState() {
+        if (isFavorited) {
+            binding.textFavoriteTitle.text = context.getString(R.string.menu_already_favorited)
+            binding.textFavoriteTitle.setTextColor(
+                ContextCompat.getColor(context, R.color.pink)
+            )
+        } else {
+            binding.textFavoriteTitle.text = context.getString(R.string.menu_favorite)
+            binding.textFavoriteTitle.setTextColor(
+                ContextCompat.getColor(context, R.color.textColor)
+            )
+        }
+    }
+
     private fun renderWatchLaterState() {
         if (isInWatchLater) {
             binding.textWatchLaterTitle.text = context.getString(R.string.menu_already_in_watch_later)
@@ -277,6 +452,7 @@ class VideoCardMenuDialog(
     private fun configureContent() {
         binding.textTitle.text = video.title.ifBlank { context.getString(R.string.video) }.take(60)
         binding.buttonWatchLater.visibility = if (supportsWatchLater) View.VISIBLE else View.GONE
+        binding.textFavoriteSummary.text = context.getString(R.string.menu_favorite_summary)
         binding.textSubtitle.text = context.getString(
             if (isLiveFeedbackCard) {
                 R.string.menu_live_card_subtitle
@@ -299,6 +475,7 @@ class VideoCardMenuDialog(
             }
         )
         renderWatchLaterState()
+        renderFavoriteState()
         renderDislikeUpState()
     }
 
@@ -331,14 +508,19 @@ class VideoCardMenuDialog(
     private fun setActionInProgress(inProgress: Boolean) {
         isActionInProgress = inProgress
         val watchLaterEnabled = supportsWatchLater && !inProgress
+        val favoriteEnabled = !inProgress
         val dislikeVideoEnabled = !inProgress
         binding.buttonWatchLater.isEnabled = watchLaterEnabled
         binding.buttonWatchLater.isClickable = watchLaterEnabled
         binding.buttonWatchLater.isFocusable = watchLaterEnabled
+        binding.buttonFavorite.isEnabled = favoriteEnabled
+        binding.buttonFavorite.isClickable = favoriteEnabled
+        binding.buttonFavorite.isFocusable = favoriteEnabled
         binding.buttonDislikeVideo.isEnabled = dislikeVideoEnabled
         binding.buttonDislikeVideo.isClickable = dislikeVideoEnabled
         binding.buttonDislikeVideo.isFocusable = dislikeVideoEnabled
         binding.buttonWatchLater.alpha = if (watchLaterEnabled) 1f else 0.6f
+        binding.buttonFavorite.alpha = if (favoriteEnabled) 1f else 0.6f
         binding.buttonDislikeVideo.alpha = if (dislikeVideoEnabled) 1f else 0.6f
         renderDislikeUpState()
     }

@@ -251,6 +251,14 @@
     <string name="menu_dislike_up_summary">屏蔽这位UP主，减少其内容再次出现</string>
     <string name="menu_dislike_live_up_summary">减少这位主播的直播内容再次出现</string>
     <string name="menu_dislike_up_unknown_summary">当前卡片没有可识别的UP信息</string>
+    <string name="menu_favorite">收藏</string>
+    <string name="menu_already_favorited">已收藏</string>
+    <string name="menu_favorite_summary">短按收藏/取消收藏，长按选择收藏夹</string>
+    <string name="menu_favorite_added_summary">已在收藏夹中，再点一次可取消收藏</string>
+    <string name="toast_add_favorite_success">已收藏</string>
+    <string name="toast_add_favorite_failed">收藏失败，请重试</string>
+    <string name="toast_remove_favorite_success">已取消收藏</string>
+    <string name="toast_remove_favorite_failed">取消收藏失败，请重试</string>
     <string name="toast_add_watch_later_success">已加入稍后观看</string>
     <string name="toast_add_watch_later_failed">加入稍后观看失败，请重试</string>
     <string name="toast_remove_watch_later_success">已移出稍后观看</string>

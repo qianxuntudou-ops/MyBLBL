@@ -53,7 +53,7 @@
         android:background="@drawable/bg_menu_button"
         android:clickable="true"
         android:focusable="true"
-        android:nextFocusDown="@id/button_dislike_video"
+        android:nextFocusDown="@id/button_favorite"
         android:gravity="center_vertical"
         android:minHeight="@dimen/px120"
         android:orientation="horizontal"
@@ -102,7 +102,7 @@
     </androidx.appcompat.widget.LinearLayoutCompat>
 
     <androidx.appcompat.widget.LinearLayoutCompat
-        android:id="@+id/button_dislike_video"
+        android:id="@+id/button_favorite"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/px10"
@@ -110,6 +110,63 @@
         android:clickable="true"
         android:focusable="true"
         android:nextFocusUp="@id/button_watch_later"
+        android:nextFocusDown="@id/button_dislike_video"
+        android:gravity="center_vertical"
+        android:minHeight="@dimen/px120"
+        android:orientation="horizontal"
+        android:paddingStart="@dimen/px22"
+        android:paddingTop="@dimen/px16"
+        android:paddingEnd="@dimen/px22"
+        android:paddingBottom="@dimen/px16">
+
+        <FrameLayout
+            android:layout_width="@dimen/px70"
+            android:layout_height="@dimen/px70"
+            android:background="@drawable/dialog_menu_icon_background">
+
+            <androidx.appcompat.widget.AppCompatImageView
+                android:layout_width="@dimen/px38"
+                android:layout_height="@dimen/px38"
+                android:layout_gravity="center"
+                app:srcCompat="@drawable/ic_favorite"
+                app:tint="@color/textColor" />
+        </FrameLayout>
+
+        <androidx.appcompat.widget.LinearLayoutCompat
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/px20"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/text_favorite_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/menu_favorite"
+                android:textColor="@color/textColor"
+                android:textSize="@dimen/px30"
+                android:textStyle="bold" />
+
+            <androidx.appcompat.widget.AppCompatTextView
+                android:id="@+id/text_favorite_summary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/px4"
+                android:textColor="@color/subTextColor"
+                android:textSize="@dimen/px20" />
+        </androidx.appcompat.widget.LinearLayoutCompat>
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/button_dislike_video"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/px10"
+        android:background="@drawable/bg_menu_button"
+        android:clickable="true"
+        android:focusable="true"
+        android:nextFocusUp="@id/button_favorite"
         android:nextFocusDown="@id/button_dislike_up"
         android:gravity="center_vertical"
         android:minHeight="@dimen/px120"

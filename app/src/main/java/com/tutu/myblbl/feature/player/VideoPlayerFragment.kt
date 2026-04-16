@@ -348,21 +348,6 @@ class VideoPlayerFragment : Fragment() {
         buttonCloseRelated.setOnClickListener {
             hideContentPanel()
         }
-
-        playerView.setTouchInterceptListener { event ->
-            if (event.action == MotionEvent.ACTION_DOWN && viewRelated.isVisible) {
-                val location = IntArray(2)
-                viewRelated.getLocationOnScreen(location)
-                if (event.rawY < location[1]) {
-                    hideContentPanel()
-                    true
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        }
     }
 
     private fun setupAdapters() {
@@ -395,6 +380,7 @@ class VideoPlayerFragment : Fragment() {
             latestVideoInfoProvider = { latestVideoInfo },
             relatedAdapter = relatedAdapter,
             viewRelated = viewRelated,
+            dimBackground = binding.dimBackground,
             recyclerViewRelated = recyclerViewRelated,
             textMoreTitle = textMoreTitle,
             onPlayEpisode = { index -> viewModel.playEpisode(index) },

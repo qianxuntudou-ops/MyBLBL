@@ -95,6 +95,14 @@
             android:shadowRadius="4"
             android:layout_marginStart="@dimen/px17"/>
     </androidx.appcompat.widget.LinearLayoutCompat>
+    <View
+        android:id="@+id/dim_background"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#80000000"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="false"/>
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_gravity="bottom"
         android:orientation="vertical"

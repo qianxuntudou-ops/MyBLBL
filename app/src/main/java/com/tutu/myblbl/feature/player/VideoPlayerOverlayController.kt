@@ -33,6 +33,7 @@ class VideoPlayerOverlayController(
     private val latestVideoInfoProvider: () -> VideoDetailModel?,
     private val relatedAdapter: VideoAdapter,
     private val viewRelated: View,
+    private val dimBackground: View,
     private val recyclerViewRelated: RecyclerView,
     private val textMoreTitle: TextView,
     private val onPlayEpisode: (Int) -> Unit,
@@ -122,6 +123,8 @@ class VideoPlayerOverlayController(
             recyclerViewRelated.requestFocus()
             return
         }
+        dimBackground.visibility = View.VISIBLE
+        dimBackground.setOnClickListener { hideContentPanel() }
         viewRelated.clearAnimation()
         viewRelated.visibility = View.VISIBLE
         AnimationUtils.loadAnimation(activity, R.anim.slide_up).apply {
@@ -141,11 +144,13 @@ class VideoPlayerOverlayController(
     fun hideContentPanel(restoreFocus: Boolean = true) {
         overlayCoordinator.onRelatedPanelHidden()
         if (!viewRelated.isVisible) {
+            dimBackground.visibility = View.GONE
             if (restoreFocus && isViewActive()) {
                 restoreControllerAfterOverlay()
             }
             return
         }
+        dimBackground.visibility = View.GONE
         viewRelated.clearAnimation()
         AnimationUtils.loadAnimation(activity, R.anim.slide_down).apply {
             setAnimationListener(object : Animation.AnimationListener {

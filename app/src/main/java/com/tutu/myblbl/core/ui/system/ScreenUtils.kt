@@ -55,11 +55,13 @@ object ScreenUtils {
         return (px / getScreenDensity(context) + 0.5f).toInt()
     }
 
+    @Suppress("DEPRECATION")
     fun spToPx(context: Context, sp: Float): Int {
         val scaledDensity = context.resources.displayMetrics.scaledDensity
         return (sp * scaledDensity + 0.5f).toInt()
     }
 
+    @Suppress("DEPRECATION")
     fun pxToSp(context: Context, px: Float): Int {
         val scaledDensity = context.resources.displayMetrics.scaledDensity
         return (px / scaledDensity + 0.5f).toInt()

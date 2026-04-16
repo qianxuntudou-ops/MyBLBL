@@ -404,13 +404,6 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             override fun onGetPlayerView(): View? = playerView
         })
         buttonCloseRelated.setOnClickListener { hideContentPanel() }
-        playerView.setTouchInterceptListener { event ->
-            if (event.action == MotionEvent.ACTION_DOWN && viewRelated.isVisible) {
-                val location = IntArray(2)
-                viewRelated.getLocationOnScreen(location)
-                event.rawY < location[1]
-            } else false
-        }
     }
 
     private fun setupAdapters() {
@@ -443,6 +436,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             latestVideoInfoProvider = { latestVideoInfo },
             relatedAdapter = relatedAdapter,
             viewRelated = viewRelated,
+            dimBackground = binding.dimBackground,
             recyclerViewRelated = recyclerViewRelated,
             textMoreTitle = textMoreTitle,
             onPlayEpisode = { index -> viewModel.playEpisode(index) },
@@ -1119,8 +1113,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private fun hideNextPreview() { autoPlayController.hideNextPreview() }
 
     private fun hideContentPanel() {
-        overlayCoordinator.onRelatedPanelHidden()
-        viewRelated.visibility = View.GONE
+        overlayUiController.hideContentPanel()
     }
 
     private fun showChooseEpisodeDialog() { overlayUiController.showChooseEpisodeDialog() }

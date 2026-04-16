@@ -12,7 +12,6 @@
         app:layout_constraintWidth_percent="0.18"/>
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerViewRight"
-        android:background="?attr/thirdBackgroundColor"
         android:paddingLeft="@dimen/px20"
         android:paddingTop="@dimen/px20"
         android:paddingRight="@dimen/px20"

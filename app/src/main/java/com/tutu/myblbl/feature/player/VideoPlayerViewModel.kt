@@ -1295,7 +1295,8 @@ class VideoPlayerViewModel(
             else -> playbackPositionMs
         }
 
-        val shouldResume = rawResumePosition > 5000L
+        val shouldResume = rawResumePosition > 5000L &&
+            (initialPlayInfo.timeLength - rawResumePosition) > 5000L
 
         val startPosition = rawResumePosition.takeIf { shouldResume } ?: 0L
 

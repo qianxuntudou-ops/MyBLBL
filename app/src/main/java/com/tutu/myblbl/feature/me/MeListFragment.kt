@@ -194,7 +194,9 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                     if (loading && !hasData) {
                         binding.emptyContainer.visibility = View.GONE
                     }
-                    updateContentState(!hasData)
+                    if (loading || hasData || !viewModel.error.value.isNullOrBlank()) {
+                        updateContentState(!hasData)
+                    }
                 }
             }
         }
@@ -231,6 +233,21 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                         AppEventHub.Event.UserSessionChanged -> {
                             if (type == TYPE_HISTORY || type == TYPE_LATER) {
                                 refresh()
+                            }
+                        }
+
+                        is AppEventHub.Event.WatchLaterVideoRemoved -> {
+                            if (type == TYPE_LATER) {
+                                videoAdapter?.let { adapter ->
+                                    val snapshot = adapter.getItemsSnapshot()
+                                    val filtered = snapshot.filter {
+                                        it.aid != event.aid || (event.bvid.isNotBlank() && it.bvid != event.bvid)
+                                    }
+                                    if (filtered.size < snapshot.size) {
+                                        adapter.setData(filtered)
+                                        updateContentState(filtered.isEmpty())
+                                    }
+                                }
                             }
                         }
 

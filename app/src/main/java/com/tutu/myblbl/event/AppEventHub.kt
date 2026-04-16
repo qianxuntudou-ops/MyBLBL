@@ -20,6 +20,11 @@ class AppEventHub {
             val progressMs: Long,
             val episodeIndex: String
         ) : Event
+
+        data class WatchLaterVideoRemoved(
+            val aid: Long,
+            val bvid: String
+        ) : Event
     }
 
     private val _events = MutableSharedFlow<Event>(extraBufferCapacity = 64)

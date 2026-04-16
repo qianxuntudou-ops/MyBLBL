@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder
 import com.tutu.myblbl.BuildConfig
 import com.tutu.myblbl.model.adapter.FlexibleIntAdapter
 import com.tutu.myblbl.model.adapter.FlexibleLongAdapter
+import com.tutu.myblbl.network.interceptor.DebugResponseInterceptor
 import com.tutu.myblbl.network.interceptor.HeaderInterceptor
 import com.tutu.myblbl.network.interceptor.HttpCacheInterceptor
 import com.tutu.myblbl.network.cookie.CookieManager
@@ -44,6 +45,7 @@ object NetworkClientFactory {
                 )
             )
             .addInterceptor(HttpCacheInterceptor(cookieManager))
+            .apply { if (BuildConfig.DEBUG) addInterceptor(DebugResponseInterceptor()) }
             .retryOnConnectionFailure(true)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

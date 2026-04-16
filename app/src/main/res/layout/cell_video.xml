@@ -127,20 +127,39 @@
         app:layout_constraintEnd_toEndOf="@+id/imageView"
         app:layout_constraintStart_toStartOf="@+id/imageView"
         app:layout_constraintTop_toBottomOf="@+id/imageView"/>
-    <androidx.appcompat.widget.AppCompatImageView
-        android:id="@+id/image_avatar"
-        android:paddingRight="@dimen/px10"
-        android:visibility="visible"
-        android:layout_width="@dimen/px40"
-        android:layout_height="@dimen/px25"
-        android:scaleType="centerCrop"
-        android:paddingEnd="@dimen/px10"
+    <FrameLayout
+        android:id="@+id/layout_avatar_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_marginStart="@dimen/px2"
         app:layout_constraintBottom_toBottomOf="@+id/textView_owner"
         app:layout_constraintStart_toStartOf="@+id/textView"
-        app:layout_constraintTop_toTopOf="@+id/textView_owner"
-        app:srcCompat="@drawable/ic_video_up"
-        app:tint="?android:attr/textColorSecondary"/>
+        app:layout_constraintTop_toTopOf="@+id/textView_owner">
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/image_avatar"
+            android:visibility="visible"
+            android:layout_width="@dimen/px40"
+            android:layout_height="@dimen/px25"
+            android:scaleType="centerCrop"
+            android:paddingEnd="@dimen/px10"
+            app:srcCompat="@drawable/ic_video_up"
+            app:tint="?android:attr/textColorSecondary"/>
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_portrait_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="@dimen/px6"
+            android:background="@drawable/bg_charge_badge"
+            android:paddingStart="@dimen/px6"
+            android:paddingEnd="@dimen/px6"
+            android:paddingTop="@dimen/px2"
+            android:paddingBottom="@dimen/px2"
+            android:text="竖屏"
+            android:textColor="#FFFFFF"
+            android:textSize="@dimen/px18"
+            android:visibility="gone"/>
+    </FrameLayout>
     <androidx.appcompat.widget.AppCompatTextView
         android:textSize="@dimen/px22"
         android:textColor="?android:attr/textColorSecondary"
@@ -150,6 +169,6 @@
         android:layout_marginTop="@dimen/px5"
         android:text="@string/app_name"
         android:maxLines="1"
-        app:layout_constraintStart_toEndOf="@+id/image_avatar"
+        app:layout_constraintStart_toEndOf="@+id/layout_avatar_container"
         app:layout_constraintTop_toBottomOf="@+id/textView"/>
 </androidx.constraintlayout.widget.ConstraintLayout>

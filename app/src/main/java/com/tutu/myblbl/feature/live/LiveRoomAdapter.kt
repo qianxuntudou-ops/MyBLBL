@@ -148,6 +148,7 @@ class LiveRoomAdapter(
             binding.textView.text = item.title
             binding.textViewOwner.text = item.uname
             binding.imageAvatar.visibility = if (item.uname.isBlank()) View.GONE else View.VISIBLE
+            binding.textPortraitBadge.visibility = View.GONE
             binding.textViewOwner.visibility = if (item.uname.isBlank()) View.GONE else View.VISIBLE
             binding.textPlayCount.text = NumberUtils.formatCount(item.online.toLong())
             binding.iconPlayCount.visibility = View.VISIBLE

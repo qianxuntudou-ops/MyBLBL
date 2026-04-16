@@ -156,6 +156,8 @@ data class VideoModel(
     val isChargingExclusive: Boolean
         get() = isUpowerExclusive || privilegeType > 0 || isChargingArc
                 || elecArcType == 1 || elecArcBadge == "充电专属"
+    val isPortrait: Boolean
+        get() = dimension?.isPortrait == true
     val coverUrl: String
         get() = pic.ifEmpty { cover }
 
@@ -306,4 +308,13 @@ data class Dimension(
     
     @SerializedName("rotate")
     val rotate: Int = 0
-) : Serializable
+) : Serializable {
+    val isPortrait: Boolean
+        get() {
+            if (width == 0 || height == 0) return false
+            return when (rotate) {
+                90, 270 -> width > height
+                else -> height > width
+            }
+        }
+}

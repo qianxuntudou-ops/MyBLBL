@@ -72,11 +72,16 @@ data class HistoryVideoModel(
     val elecArcBadge: String = "",
 
     @SerializedName("rights")
-    val rights: HistoryVideoRights? = null
+    val rights: HistoryVideoRights? = null,
+
+    @SerializedName("dimension")
+    val dimension: Dimension? = null
 ) : Serializable {
     val isChargingExclusive: Boolean
         get() = isUpowerExclusive || privilegeType > 0 || isChargingArc
                 || elecArcType == 1 || elecArcBadge == "充电专属"
+    val isPortrait: Boolean
+        get() = dimension?.isPortrait == true
     fun toVideoModel(): VideoModel {
         val historyInfo = history
         val aid = historyInfo?.oid ?: 0L

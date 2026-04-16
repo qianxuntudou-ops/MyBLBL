@@ -172,6 +172,9 @@ class DynamicVideoAdapter(
         }
 
         fun bind(item: VideoModel) {
+            val d = item.dimension
+            AppLog.d("PortraitDebug", "[Dynamic] title=${item.title.take(20)} dimension=${d?.width}x${d?.height} rotate=${d?.rotate} isPortrait=${item.isPortrait}")
+
             val bangumi = item.bangumi
             val ownerName = item.authorName
             val publishText = formatPublishTime(item)
@@ -196,10 +199,17 @@ class DynamicVideoAdapter(
                 } else {
                     ownerName
                 }
-                binding.imageAvatar.visibility = View.VISIBLE
+                if (item.isPortrait) {
+                    binding.imageAvatar.visibility = View.GONE
+                    binding.textPortraitBadge.visibility = View.VISIBLE
+                } else {
+                    binding.imageAvatar.visibility = View.VISIBLE
+                    binding.textPortraitBadge.visibility = View.GONE
+                }
             } else {
                 binding.textViewOwner.text = publishText
                 binding.imageAvatar.visibility = View.GONE
+                binding.textPortraitBadge.visibility = View.GONE
             }
 
             binding.textPlayCount.text = NumberUtils.formatCount(item.viewCount)

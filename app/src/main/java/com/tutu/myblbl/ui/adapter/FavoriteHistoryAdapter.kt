@@ -191,6 +191,7 @@ class FavoriteHistoryAdapter(
             binding.textView.maxLines = 1
             binding.textView.minLines = 1
             binding.imageAvatar.visibility = View.GONE
+            binding.textPortraitBadge.visibility = View.GONE
             binding.textDuration.visibility = View.GONE
         }
 
@@ -201,6 +202,7 @@ class FavoriteHistoryAdapter(
             binding.textView.text = item.title.ifBlank { item.showTitle }
             binding.progressBar.visibility = View.GONE
             binding.imageAvatar.visibility = View.GONE
+            binding.textPortraitBadge.visibility = if (item.isPortrait) View.VISIBLE else View.GONE
             binding.iconDanmaku.visibility = View.GONE
             binding.textDanmakuCount.visibility = View.GONE
             binding.textDuration.visibility = View.GONE

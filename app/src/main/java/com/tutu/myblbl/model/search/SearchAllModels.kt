@@ -4,6 +4,7 @@ import androidx.annotation.StringRes
 import com.google.gson.annotations.SerializedName
 import com.tutu.myblbl.R
 import com.tutu.myblbl.model.user.OfficialVerifySimple
+import com.tutu.myblbl.model.video.Dimension
 import java.io.Serializable
 
 data class SearchAllResponseData(
@@ -126,7 +127,10 @@ data class SearchItemModel(
     val roomId: Long = 0,
 
     @SerializedName("official_verify")
-    val officialVerify: OfficialVerifySimple? = null
+    val officialVerify: OfficialVerifySimple? = null,
+
+    @SerializedName("dimension")
+    val dimension: Dimension? = null
 ) : Serializable {
 
     private var _decodedTitle: String? = null

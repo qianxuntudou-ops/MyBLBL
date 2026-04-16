@@ -258,6 +258,9 @@ class VideoAdapter(
         fun bind(video: VideoModel) {
             currentVideo = video
 
+            val d = video.dimension
+            AppLog.d("PortraitDebug", "title=${video.title.take(20)} dimension=${d?.width}x${d?.height} rotate=${d?.rotate} isPortrait=${video.isPortrait}")
+
             binding.textView.text = resolveDisplayTitle(video)
             when (displayStyle) {
                 DisplayStyle.DEFAULT -> bindDefault(video)
@@ -272,7 +275,6 @@ class VideoAdapter(
 
         private fun bindDefault(video: VideoModel) {
             binding.progressBar.visibility = View.GONE
-            binding.imageAvatar.visibility = View.VISIBLE
             binding.iconPlayCount.visibility = View.VISIBLE
             binding.textPlayCount.visibility = View.VISIBLE
             binding.iconDanmaku.visibility = View.VISIBLE
@@ -291,7 +293,13 @@ class VideoAdapter(
                     append(publishLabel)
                 }
             }
-            binding.imageAvatar.visibility = if (ownerName.isNotBlank()) View.VISIBLE else View.GONE
+            if (video.isPortrait) {
+                binding.imageAvatar.visibility = View.GONE
+                binding.textPortraitBadge.visibility = View.VISIBLE
+            } else {
+                binding.imageAvatar.visibility = if (ownerName.isNotBlank()) View.VISIBLE else View.GONE
+                binding.textPortraitBadge.visibility = View.GONE
+            }
             binding.textDuration.text = NumberUtils.formatDuration(video.durationValue.coerceAtLeast(0L))
             binding.textPlayCount.text = NumberUtils.formatCount(video.viewCount)
             binding.textDanmakuCount.text = NumberUtils.formatCount(video.danmakuCount)
@@ -299,11 +307,12 @@ class VideoAdapter(
         }
 
         private fun bindHistory(video: VideoModel) {
-            binding.imageAvatar.visibility = View.GONE
             binding.iconPlayCount.visibility = View.GONE
             binding.textPlayCount.visibility = View.GONE
             binding.iconDanmaku.visibility = View.GONE
             binding.textDanmakuCount.visibility = View.GONE
+            binding.imageAvatar.visibility = View.GONE
+            binding.textPortraitBadge.visibility = View.GONE
 
             val duration = video.durationValue
             val progress = video.historyProgress.coerceAtLeast(0)

@@ -1,5 +1,10 @@
 name: Android APK Build
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - app/build.gradle.kts
   workflow_dispatch:
 
 jobs:
@@ -10,6 +15,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -24,13 +31,39 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Get version name
+      - name: Get version info
         id: get_version
         run: |
-          VERSION=$(grep -A 10 "defaultConfig" app/build.gradle.kts | grep "versionName" | sed 's/.*versionName = "\(.*\)".*/\1/')
-          echo "VERSION_NAME=$VERSION" >> $GITHUB_OUTPUT
+          VERSION_CODE=$(grep -A 10 "defaultConfig" app/build.gradle.kts | grep "versionCode" | sed 's/.*versionCode = \(.*\)/\1/')
+          VERSION_NAME=$(grep -A 10 "defaultConfig" app/build.gradle.kts | grep "versionName" | sed 's/.*versionName = "\(.*\)".*/\1/')
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_OUTPUT
+          echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_OUTPUT
+          echo "Detected version: $VERSION_NAME (code: $VERSION_CODE)"
+
+      - name: Check if version changed
+        id: check_version
+        run: |
+          # 检查上一个commit中的版本号
+          git checkout HEAD~1 -- app/build.gradle.kts
+          OLD_VERSION_CODE=$(grep -A 10 "defaultConfig" app/build.gradle.kts | grep "versionCode" | sed 's/.*versionCode = \(.*\)/\1/')
+          OLD_VERSION_NAME=$(grep -A 10 "defaultConfig" app/build.gradle.kts | grep "versionName" | sed 's/.*versionName = "\(.*\)".*/\1/')
+
+          # 恢复当前版本的build.gradle.kts
+          git checkout HEAD -- app/build.gradle.kts
+
+          echo "Old version: $OLD_VERSION_NAME (code: $OLD_VERSION_CODE)"
+          echo "New version: ${{ steps.get_version.outputs.VERSION_NAME }} (code: ${{ steps.get_version.outputs.VERSION_CODE }})"
+
+          if [ "$OLD_VERSION_CODE" != "${{ steps.get_version.outputs.VERSION_CODE }}" ]; then
+            echo "Version changed! Building release..."
+            echo "VERSION_CHANGED=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version code unchanged. Skipping release build."
+            echo "VERSION_CHANGED=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build Release APK
+        if: steps.check_version.outputs.VERSION_CHANGED == 'true'
         env:
           KEYSTORE_FILE: ${{ secrets.KEYSTORE_FILE }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -39,23 +72,28 @@ jobs:
         run: |
           KEYSTORE_PATH="$GITHUB_WORKSPACE/app/keystore.jks"
           printf '%s' "$KEYSTORE_FILE" | base64 -d > "$KEYSTORE_PATH"
-          ./gradlew assembleRelease \
+          ./gradlew assembleRelease assembleReleaseRenamed \
             -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
             -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
             -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
             -Pandroid.injected.signing.key.password=$KEY_PASSWORD
 
       - name: Upload Release APK
+        if: steps.check_version.outputs.VERSION_CHANGED == 'true'
         uses: actions/upload-artifact@v6
         with:
           name: MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-release
-          path: app/build/outputs/apk/release/MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-release.apk
+          path: app/build/outputs/renamed_apk/release/MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-release.apk
 
       - name: Create GitHub Release
-        env:
-          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-        if: startsWith(github.ref, 'refs/tags/') && env.PERSONAL_ACCESS_TOKEN != ''
+        if: steps.check_version.outputs.VERSION_CHANGED == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-release.apk
-          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          tag_name: v${{ steps.get_version.outputs.VERSION_NAME }}
+          name: v${{ steps.get_version.outputs.VERSION_NAME }}
+          files: app/build/outputs/renamed_apk/release/MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-release.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

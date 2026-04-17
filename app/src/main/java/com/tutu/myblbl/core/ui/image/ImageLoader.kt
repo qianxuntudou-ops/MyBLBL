@@ -1,5 +1,6 @@
 package com.tutu.myblbl.core.ui.image
 
+import android.app.Activity
 import android.content.Context
 import android.graphics.Outline
 import android.graphics.drawable.Drawable
@@ -41,12 +42,18 @@ object ImageLoader {
     private var imageQualityFlowStarted = false
     private val imageQualityScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     
+    private fun isContextAlive(view: View): Boolean {
+        val context = view.context
+        return !(context is Activity && context.isDestroyed)
+    }
+
     fun load(
         imageView: ImageView,
         url: String?,
         placeholder: Int = 0,
         error: Int = 0
     ) {
+        if (!isContextAlive(imageView)) return
         Glide.with(imageView)
             .load(buildImageModel(buildOptimizedCommonImageUrl(imageView, url)))
             .placeholder(placeholder)
@@ -62,6 +69,7 @@ object ImageLoader {
         placeholder: Drawable?,
         error: Drawable?
     ) {
+        if (!isContextAlive(imageView)) return
         Glide.with(imageView)
             .load(buildImageModel(buildOptimizedCommonImageUrl(imageView, url)))
             .placeholder(placeholder)
@@ -77,6 +85,7 @@ object ImageLoader {
         placeholder: Int = 0,
         error: Int = 0
     ) {
+        if (!isContextAlive(imageView)) return
         val normalizedUrl = normalizeUrl(url)
         val optimizedUrl = buildOptimizedAvatarUrl(imageView, url)
         val requestManager = Glide.with(imageView)
@@ -115,6 +124,7 @@ object ImageLoader {
         placeholder: Int = 0,
         error: Int = 0
     ) {
+        if (!isContextAlive(imageView)) return
         Glide.with(imageView)
             .load(buildImageModel(buildOptimizedCommonImageUrl(imageView, url)))
             .placeholder(placeholder)
@@ -140,6 +150,7 @@ object ImageLoader {
         placeholder: Int = R.drawable.default_video,
         error: Int = R.drawable.default_video
     ) {
+        if (!isContextAlive(imageView)) return
         Glide.with(imageView)
             .load(buildImageModel(buildOptimizedVideoCoverUrl(imageView, url)))
             .placeholder(placeholder)
@@ -154,6 +165,7 @@ object ImageLoader {
         placeholder: Int = R.drawable.default_video,
         error: Int = R.drawable.default_video
     ) {
+        if (!isContextAlive(imageView)) return
         val radius = imageView.context.resources.getDimensionPixelSize(R.dimen.px15)
         Glide.with(imageView)
             .load(buildImageModel(buildOptimizedSeriesCoverUrl(imageView, url)))
@@ -170,6 +182,7 @@ object ImageLoader {
         onLoadSuccess: () -> Unit = {},
         onLoadFailed: () -> Unit = {}
     ) {
+        if (!isContextAlive(imageView)) return
         Glide.with(imageView)
             .load(buildImageModel(buildOptimizedCommonImageUrl(imageView, url)))
             .diskCacheStrategy(DiskCacheStrategy.ALL)

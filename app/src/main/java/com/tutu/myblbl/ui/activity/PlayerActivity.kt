@@ -1107,6 +1107,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         if (uiCoordinator.panelState == PlaybackUiCoordinator.PanelState.Related) {
             uiCoordinator.transition(UiEvent.PanelClosed)
         }
+        binding.dimBackground.visibility = View.GONE
         viewRelated.visibility = View.GONE
     }
 

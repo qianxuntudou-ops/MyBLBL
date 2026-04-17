@@ -254,7 +254,8 @@ class MyPlayerControlViewLayoutManager(
         bottomBar.translationY = 0f
         bottomBar.alpha = 1f
         timeBar.showScrubber()
-        playerControlView.startProgressUpdates()
+        // 不启动 progressRunnable，避免与 beginSeekPreview() 冲突导致进度条头乱跳
+        // 位置由 beginSeekPreview() 通过 seek tick 驱动
         setUxState(UX_STATE_ONLY_PROGRESS_VISIBLE)
     }
 

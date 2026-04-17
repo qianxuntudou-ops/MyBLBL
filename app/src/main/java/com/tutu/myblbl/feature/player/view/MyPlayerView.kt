@@ -714,21 +714,25 @@ class MyPlayerView @JvmOverloads constructor(
 
     private fun updateHoldSeekOverlay(session: com.tutu.myblbl.feature.player.SeekSession, forward: Boolean) {
         val currentPlayer = player ?: return
+        val positionMs = currentPlayer.currentPosition.coerceAtLeast(0L)
+        val durationMs = currentPlayer.duration
         if (session.isInSpeedMode()) {
-            // 倍速模式：显示速度指示器
+            // 倍速模式：显示速度指示器 + 更新进度条位置
             tapOverlayView?.showSpeedSeek(forward, currentPlayer.playbackParameters.speed)
+            controller?.beginSeekPreview(positionMs)
         } else if (!forward) {
-            // 快退：每次 tick 累积秒数
+            // 快退：每次 tick 累积秒数（beginSeekPreview 由 seekPreviewRenderer 调用）
             val seekMs = (tapOverlayView?.seekSeconds ?: 10) * 1000L
             tapOverlayView?.showControllerSeek(
-                targetPositionMs = currentPlayer.currentPosition.coerceAtLeast(0L),
-                durationMs = currentPlayer.duration,
+                targetPositionMs = positionMs,
+                durationMs = durationMs,
                 deltaMs = -seekMs,
                 showBottomProgress = false
             )
         } else {
-            // 快进未进入倍速模式：保持 overlay 可见，重置 auto-hide 定时器
+            // 快进未进入倍速模式：保持 overlay 可见 + 更新进度条位置
             tapOverlayView?.extendOverlayVisibility()
+            controller?.beginSeekPreview(positionMs)
         }
     }
 

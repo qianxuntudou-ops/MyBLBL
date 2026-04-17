@@ -512,10 +512,12 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             coordinator = uiCoordinator,
             playerProvider = { player },
             seekPreviewRenderer = { targetMs, durationMs ->
-                if (playerView.getController()?.isVisible() == true) {
+                val controllerHandling = playerView.getController()?.isVisible() == true
+                if (controllerHandling) {
                     playerView.getController()?.beginSeekPreview(targetMs)
                 }
-                if (::slimTimelineRenderer.isInitialized) {
+                // 控制器进度条已处理 preview 时，不更新细进度条，避免 hide/show 互相打架
+                if (!controllerHandling && ::slimTimelineRenderer.isInitialized) {
                     slimTimelineRenderer.showPreview(targetMs, durationMs)
                 }
             },

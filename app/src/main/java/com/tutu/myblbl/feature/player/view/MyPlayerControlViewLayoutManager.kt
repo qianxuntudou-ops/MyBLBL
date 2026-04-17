@@ -14,7 +14,7 @@ class MyPlayerControlViewLayoutManager(
     companion object {
         private const val ANIMATION_DURATION_MS = 250L
         private const val OVERFLOW_ANIMATION_DURATION_MS = 220L
-        private const val PROGRESS_ONLY_DURATION_MS = 2000L
+        private const val PROGRESS_ONLY_DURATION_MS = 1000L
         private const val UX_STATE_ALL_VISIBLE = 0
         private const val UX_STATE_ONLY_PROGRESS_VISIBLE = 1
         private const val UX_STATE_NONE_VISIBLE = 2

@@ -133,6 +133,15 @@ class MyPlayerView @JvmOverloads constructor(
     private val heldSeekKeyCodes = mutableSetOf<Int>()
     private var pendingExitSeekProgressOnly: Runnable? = null
 
+    // --- Timebar-focused seek state (30s steps, 200ms intervals) ---
+    private var timebarSeekActive = false
+    private var timebarSeekForward = true
+    private var timebarSeekRunnable: Runnable? = null
+    private var timebarSeekIdleRunnable: Runnable? = null
+    private val timebarSeekStepMs = 30_000L
+    private val timebarSeekIntervalMs = 200L
+    private val timebarSeekIdleTimeoutMs = 200L
+
     interface ControllerVisibilityListener {
         fun onVisibilityChanged(visibility: Int)
     }
@@ -592,6 +601,12 @@ class MyPlayerView @JvmOverloads constructor(
             seekSession?.cancel()
         }
 
+        // Timebar-focused seek: 30s steps, 200ms interval
+        if (timebarSeekActive && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            val forward = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+            return handleTimebarSeekKeyEvent(event, forward)
+        }
+
         if (gestureListener.isDoubleTapping) {
             if (event.action == KeyEvent.ACTION_DOWN &&
                 (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
@@ -609,6 +624,11 @@ class MyPlayerView @JvmOverloads constructor(
 
         if (isDpadKey && useController) {
             val controllerVisible = controller?.isFullyVisible() == true
+            // Timebar-focused seek: 30s steps, 200ms interval (different from normal seek)
+            if (isSeekKey && controller?.isTimebarFocused() == true) {
+                val forward = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                return handleTimebarSeekKeyEvent(event, forward)
+            }
             if (isSeekKey && event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                 if (!controllerVisible || controller?.isScrubbingTimeBar() == true) {
                     return handleSeekSessionKeyEvent(event)
@@ -711,6 +731,81 @@ class MyPlayerView @JvmOverloads constructor(
         pendingExitSeekProgressOnly?.let { removeCallbacks(it) }
         pendingExitSeekProgressOnly = null
     }
+
+    // ==================== Timebar-focused seek (30s, 200ms) ====================
+
+    private fun handleTimebarSeekKeyEvent(event: KeyEvent, forward: Boolean): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            cancelTimebarSeekIdle()
+            if (!timebarSeekActive) {
+                timebarSeekActive = true
+                timebarSeekForward = forward
+                controller?.enterSeekProgressOnly()
+                doTimebarSeekTick()
+                startTimebarSeekLoop()
+            } else if (timebarSeekForward != forward) {
+                cancelTimebarSeekLoop()
+                timebarSeekForward = forward
+                doTimebarSeekTick()
+                startTimebarSeekLoop()
+            }
+            return true
+        } else if (event.action == KeyEvent.ACTION_UP) {
+            cancelTimebarSeekLoop()
+            startTimebarSeekIdle()
+            return true
+        }
+        return timebarSeekActive
+    }
+
+    private fun doTimebarSeekTick() {
+        val currentPlayer = player ?: return
+        if (currentPlayer.duration <= 0L) return
+        val delta = timebarSeekStepMs * if (timebarSeekForward) 1 else -1
+        val target = (currentPlayer.currentPosition + delta).coerceIn(0L, currentPlayer.duration)
+        currentPlayer.seekTo(target)
+        syncDanmakuPosition(target, forceSeek = true)
+        controller?.beginSeekPreview(target)
+    }
+
+    private fun startTimebarSeekLoop() {
+        cancelTimebarSeekLoop()
+        val runnable = Runnable {
+            if (timebarSeekActive) {
+                doTimebarSeekTick()
+                startTimebarSeekLoop()
+            }
+        }
+        timebarSeekRunnable = runnable
+        postDelayed(runnable, timebarSeekIntervalMs)
+    }
+
+    private fun cancelTimebarSeekLoop() {
+        timebarSeekRunnable?.let { removeCallbacks(it) }
+        timebarSeekRunnable = null
+    }
+
+    private fun startTimebarSeekIdle() {
+        cancelTimebarSeekIdle()
+        val runnable = Runnable {
+            if (timebarSeekActive) {
+                timebarSeekActive = false
+                // 从 ONLY_PROGRESS_VISIBLE 平滑过渡到 ALL_VISIBLE（不经过 GONE）
+                // show() 内部调用 showAllBars() → animateShowMainBar() → resetHideCallbacks()
+                controller?.show()
+                controller?.startProgressUpdates()
+            }
+        }
+        timebarSeekIdleRunnable = runnable
+        postDelayed(runnable, timebarSeekIdleTimeoutMs)
+    }
+
+    private fun cancelTimebarSeekIdle() {
+        timebarSeekIdleRunnable?.let { removeCallbacks(it) }
+        timebarSeekIdleRunnable = null
+    }
+
+    // ==================== End timebar seek ====================
 
     private fun updateHoldSeekOverlay(session: com.tutu.myblbl.feature.player.SeekSession, forward: Boolean) {
         val currentPlayer = player ?: return

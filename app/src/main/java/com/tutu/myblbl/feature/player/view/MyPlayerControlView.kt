@@ -36,7 +36,7 @@ class MyPlayerControlView @JvmOverloads constructor(
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
     companion object {
-        const val DEFAULT_SHOW_TIMEOUT_MS = 5000
+        const val DEFAULT_SHOW_TIMEOUT_MS = 3000
         const val DEFAULT_FAST_FORWARD_MS = 10000L
         const val DEFAULT_REWIND_MS = 10000L
         const val DEFAULT_TIME_BAR_MIN_UPDATE_INTERVAL_MS = 200
@@ -405,6 +405,8 @@ class MyPlayerControlView @JvmOverloads constructor(
     fun isFullyVisible(): Boolean = controlViewLayoutManager.isFullyVisible()
 
     fun isScrubbingTimeBar(): Boolean = isScrubbing
+
+    fun isTimebarFocused(): Boolean = ::timeBar.isInitialized && timeBar.hasFocus()
 
     fun enterSeekProgressOnly() {
         controlViewLayoutManager.enterSeekProgressOnly()

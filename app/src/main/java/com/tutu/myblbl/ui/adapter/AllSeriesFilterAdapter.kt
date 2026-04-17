@@ -17,7 +17,8 @@ class AllSeriesFilterAdapter(
     private val onItemClick: (Int) -> Unit,
     private val onItemFocused: (() -> Unit)? = null,
     private val onTopEdgeUp: (() -> Boolean)? = null,
-    private val onLeftEdge: (() -> Boolean)? = null
+    private val onLeftEdge: ((View) -> Boolean)? = null,
+    private val onRightEdge: ((View) -> Boolean)? = null
 ) : ListAdapter<AllSeriesFilterModel, AllSeriesFilterAdapter.FilterViewHolder>(DIFF_CALLBACK) {
 
     companion object {
@@ -96,6 +97,7 @@ class AllSeriesFilterAdapter(
             onItemFocused?.invoke()
         }.also { holder ->
             holder.onLeftEdge = onLeftEdge
+            holder.onRightEdge = onRightEdge
         }
     }
 
@@ -128,7 +130,8 @@ class AllSeriesFilterAdapter(
         private val onFocused: (android.view.View) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        var onLeftEdge: (() -> Boolean)? = null
+        var onLeftEdge: ((android.view.View) -> Boolean)? = null
+        var onRightEdge: ((android.view.View) -> Boolean)? = null
         private val accentColor = TypedValue()
         private val defaultTextColor = TypedValue()
 
@@ -179,18 +182,17 @@ class AllSeriesFilterAdapter(
                 }
             }
             binding.clickView.setOnKeyListener { _, keyCode, event ->
-                if (event.action == android.view.KeyEvent.ACTION_DOWN &&
-                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP &&
-                    bindingAdapterPosition == 0
-                ) {
-                    onTopEdgeUp?.invoke() == true
-                } else if (
-                    event.action == android.view.KeyEvent.ACTION_DOWN &&
-                    keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT
-                ) {
-                    onLeftEdge?.invoke() == true
-                } else {
-                    false
+                if (event.action != android.view.KeyEvent.ACTION_DOWN) {
+                    return@setOnKeyListener false
+                }
+                when (keyCode) {
+                    android.view.KeyEvent.KEYCODE_DPAD_UP ->
+                        if (bindingAdapterPosition == 0) onTopEdgeUp?.invoke() == true else false
+                    android.view.KeyEvent.KEYCODE_DPAD_LEFT ->
+                        onLeftEdge?.invoke(binding.clickView) == true
+                    android.view.KeyEvent.KEYCODE_DPAD_RIGHT ->
+                        onRightEdge?.invoke(binding.clickView) == true
+                    else -> false
                 }
             }
         }

@@ -11,6 +11,7 @@ import com.tutu.myblbl.databinding.CellSettingChoiceBinding
 class SettingSelectionDialogAdapter(
     private val options: List<String>,
     selectedIndex: Int,
+    private val sortDirection: Int = -1,
     private val onItemSelected: (Int) -> Unit
 ) : RecyclerView.Adapter<SettingSelectionDialogAdapter.SettingChoiceViewHolder>() {
 
@@ -79,6 +80,11 @@ class SettingSelectionDialogAdapter(
         }
 
         private fun applyState(isSelected: Boolean, isFocused: Boolean) {
+            if (isSelected && sortDirection >= 0) {
+                binding.tvCurrent.text = if (sortDirection == 1) "↑ 升序" else "↓ 降序"
+            } else {
+                binding.tvCurrent.text = "当前"
+            }
             binding.tvCurrent.visibility = if (isSelected) View.VISIBLE else View.GONE
             binding.iconCheck.visibility = if (isSelected) View.VISIBLE else View.GONE
 

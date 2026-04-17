@@ -568,11 +568,11 @@ object AllSeriesFilterFactory {
     private fun createOrderOptions(seasonType: Int): List<AllSeriesFilterOption> {
         return when (seasonType) {
             SeriesType.ANIME, SeriesType.CHINA_ANIME -> listOf(
-                option("追番人数", "2"),
+                option("追番人数", "3"),
                 option("最近更新", "0"),
-                option("最高评分", "3"),
-                option("播放数量", "1"),
-                option("开播时间", "4")
+                option("最高评分", "4"),
+                option("播放数量", "2"),
+                option("开播时间", "5")
             )
             SeriesType.VARIETY -> listOf(
                 option("播放数量", "2"),
@@ -672,6 +672,9 @@ object AllSeriesFilterFactory {
     private fun createReleaseDateOptions(): List<AllSeriesFilterOption> {
         return listOf(
             option("全部年份", "-1"),
+            option("2026", "[2026-01-01 00:00:00,2027-01-01 00:00:00)"),
+            option("2025", "[2025-01-01 00:00:00,2026-01-01 00:00:00)"),
+            option("2024", "[2024-01-01 00:00:00,2025-01-01 00:00:00)"),
             option("2023", "[2023-01-01 00:00:00,2024-01-01 00:00:00)"),
             option("2022", "[2022-01-01 00:00:00,2023-01-01 00:00:00)"),
             option("2021", "[2021-01-01 00:00:00,2022-01-01 00:00:00)"),
@@ -692,6 +695,9 @@ object AllSeriesFilterFactory {
     private fun createAnimeYearOptions(): List<AllSeriesFilterOption> {
         return listOf(
             option("全部年份", "-1"),
+            option("2026", "[2026,2027)"),
+            option("2025", "[2025,2026)"),
+            option("2024", "[2024,2025)"),
             option("2023", "[2023,2024)"),
             option("2022", "[2022,2023)"),
             option("2021", "[2021,2022)"),

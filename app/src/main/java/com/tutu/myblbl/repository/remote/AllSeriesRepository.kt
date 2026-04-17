@@ -46,10 +46,12 @@ class AllSeriesRepository(
             put("page", page.toString())
             put("pagesize", "24")
             put("type", "1")
-            put("sort", "0")
             filters.forEach { filter ->
                 val option = filter.options.getOrNull(filter.currentSelect) ?: return@forEach
                 put(filter.key, option.value)
+                if (filter.key == "order") {
+                    put("sort", filter.sortDirection.toString())
+                }
             }
         }
     }

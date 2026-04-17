@@ -223,6 +223,12 @@ class SeriesDetailContentAdapter(
                 detail.rating?.score
                     ?.takeIf { it > 0 }
                     ?.let { add("评分 $it") }
+                detail.stat?.favorites
+                    ?.takeIf { it > 0 }
+                    ?.let {
+                        val label = if (detail.type == 1) "追番" else "追剧"
+                        add("${NumberUtils.formatCount(it)} $label")
+                    }
                 detail.stat?.view
                     ?.takeIf { it > 0 }
                     ?.let { add("${NumberUtils.formatCount(it)} 播放") }
@@ -298,12 +304,19 @@ class SeriesDetailContentAdapter(
             binding.recyclerView.adapter = adapter
             binding.recyclerView.isNestedScrollingEnabled = false
             binding.buttonOrder.visibility = View.VISIBLE
-            binding.textOrder.setText(R.string.negative_sequence)
+            binding.textOrder.setText(R.string.positive_sequence)
             binding.buttonOrder.setOnClickListener {
                 inReverseOrder = !inReverseOrder
-                adapter.reverse()
+                val layoutManager = binding.recyclerView.layoutManager as LinearLayoutManager
+                layoutManager.reverseLayout = inReverseOrder
+                binding.recyclerView.adapter = adapter
+                if (inReverseOrder) {
+                    binding.recyclerView.scrollToPosition(adapter.itemCount - 1)
+                } else {
+                    binding.recyclerView.scrollToPosition(0)
+                }
                 binding.textOrder.setText(
-                    if (inReverseOrder) R.string.positive_sequence else R.string.negative_sequence
+                    if (inReverseOrder) R.string.negative_sequence else R.string.positive_sequence
                 )
             }
             binding.buttonOrder.setOnFocusChangeListener { _, hasFocus ->
@@ -341,7 +354,8 @@ class SeriesDetailContentAdapter(
 
         private fun bindEpisodes() {
             adapter.submitList(items)
-            binding.textOrder.setText(R.string.negative_sequence)
+            binding.textOrder.setText(R.string.positive_sequence)
+            (binding.recyclerView.layoutManager as? LinearLayoutManager)?.reverseLayout = false
         }
 
         fun requestStoredFocus(): Boolean {
@@ -405,7 +419,8 @@ class SeriesDetailContentAdapter(
             onItemClick = onSeasonClick,
             enableSidebarExit = false,
             onItemFocused = ::onRowContentFocused,
-            onVerticalKey = onContentVerticalKey
+            onVerticalKey = onContentVerticalKey,
+            cardWidth = ScreenUtils.getScreenWidth(binding.root.context) / 7
         )
 
         init {

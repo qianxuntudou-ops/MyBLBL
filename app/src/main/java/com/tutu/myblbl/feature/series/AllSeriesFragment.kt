@@ -46,7 +46,7 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         private const val ARG_ENTRY_TITLE = "entryTitle"
         private const val MIN_CONTENT_SPAN_COUNT = 2
         private const val MAX_CONTENT_SPAN_COUNT = 6
-        private const val BASELINE_CARD_WIDTH_PX = 225
+        private const val BASELINE_CARD_WIDTH_PX = 180
         private const val BASELINE_CARD_SPACING_PX = 20
 
         fun newInstance(
@@ -81,8 +81,10 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
     private lateinit var adapter: SeriesAdapter
     private lateinit var filterAdapter: AllSeriesFilterAdapter
     private lateinit var gridLayoutManager: WrapContentGridLayoutManager
+    private lateinit var gridSpacingDecoration: GridSpacingItemDecoration
     private var filters: List<AllSeriesFilterModel> = emptyList()
     private var lastFocusedArea = FocusArea.CONTENT
+    private var originalSpacing = 0
 
     override fun initArguments() {
         seasonType = arguments?.getInt(ARG_SEASON_TYPE, SeriesType.ANIME) ?: SeriesType.ANIME
@@ -126,7 +128,8 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
                 setFilterExpanded(true, animate = false)
             },
             onTopEdgeUp = ::focusBackButton,
-            onLeftEdge = ::focusContentGrid
+            onLeftEdge = { focusContentGrid(it) },
+            onRightEdge = { focusContentGrid(it) }
         )
 
         binding.textTopTitle.text = entryTitle.ifBlank {
@@ -147,7 +150,7 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         binding.buttonBack1.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                 AppLog.d(TAG, "back key DOWN: currentFocus=${describeView(binding.root.findFocus())}")
-                focusFilterPanel() || focusContentGrid()
+                focusContentGrid() || focusFilterPanel()
             } else {
                 false
             }
@@ -169,13 +172,13 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             }
             false
         }
-        binding.recyclerView.addItemDecoration(
-            GridSpacingItemDecoration(
-                MAX_CONTENT_SPAN_COUNT,
-                resources.getDimensionPixelSize(R.dimen.px20),
-                true
-            )
+        originalSpacing = resources.getDimensionPixelSize(R.dimen.px20)
+        gridSpacingDecoration = GridSpacingItemDecoration(
+            MAX_CONTENT_SPAN_COUNT,
+            originalSpacing,
+            true
         )
+        binding.recyclerView.addItemDecoration(gridSpacingDecoration)
         binding.recyclerView.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
             if ((right - left) != (oldRight - oldLeft)) {
                 updateContentGridMetrics()
@@ -297,18 +300,28 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
 
         val optionAdapter = SettingSelectionDialogAdapter(
             options = filter.options.map { it.title },
-            selectedIndex = filter.currentSelect
+            selectedIndex = filter.currentSelect,
+            sortDirection = if (filter.key == "order") filter.sortDirection else -1
         ) { selectedIndex ->
-            if (selectedIndex != filter.currentSelect) {
+            if (selectedIndex == filter.currentSelect && filter.key == "order") {
                 filters = filters.toMutableList().apply {
-                    this[position] = filter.copy(currentSelect = selectedIndex)
+                    this[position] = filter.copy(
+                        sortDirection = if (filter.sortDirection == 0) 1 else 0
+                    )
                 }
-                filterAdapter.setData(filters)
-                filterAdapter.setExpanded(isFilterExpanded)
-                currentPage = 1
-                hasMore = true
-                loadData()
+            } else if (selectedIndex != filter.currentSelect) {
+                filters = filters.toMutableList().apply {
+                    this[position] = filter.copy(
+                        currentSelect = selectedIndex,
+                        sortDirection = if (filter.key == "order") 0 else filter.sortDirection
+                    )
+                }
             }
+            filterAdapter.setData(filters)
+            filterAdapter.setExpanded(isFilterExpanded)
+            currentPage = 1
+            hasMore = true
+            loadData()
             dialog.dismiss()
         }
 
@@ -412,15 +425,53 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         return handled
     }
 
-    private fun focusContentGrid(): Boolean {
+    private fun focusContentGrid(sourceView: View? = null): Boolean {
         if (shouldSuppressAutoFocus()) {
             return false
         }
         lastFocusedArea = FocusArea.CONTENT
         setFilterExpanded(false, animate = false)
+        if (sourceView != null) {
+            val anchorCenterY = getCenterYOnScreen(sourceView)
+            binding.recyclerView.post {
+                if (!isAdded || view == null) return@post
+                if (!focusNearestContentCard(anchorCenterY)) {
+                    adapter.requestFocusedView() || requestFirstContentCardFocus()
+                }
+            }
+            return true
+        }
         val handled = adapter.requestFocusedView() || requestFirstContentCardFocus()
         AppLog.d(TAG, "focusContentGrid: handled=$handled currentFocus=${describeView(binding.root.findFocus())}")
         return handled
+    }
+
+    private fun getCenterYOnScreen(view: View): Int {
+        val location = IntArray(2)
+        view.getLocationOnScreen(location)
+        return location[1] + view.height / 2
+    }
+
+    private fun focusNearestContentCard(anchorCenterY: Int): Boolean {
+        val recyclerView = binding.recyclerView
+        var bestChild: View? = null
+        var bestDistance = Int.MAX_VALUE
+        var bestX = Int.MIN_VALUE
+
+        for (i in 0 until recyclerView.childCount) {
+            val child = recyclerView.getChildAt(i) ?: continue
+            if (!child.isFocusable || child.visibility != View.VISIBLE) continue
+            val childLocation = IntArray(2)
+            child.getLocationOnScreen(childLocation)
+            val childCenterY = childLocation[1] + child.height / 2
+            val distance = kotlin.math.abs(childCenterY - anchorCenterY)
+            if (distance < bestDistance || (distance == bestDistance && childLocation[0] > bestX)) {
+                bestDistance = distance
+                bestX = childLocation[0]
+                bestChild = child
+            }
+        }
+        return bestChild?.requestFocus() == true
     }
 
     private fun requestFirstContentCardFocus(): Boolean {
@@ -453,7 +504,7 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
 
     private fun setFilterExpanded(expanded: Boolean, animate: Boolean = true) {
         val targetWidth = resources.getDimensionPixelSize(
-            if (expanded) R.dimen.px300 else R.dimen.px85
+            if (expanded) R.dimen.px200 else R.dimen.px85
         )
         val currentWidth = binding.viewFilter.layoutParams.width.takeIf { it > 0 } ?: targetWidth
         if (isFilterExpanded == expanded && currentWidth == targetWidth) {
@@ -471,14 +522,19 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         filterAdapter.setExpanded(expanded)
         binding.viewFilter.animate().cancel()
         if (animate) {
-            ValueAnimator.ofInt(currentWidth, targetWidth).apply {
+            val startSpacing = gridSpacingDecoration.currentHSpacing
+            val endSpacing = calculateSpacing(targetWidth)
+            ValueAnimator.ofFloat(0f, 1f).apply {
                 duration = 220L
                 addUpdateListener { animator ->
-                    val width = animator.animatedValue as Int
+                    val fraction = animator.animatedFraction
+                    val width = (currentWidth + (targetWidth - currentWidth) * fraction).toInt()
                     binding.viewFilter.layoutParams = binding.viewFilter.layoutParams.apply {
                         this.width = width
                     }
-                    updateContentGridMetrics()
+                    val spacing = (startSpacing + (endSpacing - startSpacing) * fraction).toInt()
+                    gridSpacingDecoration.setHSpacing(spacing)
+                    binding.recyclerView.invalidateItemDecorations()
                 }
                 start()
             }
@@ -486,9 +542,27 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             binding.viewFilter.layoutParams = binding.viewFilter.layoutParams.apply {
                 width = targetWidth
             }
+            gridSpacingDecoration.setHSpacing(calculateSpacing(targetWidth))
+            binding.recyclerView.invalidateItemDecorations()
             updateContentGridMetrics(force = true)
         }
     }
+
+    private fun calculateSpacing(filterWidth: Int): Int {
+        if (fixedSpanCount <= 0) return originalSpacing
+        val recyclerViewWidth = binding.root.width - filterWidth
+        val availableWidth = recyclerViewWidth - binding.recyclerView.paddingStart - binding.recyclerView.paddingEnd
+        if (availableWidth <= 0) return originalSpacing
+        val gapCount = fixedSpanCount + 1
+        val collapsedWidth = binding.root.width - resources.getDimensionPixelSize(R.dimen.px85)
+        val collapsedAvailable = collapsedWidth - binding.recyclerView.paddingStart - binding.recyclerView.paddingEnd
+        val cardWidth = (collapsedAvailable - originalSpacing * gapCount) / fixedSpanCount
+        val requiredTotalSpacing = availableWidth - cardWidth * fixedSpanCount
+        val newSpacing = (requiredTotalSpacing / gapCount).coerceAtLeast(0)
+        return newSpacing
+    }
+
+    private var fixedSpanCount = 0
 
     private fun updateContentGridMetrics(force: Boolean = false) {
         if (!::gridLayoutManager.isInitialized) {
@@ -500,9 +574,12 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         if (availableWidth <= 0) {
             return
         }
-        val spanCount = ((availableWidth + BASELINE_CARD_SPACING_PX) /
-            (BASELINE_CARD_WIDTH_PX + BASELINE_CARD_SPACING_PX))
-            .coerceIn(MIN_CONTENT_SPAN_COUNT, MAX_CONTENT_SPAN_COUNT)
+        if (fixedSpanCount <= 0) {
+            fixedSpanCount = ((availableWidth + BASELINE_CARD_SPACING_PX) /
+                (BASELINE_CARD_WIDTH_PX + BASELINE_CARD_SPACING_PX))
+                .coerceIn(MIN_CONTENT_SPAN_COUNT, MAX_CONTENT_SPAN_COUNT)
+        }
+        val spanCount = fixedSpanCount
         if (force || gridLayoutManager.spanCount != spanCount) {
             AppLog.d(
                 TAG,

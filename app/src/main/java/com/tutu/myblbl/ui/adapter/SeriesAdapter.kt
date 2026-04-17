@@ -24,7 +24,8 @@ class SeriesAdapter(
     private val onItemFocused: (() -> Unit)? = null,
     private val nextFocusUpId: Int? = null,
     private val rememberFocusedItem: Boolean = true,
-    private val onVerticalKey: ((View, Int) -> Boolean)? = null
+    private val onVerticalKey: ((View, Int) -> Boolean)? = null,
+    private val cardWidth: Int = 0
 ) : ListAdapter<SeriesModel, SeriesAdapter.SeriesViewHolder>(DIFF_CALLBACK) {
 
     var focusedView: View? = null
@@ -73,13 +74,15 @@ class SeriesAdapter(
             onLeftEdge = onLeftEdge,
             onRightEdge = onRightEdge,
             nextFocusUpId = nextFocusUpId,
-            onVerticalKey = onVerticalKey
-        ) { view ->
-            if (rememberFocusedItem) {
-                focusedView = view
-            }
-            onItemFocused?.invoke()
-        }
+            onVerticalKey = onVerticalKey,
+            onFocused = { view ->
+                if (rememberFocusedItem) {
+                    focusedView = view
+                }
+                onItemFocused?.invoke()
+            },
+            cardWidth = cardWidth
+        )
     }
 
     override fun onBindViewHolder(holder: SeriesViewHolder, position: Int) {
@@ -95,7 +98,8 @@ class SeriesAdapter(
         private val onRightEdge: (() -> Boolean)?,
         private val nextFocusUpId: Int?,
         private val onVerticalKey: ((View, Int) -> Boolean)?,
-        private val onFocused: (View) -> Unit
+        private val onFocused: (View) -> Unit,
+        private val cardWidth: Int = 0
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private var currentItem: SeriesModel? = null
@@ -133,6 +137,7 @@ class SeriesAdapter(
 
         fun bind(item: SeriesModel) {
             currentItem = item
+            applyCardWidth(binding.clickView)
             binding.clickView.nextFocusUpId = nextFocusUpId ?: View.NO_ID
 
             ImageLoader.loadSeriesCover(binding.imageView, item.cover)
@@ -188,6 +193,15 @@ class SeriesAdapter(
                 binding.textBadge.background = wrapped
             }.onFailure {
                 binding.textBadge.background = drawable
+            }
+        }
+
+        private fun applyCardWidth(view: View) {
+            if (cardWidth <= 0) return
+            val layoutParams = view.layoutParams ?: return
+            if (layoutParams.width != cardWidth) {
+                layoutParams.width = cardWidth
+                view.layoutParams = layoutParams
             }
         }
     }

@@ -594,7 +594,6 @@ class MyPlayerView @JvmOverloads constructor(
             settingView?.isShowing() != true &&
             onResumeProgressCancelled?.invoke() == true
         ) {
-            if (isBackKey) android.util.Log.d("BackKeyTrace", "→ consumed by onResumeProgressCancelled")
             return true
         }
 
@@ -602,13 +601,11 @@ class MyPlayerView @JvmOverloads constructor(
             event.action == KeyEvent.ACTION_DOWN &&
             settingView?.isShowing() == true
         ) {
-            if (isBackKey) android.util.Log.d("BackKeyTrace", "→ consumed by settingView.onBack")
             settingView?.onBack()
             return true
         }
 
         if (settingView?.isShowing() == true) {
-            if (isBackKey) android.util.Log.d("BackKeyTrace", "→ consumed by settingView.dispatchKeyEvent")
             return settingView?.dispatchKeyEvent(event) ?: super.dispatchKeyEvent(event)
         }
 
@@ -616,7 +613,6 @@ class MyPlayerView @JvmOverloads constructor(
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 return handleSeekSessionKeyEvent(event)
             }
-            if (isBackKey) android.util.Log.d("BackKeyTrace", "→ seekSession cancel + fall through")
             seekSession?.cancel()
         }
 
@@ -636,7 +632,6 @@ class MyPlayerView @JvmOverloads constructor(
         }
 
         if (gestureListener.isDoubleTapping) {
-            if (isBackKey) android.util.Log.d("BackKeyTrace", "→ consumed by gestureListener.isDoubleTapping")
             if (event.action == KeyEvent.ACTION_DOWN &&
                 (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
             ) {
@@ -683,7 +678,6 @@ class MyPlayerView @JvmOverloads constructor(
         }
 
         val superResult = super.dispatchKeyEvent(event)
-        if (isBackKey) android.util.Log.d("BackKeyTrace", "→ superResult=$superResult isDpadKey=$isDpadKey")
         if (superResult) {
             maybeShowController(true)
             return true

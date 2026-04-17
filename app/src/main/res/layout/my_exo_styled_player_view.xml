@@ -14,12 +14,13 @@
             android:id="@+id/exo_subtitles"
             android:layout_width="match_parent"
             android:layout_height="match_parent"/>
-        <ProgressBar
-            android:layout_gravity="center"
+        <ImageView
+            android:layout_gravity="center|top"
             android:id="@+id/exo_buffering"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:indeterminate="true"/>
+            android:layout_marginTop="@dimen/px350"
+            android:visibility="gone"
+            android:layout_width="@dimen/px100"
+            android:layout_height="@dimen/px100"/>
         <TextView
             android:textSize="@dimen/exo_error_message_text_size"
             android:textColor="@color/exo_white"
@@ -44,6 +45,17 @@
         android:id="@+id/special_dmk_overlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
+    <androidx.appcompat.widget.AppCompatImageView
+        android:layout_gravity="end|bottom"
+        android:id="@+id/image_pause_indicator"
+        android:src="@drawable/ic_pause_new"
+        android:visibility="gone"
+        android:layout_width="@dimen/px120"
+        android:layout_height="@dimen/px120"
+        android:layout_marginBottom="@dimen/px150"
+        android:layout_marginRight="@dimen/px80"
+        android:layout_marginEnd="@dimen/px80"
+        android:alpha="0.9"/>
     <View
         android:id="@+id/exo_controller_placeholder"
         android:layout_width="match_parent"

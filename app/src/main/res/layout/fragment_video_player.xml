@@ -99,9 +99,6 @@
         android:layout_gravity="bottom"
         android:orientation="vertical"
         android:id="@+id/view_related"
-        android:background="@drawable/focus_background"
-        android:paddingTop="@dimen/px70"
-        android:paddingBottom="@dimen/px40"
         android:visibility="gone"
         android:descendantFocusability="afterDescendants"
         android:layout_width="match_parent"
@@ -117,6 +114,8 @@
             android:shadowColor="@color/systemBackgroundColor"
             android:shadowRadius="4"
             android:layout_marginStart="@dimen/px30"
+            android:layout_marginTop="@dimen/px20"
+            android:layout_marginBottom="@dimen/px15"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"/>
         <androidx.appcompat.widget.AppCompatImageView
@@ -129,6 +128,7 @@
             android:layout_height="@dimen/px60"
             android:layout_marginRight="@dimen/px30"
             android:layout_marginEnd="@dimen/px30"
+            android:layout_marginTop="@dimen/px10"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent"
             app:srcCompat="@drawable/ic_close"/>
@@ -136,6 +136,10 @@
             android:id="@+id/recyclerViewRelated"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@drawable/related_panel_bg"
+            android:padding="@dimen/px15"
+            android:paddingBottom="@dimen/px40"
+            android:clipToPadding="false"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/title_more"/>
     </androidx.constraintlayout.widget.ConstraintLayout>

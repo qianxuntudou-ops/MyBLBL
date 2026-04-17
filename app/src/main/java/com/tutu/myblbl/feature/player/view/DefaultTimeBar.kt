@@ -331,8 +331,10 @@ class DefaultTimeBar @JvmOverloads constructor(
             val scrubberRadius = scrubberSize / 2f
 
             if (scrubberDrawable != null) {
-                val drawableWidth = (scrubberDrawable.intrinsicWidth * scrubberScale).toInt()
-                val drawableHeight = (scrubberDrawable.intrinsicHeight * scrubberScale).toInt()
+                val intrinsicMax = max(scrubberDrawable.intrinsicWidth, scrubberDrawable.intrinsicHeight)
+                val drawableScale = if (intrinsicMax > 0) scrubberSize.toFloat() / intrinsicMax else scrubberScale
+                val drawableWidth = (scrubberDrawable.intrinsicWidth * drawableScale).toInt()
+                val drawableHeight = (scrubberDrawable.intrinsicHeight * drawableScale).toInt()
                 scrubberDrawable.setBounds(
                     scrubberCenterX - drawableWidth / 2,
                     scrubberCenterY - drawableHeight / 2,

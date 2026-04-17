@@ -16,6 +16,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewConfiguration
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.annotation.OptIn
@@ -64,7 +65,7 @@ class MyPlayerView @JvmOverloads constructor(
 
     private var contentFrame: AspectRatioFrameLayout? = null
     private var shutterView: View? = null
-    private var bufferingView: ProgressBar? = null
+    private var bufferingView: ImageView? = null
     private var errorMessageView: TextView? = null
     private var videoSurfaceView: View? = null
 
@@ -73,6 +74,7 @@ class MyPlayerView @JvmOverloads constructor(
     private var tapOverlayView: YouTubeOverlay? = null
     private var dmkView: DanmakuView? = null
     private var specialDmkOverlayView: SpecialDanmakuOverlayView? = null
+    private var pauseIndicatorView: View? = null
 
     private var player: ExoPlayer? = null
     private var showBuffering: Int = SHOW_BUFFERING_WHEN_PLAYING
@@ -173,12 +175,14 @@ class MyPlayerView @JvmOverloads constructor(
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
             updateBuffering()
             updateControllerVisibility()
+            updatePauseIndicator()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             updateBuffering()
             updateErrorMessage()
             updateControllerVisibility()
+            updatePauseIndicator()
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -212,10 +216,13 @@ class MyPlayerView @JvmOverloads constructor(
 
         contentFrame = findViewById(R.id.exo_content_frame)
         shutterView = findViewById(R.id.exo_shutter)
-        bufferingView = findViewById(R.id.exo_buffering)
+        bufferingView = findViewById<ImageView>(R.id.exo_buffering).also {
+            com.bumptech.glide.Glide.with(context).load(R.drawable.load_data).into(it)
+        }
         errorMessageView = findViewById(R.id.exo_error_message)
         dmkView = findViewById(R.id.dmk_view)
         specialDmkOverlayView = findViewById(R.id.special_dmk_overlay)
+        pauseIndicatorView = findViewById(R.id.image_pause_indicator)
 
         setupSurfaceView()
 
@@ -484,6 +491,12 @@ class MyPlayerView @JvmOverloads constructor(
         maybeShowController(false)
     }
 
+    private fun updatePauseIndicator() {
+        val p = player ?: return
+        val isPaused = !p.playWhenReady && p.playbackState == Player.STATE_READY
+        pauseIndicatorView?.visibility = if (isPaused) VISIBLE else GONE
+    }
+
     private fun maybeShowController(isForced: Boolean) {
         if (!useController() || player == null) return
         if (tapOverlayView?.isOverlayShowing() == true) return
@@ -563,6 +576,17 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val isBackKey = event.keyCode == KeyEvent.KEYCODE_BACK
+        if (isBackKey) {
+            android.util.Log.d("BackKeyTrace", "dispatchKeyEvent: action=${event.action} " +
+                "settingShowing=${settingView?.isShowing()} " +
+                "resumeCancelled=${onResumeProgressCancelled?.invoke()} " +
+                "seekActive=${seekSession?.isActive()} " +
+                "doubleTapping=${gestureListener.isDoubleTapping} " +
+                "timebarSeek=$timebarSeekActive " +
+                "controllerVisible=${controller?.isFullyVisible()} " +
+                "useController=$useController")
+        }
         if (player == null) return super.dispatchKeyEvent(event)
         if (controller == null) return false
 
@@ -579,6 +603,7 @@ class MyPlayerView @JvmOverloads constructor(
             settingView?.isShowing() != true &&
             onResumeProgressCancelled?.invoke() == true
         ) {
+            if (isBackKey) android.util.Log.d("BackKeyTrace", "→ consumed by onResumeProgressCancelled")
             return true
         }
 
@@ -586,11 +611,13 @@ class MyPlayerView @JvmOverloads constructor(
             event.action == KeyEvent.ACTION_DOWN &&
             settingView?.isShowing() == true
         ) {
+            if (isBackKey) android.util.Log.d("BackKeyTrace", "→ consumed by settingView.onBack")
             settingView?.onBack()
             return true
         }
 
         if (settingView?.isShowing() == true) {
+            if (isBackKey) android.util.Log.d("BackKeyTrace", "→ consumed by settingView.dispatchKeyEvent")
             return settingView?.dispatchKeyEvent(event) ?: super.dispatchKeyEvent(event)
         }
 
@@ -598,7 +625,17 @@ class MyPlayerView @JvmOverloads constructor(
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 return handleSeekSessionKeyEvent(event)
             }
+            if (isBackKey) android.util.Log.d("BackKeyTrace", "→ seekSession cancel + fall through")
             seekSession?.cancel()
+        }
+
+        // Cancel timebar seek on BACK key
+        if (timebarSeekActive && isBackKey && event.action == KeyEvent.ACTION_DOWN) {
+            cancelTimebarSeekLoop()
+            cancelTimebarSeekIdle()
+            timebarSeekActive = false
+            controller?.show()
+            controller?.startProgressUpdates()
         }
 
         // Timebar-focused seek: 30s steps, 200ms interval
@@ -608,6 +645,7 @@ class MyPlayerView @JvmOverloads constructor(
         }
 
         if (gestureListener.isDoubleTapping) {
+            if (isBackKey) android.util.Log.d("BackKeyTrace", "→ consumed by gestureListener.isDoubleTapping")
             if (event.action == KeyEvent.ACTION_DOWN &&
                 (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
             ) {
@@ -655,6 +693,7 @@ class MyPlayerView @JvmOverloads constructor(
         }
 
         val superResult = super.dispatchKeyEvent(event)
+        if (isBackKey) android.util.Log.d("BackKeyTrace", "→ superResult=$superResult isDpadKey=$isDpadKey")
         if (superResult) {
             maybeShowController(true)
             return true

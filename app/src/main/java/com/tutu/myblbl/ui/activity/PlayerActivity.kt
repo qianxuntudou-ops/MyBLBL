@@ -39,6 +39,7 @@ import com.tutu.myblbl.event.AppEventHub
 import com.tutu.myblbl.feature.player.CdnLatencyProfile
 import com.tutu.myblbl.feature.player.PlayerInstancePool
 import com.tutu.myblbl.feature.player.PlaybackUiCoordinator
+import com.tutu.myblbl.feature.player.UiEvent
 import com.tutu.myblbl.feature.player.PlayerLaunchContext
 import com.tutu.myblbl.feature.player.PlayerOverlayCoordinator
 import com.tutu.myblbl.feature.player.PlayerSessionCoordinator
@@ -1109,6 +1110,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
 
     private fun hideContentPanel() {
         overlayCoordinator.onRelatedPanelHidden()
+        if (uiCoordinator.panelState == PlaybackUiCoordinator.PanelState.Related) {
+            uiCoordinator.transition(UiEvent.PanelClosed)
+        }
         viewRelated.visibility = View.GONE
     }
 

@@ -77,7 +77,9 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="@dimen/px5"
             app:layout_constraintTop_toBottomOf="@+id/view_title"
-            app:scrubber_dragged_size="@dimen/px40"/>
+            app:scrubber_dragged_size="@dimen/px46"
+            app:scrubber_enabled_size="@dimen/px32"
+            app:scrubber_drawable="@drawable/ic_progress_head"/>
         <FrameLayout
             android:id="@+id/view_bottom_controller"
             android:layout_width="match_parent"

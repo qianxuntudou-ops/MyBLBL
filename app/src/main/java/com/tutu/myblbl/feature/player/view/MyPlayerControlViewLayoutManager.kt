@@ -7,7 +7,8 @@ import android.view.ViewGroup
 import com.tutu.myblbl.R
 
 class MyPlayerControlViewLayoutManager(
-    private val playerControlView: MyPlayerControlView
+    private val playerControlView: MyPlayerControlView,
+    private val uiCoordinator: com.tutu.myblbl.feature.player.PlaybackUiCoordinator? = null
 ) {
 
     companion object {
@@ -235,6 +236,38 @@ class MyPlayerControlViewLayoutManager(
         playerControlView.removeOnLayoutChangeListener(onLayoutChangeListener)
         removeHideCallbacks()
         cancelAllAnimations()
+    }
+
+    /**
+     * 进入 seek 模式：只显示进度条+时间，隐藏其他 UI。
+     * 无论当前处于什么状态都可以调用。
+     */
+    fun enterSeekProgressOnly() {
+        cancelAllAnimations()
+        removeHideCallbacks()
+        playerControlView.visibility = View.VISIBLE
+        controlsBackground.visibility = View.INVISIBLE
+        centerControls.visibility = View.INVISIBLE
+        titleView.visibility = View.INVISIBLE
+        bottomBarController.visibility = View.INVISIBLE
+        bottomBar.visibility = View.VISIBLE
+        bottomBar.translationY = 0f
+        bottomBar.alpha = 1f
+        timeBar.showScrubber()
+        playerControlView.startProgressUpdates()
+        setUxState(UX_STATE_ONLY_PROGRESS_VISIBLE)
+    }
+
+    /**
+     * 退出 seek 模式：立刻隐藏进度条和整个控制器，不闪现其他 UI。
+     */
+    fun exitSeekProgressOnly() {
+        if (uxState == UX_STATE_ONLY_PROGRESS_VISIBLE) {
+            cancelAllAnimations()
+            playerControlView.stopProgressUpdates()
+            playerControlView.visibility = View.GONE
+            setUxState(UX_STATE_NONE_VISIBLE)
+        }
     }
 
     fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
@@ -726,6 +759,29 @@ class MyPlayerControlViewLayoutManager(
         }
         if (oldState != newState) {
             playerControlView.notifyOnVisibilityChange()
+        }
+        uiCoordinator?.let { coord ->
+            when (newState) {
+                UX_STATE_ALL_VISIBLE -> {
+                    coord.transition(com.tutu.myblbl.feature.player.UiEvent.ChromeShowAll)
+                }
+                UX_STATE_ONLY_PROGRESS_VISIBLE -> {
+                    if (coord.chromeState != com.tutu.myblbl.feature.player.PlaybackUiCoordinator.ChromeState.ProgressOnly) {
+                        coord.withState { c ->
+                            c.chromeState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.ChromeState.ProgressOnly
+                            c.bottomOccupant = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.BottomOccupant.FullChrome
+                            c.hudState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.HudState.Chrome
+                        }
+                    }
+                }
+                UX_STATE_NONE_VISIBLE -> {
+                    coord.withState { c ->
+                        c.chromeState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.ChromeState.Hidden
+                        c.bottomOccupant = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.BottomOccupant.SlimTimeline
+                        c.hudState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.HudState.Ambient
+                    }
+                }
+            }
         }
     }
 }

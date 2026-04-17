@@ -7,7 +7,6 @@ import android.util.AttributeSet
 import android.util.LruCache
 import android.view.LayoutInflater
 import android.view.View
-import android.widget.ProgressBar
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
@@ -22,6 +21,8 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.model.player.VideoSnapshotData
 import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.core.common.format.NumberUtils
+import com.tutu.myblbl.feature.player.PlaybackUiCoordinator
+import com.tutu.myblbl.feature.player.UiEvent
 import kotlin.math.abs
 
 class YouTubeOverlay @JvmOverloads constructor(
@@ -44,11 +45,11 @@ class YouTubeOverlay @JvmOverloads constructor(
     private val rootConstraintLayout: ConstraintLayout
     private val secondsView: SecondsView
     private val circleClipTapView: CircleClipTapView
-    private val progressBar: ProgressBar
 
     private var player: Player? = null
     private var playerView: MyPlayerView? = null
     private var callback: Callback? = null
+    private var uiCoordinator: PlaybackUiCoordinator? = null
     private var overlayShowing = false
     private var activeDisplayMode = DisplayMode.EXCLUSIVE
     private var layoutMode = IndicatorLayoutMode.CENTER
@@ -80,12 +81,15 @@ class YouTubeOverlay @JvmOverloads constructor(
         fun shouldForward(player: Player, playerView: MyPlayerView, x: Float): Boolean?
     }
 
+    fun setUiCoordinator(coordinator: PlaybackUiCoordinator?) {
+        uiCoordinator = coordinator
+    }
+
     init {
         val view = LayoutInflater.from(context).inflate(R.layout.yt_overlay, this, true)
         rootConstraintLayout = view.findViewById(R.id.root_constraint_layout)
         secondsView = view.findViewById(R.id.seconds_view)
         circleClipTapView = view.findViewById(R.id.circle_clip_tap_view)
-        progressBar = view.findViewById(R.id.progress_bar)
 
         if (attrs != null) {
             val a = context.obtainStyledAttributes(attrs, R.styleable.YouTubeOverlay, 0, 0)
@@ -143,6 +147,8 @@ class YouTubeOverlay @JvmOverloads constructor(
         this.player = player
     }
 
+    fun isOverlayShowing(): Boolean = overlayShowing
+
     fun setPlayerView(playerView: MyPlayerView?) {
         this.playerView = playerView
     }
@@ -162,7 +168,6 @@ class YouTubeOverlay @JvmOverloads constructor(
 
     fun setPersistentBottomProgressEnabled(enabled: Boolean) {
         persistentBottomProgressEnabled = enabled
-        updateProgressBarVisibility()
     }
 
     fun setIconDrawables(
@@ -338,6 +343,17 @@ class YouTubeOverlay @JvmOverloads constructor(
         scheduleHide(minIndicatorDisplayDurationMs())
     }
 
+    /**
+     * 延长 overlay 可见时间，不改变内容，仅重置 auto-hide 定时器。
+     * 用于长按快进等场景，保持 overlay 不被自动隐藏。
+     */
+    fun extendOverlayVisibility() {
+        if (overlayShowing) {
+            removeCallbacks(hideOverlayRunnable)
+            scheduleHide(minIndicatorDisplayDurationMs())
+        }
+    }
+
     fun showSpeedSeek(forward: Boolean, speed: Float) {
         val directionChanged = secondsView.isForward != forward
         val wasShowing = overlayShowing
@@ -376,12 +392,13 @@ class YouTubeOverlay @JvmOverloads constructor(
 
     fun cancelSwipeSeek() {
         circleClipTapView.cancelAndHide()
-        hideOverlayImmediately()
+        hideOverlayImmediately(sendSeekCancelled = true)
     }
 
     override fun onDetachedFromWindow() {
         removeCallbacks(hideOverlayRunnable)
         cancelPreviewRequest(resetFrameKey = true)
+        previewBitmapCache.evictAll()
         secondsView.cancel()
         super.onDetachedFromWindow()
     }
@@ -460,7 +477,9 @@ class YouTubeOverlay @JvmOverloads constructor(
 
     private fun ensureOverlayVisible(displayMode: DisplayMode, showBottomProgress: Boolean) {
         this.showBottomProgress = showBottomProgress
-        updateProgressBarVisibility()
+        if (!overlayShowing) {
+            uiCoordinator?.transition(UiEvent.SeekStarted)
+        }
         if (overlayShowing) {
             if (activeDisplayMode != displayMode) {
                 callback?.onAnimationEnd(activeDisplayMode)
@@ -476,7 +495,7 @@ class YouTubeOverlay @JvmOverloads constructor(
         callback?.onAnimationStart(activeDisplayMode)
     }
 
-    private fun hideOverlayImmediately() {
+    private fun hideOverlayImmediately(sendSeekCancelled: Boolean = false) {
         if (!overlayShowing) {
             return
         }
@@ -489,9 +508,9 @@ class YouTubeOverlay @JvmOverloads constructor(
         secondsView.cancel()
         secondsView.setSeekText(0)
         secondsView.visibility = View.INVISIBLE
-        updateProgressBarVisibility()
         visibility = View.GONE
         callback?.onAnimationEnd(previousDisplayMode)
+        uiCoordinator?.transition(if (sendSeekCancelled) UiEvent.SeekCancelled else UiEvent.SeekFinished)
     }
 
     private fun scheduleHide(delayMs: Long = 650L) {
@@ -504,18 +523,7 @@ class YouTubeOverlay @JvmOverloads constructor(
     }
 
     private fun updateProgress(positionMs: Long, durationMs: Long) {
-        val safeDuration = durationMs.coerceAtLeast(0L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        val safePosition = positionMs.coerceAtLeast(0L).coerceAtMost(safeDuration.toLong()).toInt()
-        progressBar.max = safeDuration
-        progressBar.progress = safePosition
-    }
-
-    private fun updateProgressBarVisibility() {
-        progressBar.visibility = if (showBottomProgress && !persistentBottomProgressEnabled) {
-            View.VISIBLE
-        } else {
-            View.GONE
-        }
+        uiCoordinator?.updateSeekPreview(positionMs, durationMs)
     }
 
     private fun resetSecondsViewPosition() {

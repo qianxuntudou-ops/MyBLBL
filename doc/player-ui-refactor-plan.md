@@ -23,7 +23,7 @@
 |---|---|---|
 | `chromeState` | `Hidden / ProgressOnly / Full` | 控制主控制层显示级别。`ProgressOnly` 保留"仅进度条 2 秒过渡"的现有体验 |
 | `bottomOccupant` | `None / SlimTimeline / FullChrome / BottomPanel` | 统一管理底部占位，杜绝多进度条 |
-| `seekState` | `None / TapSeek / HoldSeek / SwipeSeek / DoubleTapSeek` | 统一所有 seek 会话 |
+| `seekState` | `None / TapSeek / HoldSeek / SpeedMode / SwipeSeek / DoubleTapSeek` | 统一所有 seek 会话。`SpeedMode` 为右长按倍速播放，不改变播放位置 |
 | `panelState` | `None / Settings / Episode / Related / Action / Owner / NextUp / Interaction / ResumeHint` | 统一外层面板和弹窗策略 |
 | `focusOwner` | `PlayerRoot / Controller / Panel / Dialog / Interaction` | 统一方向键和返回键归属 |
 | `hudState` | `Ambient / Chrome / Seek / Panel / Completion` | 驱动时钟、字幕 inset、调试信息 |
@@ -94,8 +94,10 @@ sealed class UiEvent {
 
 - `MyPlayerControlViewLayoutManager.setUxState()` 内增加对 `PlaybackUiCoordinator.chromeState` 的同步写入
 - `VideoPlayerFragment.renderControllerChrome()` 内增加对 `bottomOccupant` 和 `hudState` 的同步写入
+- **`PlayerActivity.renderControllerChrome()` 同步执行相同写入**（PlayerActivity 与 VideoPlayerFragment 有完全相同的 chrome 联动逻辑，必须同步改造）
 - `YouTubeOverlay.ensureOverlayVisible()` / `hideOverlayImmediately()` 内增加对 `seekState` 的同步写入
 - `PlayerOverlayCoordinator.onRelatedPanelShown()` / `onRelatedPanelHidden()` 增加对 `panelState` 的同步写入
+- `VideoPlayerOverlayController` 中各 dialog/panel 的 `keepControllerVisibleForOverlay()` / `restoreControllerAfterOverlay()` 调用处增加对 `panelState` 的同步写入
 - 旧逻辑不变，新状态仅作为镜像存在，用于后续阶段切换时的校验
 
 #### 3.1.4 验收标准
@@ -128,23 +130,32 @@ interface TimelineRenderer {
 | `FullTimelineRenderer` | `MyPlayerControlView` 内的 `DefaultTimeBar` | `bottomOccupant = FullChrome` |
 | `SlimTimelineRenderer` | `VideoPlayerFragment` 内的 `bottomProgressBar` | `bottomOccupant = SlimTimeline` |
 
+> **与现有 coordinator 的关系**：`PlayerControlTimelineCoordinator` 已实现 multi-window 时间线数据计算（position offset、duration 累加、formatTime 等），`TimelineRenderer` 不应重新实现这些逻辑。`FullTimelineRenderer` 应委托 `PlayerControlTimelineCoordinator` 获取 position/duration，只负责 UI 层面的 show/hide/preview 渲染。`VideoPlayerProgressCoordinator` 负责定时轮询 player 进度并通过回调分发，其 `onProgressPublished` 回调应同时驱动两个 renderer 的 `show()`，由 renderer 自行判断是否 active。
+
 #### 3.2.3 改造 `bottomOccupant` 切换逻辑
 
 在 `PlaybackUiCoordinator` 内：
 
 - `bottomOccupant` 变化时，旧 renderer 调 `hide()`，新 renderer 调 `show()`
 - `seekState` 变化时，当前 renderer 调 `showPreview()` 或恢复 `show()`
-- 废弃 `YouTubeOverlay.progressBar`（`yt_overlay.xml:24`），其显示逻辑由 `bottomOccupant` 规则接管
+- 废弃 `YouTubeOverlay.progressBar`（`yt_overlay.xml`），其显示逻辑由 `bottomOccupant` 规则接管
 - 废弃 `MyPlayerView.dispatchSeekPreviewState()` → `VideoPlayerFragment.onSeekPreviewStateChanged()` 这条跨层回调链，改为 `TimelineRenderer` 直接读 coordinator 状态
+
+> **`progressBar` 迁移调用链**：`YouTubeOverlay` 中以下调用点需逐个迁移到 renderer：
+> - `updateProgress(positionMs, durationMs)` — 被 `seekTo()`、`handleDoubleTap()`、`showSwipeSeek()`、`showControllerSeek()`、`showSpeedSeek()` 调用，设置 `progressBar.max/progress`。迁移后，这些调用方改为写 coordinator 的 `seekPreviewTarget`，由当前 active renderer 读取并渲染。
+> - `updateProgressBarVisibility()` — 由 `ensureOverlayVisible()` / `hideOverlayImmediately()` / `setPersistentBottomProgressEnabled()` 调用。迁移后由 coordinator 根据 `bottomOccupant` 直接控制 renderer 的 show/hide，`YouTubeOverlay` 不再持有 `progressBar` 引用。
 
 #### 3.2.4 删除跨层进度条联动
 
+> **定位策略**：以下行号仅供参考，实际重构时以符号名定位，因代码会随编辑偏移。
+
 | 删除目标 | 文件 | 行为 |
 |---|---|---|
-| `bottomProgressSeekPreviewActive / Position / Duration` | `VideoPlayerFragment.kt:152-154` | 改由 `SlimTimelineRenderer` 管理 |
-| `hiddenSeekPreviewActive / Position / Duration` | `MyPlayerView.kt:132-134` | 改由 coordinator + renderer 管理 |
-| `renderBottomProgressBar()` 中所有 seek preview 判断 | `VideoPlayerFragment.kt:990-1018` | 简化为 `SlimTimelineRenderer.show()` |
-| `YouTubeOverlay.updateProgressBarVisibility()` | `YouTubeOverlay.kt:513-519` | 废弃，由 coordinator 控制 |
+| `bottomProgressSeekPreviewActive / Position / Duration` | `VideoPlayerFragment.kt` / `PlayerActivity.kt` | 改由 `SlimTimelineRenderer` 管理 |
+| `hiddenSeekPreviewActive / Position / Duration` | `MyPlayerView.kt` | 改由 coordinator + renderer 管理 |
+| `renderBottomProgressBar()` 中所有 seek preview 判断 | `VideoPlayerFragment.kt` / `PlayerActivity.kt` | 简化为 `SlimTimelineRenderer.show()` |
+| `YouTubeOverlay.updateProgressBarVisibility()` | `YouTubeOverlay.kt` | 废弃，由 coordinator 控制 |
+| `clearBottomProgressSeekPreview()` | `VideoPlayerFragment.kt` / `PlayerActivity.kt` | 改由 `SlimTimelineRenderer` 内部管理 |
 
 #### 3.2.5 验收标准
 
@@ -185,9 +196,24 @@ class SeekSession(
 |---|---|---|
 | 左右短按 | `ProgressiveSeekHelper.doSingleSeek()` 即时 `seekTo` | `TapSeek`：即时 commit，短暂反馈后消失 |
 | 左长按 | `doRewindTick()` 每次 ACTION_DOWN 都 `seekTo` | `HoldSeek`：每次 DOWN commit 一次离散跳 |
-| 右长按 | 倍速播放 `enterSpeedMode()` | 独立为 `SpeedMode` 或统一为 `HoldSeek`，需产品确认 |
+| 右长按 | 倍速播放 `enterSpeedMode()` | 独立为 `SpeedMode`（见 3.3.2a） |
 | 双击 | `YouTubeOverlay.seekTo()` 即时 commit | `DoubleTapSeek`：即时 commit，overlay 纯视觉反馈 |
 | 滑动 | `handleSwipeSeekTouch()` 松手时 commit | `SwipeSeek`：松手时一次性 commit |
+
+##### 3.3.2a `SpeedMode` 决策
+
+**结论：保留为独立 `SpeedMode`，不合并入 `HoldSeek`。**
+
+理由：
+- 现有 `ProgressiveSeekHelper` 中右长按实现的是速度递进播放（2x→4x→8x→16x，每 1.5s 自动升档），不改变播放位置，与左长按的离散回退语义完全不同。
+- `SeekSession` 的 `startHoldSeek()` / `commit()` 语义是"累积偏移量后一次性 seekTo"，不适用于速度递进场景。
+- `SpeedMode` 独立后，`SeekSession` 新增 `fun startSpeedMode()` / `fun finishSpeedMode()` / `fun stepUpSpeed()`，内部只改 `player.playbackParameters`，不影响 timeline position。
+- `seekState` 值域补充 `SpeedMode` 枚举值，与 `HoldSeek` 互斥。
+
+改动影响：
+- `seekState` 值域更新为 `None / TapSeek / HoldSeek / SpeedMode / SwipeSeek / DoubleTapSeek`
+- `SeekSession` 新增三个方法
+- `YouTubeOverlay.showSpeedSeek()` / `finishSpeedSeek()` 保持不变，仍负责倍速 UI 渲染
 
 #### 3.3.3 方向切换不 restore controller
 
@@ -233,10 +259,27 @@ class SeekSession(
 #### 3.4.2 `MyPlayerView.isFocusable` 改造
 
 - 设置 `isFocusable = true`
-- 测试 `onTouchEvent` 和 `performClick` 在 focusable 状态下不退化
 - 确保 controller GONE 后焦点不会留在已 GONE 的子树
 
-#### 3.4.3 返回键优先级链
+> **风险细节**：`MyPlayerView` 当前在 `init` 块中设 `isFocusable = false`（MyPlayerView.kt），但 `fragment_video_player.xml` 中通过 XML 属性 `android:focusable="true"` 覆盖了该值。改为 `isFocusable = true` 后需验证：
+> 1. `onTouchEvent` 的行为变化 — `isFocusable = true` 时，View 会更积极地消费 `ACTION_DOWN` 事件。当前 `onTouchEvent` 中 `gestureDetector.onTouchEvent(event)` 后直接 `return true`，需确认不会因此拦截应该传递给子 view 的事件。
+> 2. `performClick()` 当前调用 `toggleControllerVisibility()`，focusable 后 `performClick` 可能被系统更频繁调用，需确保不会重复触发。
+> 3. `dispatchKeyEvent` 的回传路径 — focusable 后，MyPlayerView 会成为 key event 的候选目标，需确认不会拦截应交给 controller 的按键。
+>
+> **建议**：Phase 4 开始前，先创建一个只改 `isFocusable = true` 的分支，全量跑一遍触摸和遥控器场景的冒烟测试，确认无退化后再继续后续焦点改造。
+
+#### 3.4.3 `PlayerControlFocusCoordinator` 整合
+
+现有 `PlayerControlFocusCoordinator` 已实现 controller 内部 16 种 `FocusTarget`（PLAY_PAUSE、PREVIOUS、NEXT、REWIND、FAST_FORWARD、DM_SWITCH、SETTINGS、EPISODE、MORE、OWNER、SUBTITLE、RELATED、REPEAT、LIVE_SETTINGS、CLOSE、TIME_BAR）的记录和恢复，以及 DPad 方向键路由。
+
+整合策略：
+- **保留** `PlayerControlFocusCoordinator` 作为 controller 内部焦点管理的实现细节，不废弃
+- `PlaybackUiCoordinator` 的 `focusOwner` 只管顶层归属（PlayerRoot / Controller / Panel / Dialog / Interaction），不感知 controller 内部具体哪个 button
+- `focusOwner` 从非 Controller 态恢复到 Controller 时，委托 `PlayerControlFocusCoordinator.restoreRememberedFocus()` 选择具体 button
+- `PlayerOverlayCoordinator.FocusTarget`（5 种，RELATED_BUTTON 等）废弃，统一使用 `PlayerControlFocusCoordinator` 的 16 种 FocusTarget
+- `VideoPlayerOverlayController` 中散落的 `playerView.rememberCurrentFocusTarget()` / `playerView.restoreRememberedFocus()` 改为通过 coordinator 路由到 `PlayerControlFocusCoordinator`
+
+#### 3.4.4 返回键优先级链
 
 ```
 Dialog → Panel → Interaction → ResumeHint → Controller → ExitPrompt
@@ -244,7 +287,7 @@ Dialog → Panel → Interaction → ResumeHint → Controller → ExitPrompt
 
 由 `PlaybackUiCoordinator.handleBackPress()` 统一实现，替代现有 `PlayerOverlayCoordinator.handleBackPress()` 的 callback 模式。
 
-#### 3.4.4 废弃焦点直接操作
+#### 3.4.5 废弃焦点直接操作
 
 | 删除目标 | 替代 |
 |---|---|
@@ -252,7 +295,7 @@ Dialog → Panel → Interaction → ResumeHint → Controller → ExitPrompt
 | `controller?.restoreRememberedFocus()` | coordinator 统一恢复 |
 | `playerView.requestXxxFocus()` 散落调用 | coordinator 通过 `focusRestoreTarget` 路由 |
 
-#### 3.4.5 验收标准
+#### 3.4.6 验收标准
 
 - [ ] seek UI 收起后，方向键永远有响应
 - [ ] 关闭 panel/dialog 后焦点恢复到正确位置
@@ -333,6 +376,10 @@ Dialog → Panel → Interaction → ResumeHint → Controller → ExitPrompt
 | `VideoPlayerFragment.kt` | 移除 `renderControllerChrome` 中字幕/时钟联动，改由 coordinator 下发；移除 `bottomProgressSeekPreview*` |
 | `VideoPlayerOverlayController.kt` | 焦点恢复改由 coordinator 管理 |
 | `VideoPlayerAutoPlayController.kt` | 不再独立控制 viewNext，通过 coordinator 事件驱动 |
+| **`PlayerActivity.kt`** | **与 VideoPlayerFragment 同步改造**：移除 `renderControllerChrome` 中字幕/时钟联动，移除 `bottomProgressSeekPreview*`，改由 coordinator 下发。此文件包含与 VideoPlayerFragment 几乎完全相同的 chrome 联动和 bottomProgressBar 逻辑，必须同步改造，否则会遗留旧逻辑孤岛 |
+| **`PlayerControlFocusCoordinator.kt`** | **Phase 4 整合**：保留为 controller 内部焦点管理实现，废弃 `PlayerOverlayCoordinator.FocusTarget`（5 种），统一使用本文件的 16 种 `FocusTarget`。`rememberCurrentFocusTarget()` / `restoreRememberedFocus()` 改由 coordinator 路由调用 |
+| **`PlayerControlTimelineCoordinator.kt`** | **Phase 2 依赖**：`FullTimelineRenderer` 委托本 coordinator 获取 position/duration 数据，不重新实现 timeline 数据计算逻辑 |
+| **`VideoPlayerProgressCoordinator.kt`** | **Phase 2 依赖**：其 `onProgressPublished` 回调应同时驱动两个 `TimelineRenderer` 的 `show()`，由 renderer 自行判断是否 active |
 
 ### 需要修改的布局
 
@@ -346,17 +393,24 @@ Dialog → Panel → Interaction → ResumeHint → Controller → ExitPrompt
 
 ## 五、风险与注意事项
 
-1. **`isFocusable = true` 对触摸的影响** — Phase 4 改动后需在真机上全面测试触摸手势（单击、双击、滑动 seek）是否正常
-2. **右长按倍速行为** — Phase 3 需提前与产品确认是否保留，如保留则定义为独立 `SpeedMode` 而非挂载在 `HoldSeek` 上
+1. **`isFocusable = true` 对触摸的影响** — Phase 4 改动后需在真机上全面测试触摸手势（单击、双击、滑动 seek）是否正常。建议 Phase 4 开始前先创建独立分支验证（详见 3.4.2）
+2. **右长按倍速行为** — 已决策保留为独立 `SpeedMode`（详见 3.3.2a）
 3. **弹幕 sync 时机** — Phase 3 改为 commit 时一次性 sync，需验证弹幕不会出现明显跳跃
 4. **Phase 1/2 依赖** — Phase 2 的 `TimelineRenderer` 依赖 Phase 1 的 `bottomOccupant` 状态，不可并行
-5. **回归测试** — 每个 Phase 完成后需回归以下场景：
+5. **`PlayerActivity` 同步改造** — `PlayerActivity.kt` 包含与 `VideoPlayerFragment` 几乎完全相同的 `renderControllerChrome()`、`renderBottomProgressBar()`、`bottomProgressSeekPreview*` 逻辑。每个 Phase 的改造必须同步应用到 `PlayerActivity`，否则会出现行为不一致。建议优先考虑将公共逻辑抽取到共享 helper 或直接在 coordinator 中统一处理
+6. **现有 coordinator 复用** — `PlayerControlTimelineCoordinator`（timeline 数据计算）和 `VideoPlayerProgressCoordinator`（进度轮询）已有成熟实现，Phase 2 的 `TimelineRenderer` 必须委托它们，不可重新实现
+7. **`PlayerControlFocusCoordinator` 整合边界** — 该文件管理 controller 内部 16 种 FocusTarget，是已验证的稳定实现。Phase 4 不应废弃或重写该文件，而是将其作为 coordinator 焦点路由的底层委托
+8. **`YouTubeOverlay.progressBar` 迁移完整性** — 该 progressBar 有 5 个调用点（`updateProgress`、`ensureOverlayVisible`、`hideOverlayImmediately`、`setPersistentBottomProgressEnabled`、`updateProgressBarVisibility`），Phase 2 必须逐个迁移到 renderer，不可遗漏
+9. **回归测试** — 每个 Phase 完成后需回归以下场景：
    - 普通播放 / 暂停 / 恢复
    - 左右短按 seek / 长按 seek / 双击 seek / 滑动 seek
+   - 右长按倍速播放（升档 / 降档 / 退出）
    - seek 中途切方向
    - 设置面板打开/关闭
    - 相关推荐面板打开/关闭
    - 选集 dialog 打开/关闭
+   - 更多操作 dialog 打开/关闭
+   - UP 主详情 dialog 打开/关闭
    - 下一集提示出现/消失
    - 互动视频选择
    - 恢复进度提示
@@ -364,3 +418,4 @@ Dialog → Panel → Interaction → ResumeHint → Controller → ExitPrompt
    - 时钟显示/隐藏
    - 底部常驻进度条开启/关闭
    - 屏幕旋转 / 尺寸变化
+   - **PlayerActivity 和 VideoPlayerFragment 两套入口分别验证上述全部场景**

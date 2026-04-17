@@ -12,14 +12,15 @@
         android:layout_height="140dp"
         android:background="@drawable/seek_preview_card"
         android:elevation="12dp"
-        android:padding="1dp"
         android:visibility="gone">
 
         <FrameLayout
+            android:id="@+id/preview_surface"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:layout_margin="1dp"
             android:background="@drawable/seek_preview_surface"
-            android:clipToOutline="true">
+            android:clipChildren="true">
 
             <androidx.appcompat.widget.AppCompatImageView
                 android:id="@+id/image_preview"

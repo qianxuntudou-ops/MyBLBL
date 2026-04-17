@@ -45,8 +45,9 @@ class MyPlayerControlView @JvmOverloads constructor(
     }
 
     private val handler = Handler(Looper.getMainLooper())
+    var uiCoordinator: com.tutu.myblbl.feature.player.PlaybackUiCoordinator? = null
     private val controlViewLayoutManager by lazy(LazyThreadSafetyMode.NONE) {
-        MyPlayerControlViewLayoutManager(this)
+        MyPlayerControlViewLayoutManager(this, uiCoordinator)
     }
     
     private var player: Player? = null
@@ -402,6 +403,16 @@ class MyPlayerControlView @JvmOverloads constructor(
     }
 
     fun isFullyVisible(): Boolean = controlViewLayoutManager.isFullyVisible()
+
+    fun isScrubbingTimeBar(): Boolean = isScrubbing
+
+    fun enterSeekProgressOnly() {
+        controlViewLayoutManager.enterSeekProgressOnly()
+    }
+
+    fun exitSeekProgressOnly() {
+        controlViewLayoutManager.exitSeekProgressOnly()
+    }
 
     fun setShowTimeoutMs(timeoutMs: Int) {
         showTimeoutMs = timeoutMs

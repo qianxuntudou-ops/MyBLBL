@@ -120,6 +120,7 @@ class VideoPlayerFragment : Fragment() {
     private val viewModel: VideoPlayerViewModel by viewModel()
 
     private var player: ExoPlayer? = null
+    private val uiCoordinator = PlaybackUiCoordinator()
     private val overlayCoordinator = PlayerOverlayCoordinator()
 
     private lateinit var playerView: MyPlayerView
@@ -149,9 +150,7 @@ class VideoPlayerFragment : Fragment() {
     private var latestControllerVisibility: Int = View.GONE
     private var latestPlaybackPositionMs: Long = 0L
     private var latestPlaybackDurationMs: Long = 0L
-    private var bottomProgressSeekPreviewActive: Boolean = false
-    private var bottomProgressSeekPreviewPositionMs: Long = 0L
-    private var bottomProgressSeekPreviewDurationMs: Long = 0L
+    private lateinit var slimTimelineRenderer: SlimTimelineRenderer
     private val sessionCoordinator = PlayerSessionCoordinator()
     private var resumePlaybackWhenStarted: Boolean = false
     private var startupTrace: StartupTrace? = null
@@ -310,10 +309,14 @@ class VideoPlayerFragment : Fragment() {
 
     private fun initViews(rootView: View) {
         playerView = binding.playerView
+        playerView.setUiCoordinator(uiCoordinator)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             playerView.defaultFocusHighlightEnabled = false
         }
         bottomProgressBar = binding.bottomProgressBar
+        slimTimelineRenderer = SlimTimelineRenderer(bottomProgressBar) {
+            ::playerSettings.isInitialized && playerSettings.showBottomProgressBar && latestControllerVisibility != View.VISIBLE
+        }
         textClock = binding.textClock
         textSubtitle = binding.textSubtitle
         viewDebug = binding.viewDebug
@@ -390,6 +393,7 @@ class VideoPlayerFragment : Fragment() {
             activity = requireActivity() as androidx.appcompat.app.AppCompatActivity,
             playerView = playerView,
             overlayCoordinator = overlayCoordinator,
+            uiCoordinator = uiCoordinator,
             sessionCoordinator = sessionCoordinator,
             playerProvider = { player },
             latestVideoInfoProvider = { latestVideoInfo },
@@ -448,19 +452,29 @@ class VideoPlayerFragment : Fragment() {
                 }
             }
         })
-        playerView.setSeekPreviewListener(object : MyPlayerView.SeekPreviewListener {
-            override fun onSeekPreviewStateChanged(active: Boolean, positionMs: Long, durationMs: Long) {
-                bottomProgressSeekPreviewActive = active
-                bottomProgressSeekPreviewPositionMs = positionMs
-                bottomProgressSeekPreviewDurationMs = durationMs
-                renderBottomProgressBar()
-            }
-        })
         playerView.setControllerAutoShow(false)
         playerView.hideController()
         playerView.onResumeProgressCancelled = {
             cancelResume()
         }
+        playerView.seekPreviewUpdateListener = object : MyPlayerView.SeekPreviewUpdateListener {
+            override fun onSeekPreviewUpdated() {
+                renderBottomProgressBar()
+            }
+        }
+        playerView.seekSession = SeekSession(
+            coordinator = uiCoordinator,
+            playerProvider = { player },
+            seekPreviewRenderer = { targetMs, durationMs ->
+                if (playerView.getController()?.isVisible() == true) {
+                    playerView.getController()?.beginSeekPreview(targetMs)
+                }
+                if (::slimTimelineRenderer.isInitialized) {
+                    slimTimelineRenderer.showPreview(targetMs, durationMs)
+                }
+            },
+            danmakuSync = { positionMs -> playerView.syncDanmakuPosition(positionMs, forceSeek = true) }
+        )
         playerView.showSettingButton(false)
         playerView.showHideNextPrevious(false)
         playerView.showHideFfRe(playerSettings.showRewindFastForward)
@@ -594,9 +608,9 @@ class VideoPlayerFragment : Fragment() {
                     }
                     AppLog.d(
                         TAG,
-                        "onBackPressed: panelVisible=${overlayCoordinator.hasVisiblePanel()}, setting=${playerView.isSettingViewShowing()}"
+                        "onBackPressed: panelVisible=${uiCoordinator.hasVisiblePanel()}, setting=${playerView.isSettingViewShowing()}"
                     )
-                    overlayCoordinator.handleBackPress(
+                    uiCoordinator.handleBackPress(
                         nowMs = System.currentTimeMillis(),
                         isSettingShowing = playerView.isSettingViewShowing(),
                         hideSetting = { playerView.showHideSettingView(false) },
@@ -968,13 +982,12 @@ class VideoPlayerFragment : Fragment() {
 
     private fun renderControllerChrome(visibility: Int = latestControllerVisibility) {
         latestControllerVisibility = visibility
-        if (visibility == View.VISIBLE) {
-            clearBottomProgressSeekPreview()
-        }
-        val subtitleBottomMarginRes = if (visibility == View.VISIBLE) {
-            R.dimen.px300
-        } else {
-            R.dimen.px60
+        syncChromeStateToCoordinator(visibility)
+        val subtitleBottomMarginRes = when (uiCoordinator.bottomOccupant) {
+            PlaybackUiCoordinator.BottomOccupant.FullChrome -> R.dimen.px300
+            PlaybackUiCoordinator.BottomOccupant.SlimTimeline -> R.dimen.px80
+            PlaybackUiCoordinator.BottomOccupant.BottomPanel -> R.dimen.px300
+            PlaybackUiCoordinator.BottomOccupant.None -> R.dimen.px60
         }
         (textSubtitle.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
             val targetMargin = resources.getDimensionPixelSize(subtitleBottomMarginRes)
@@ -984,49 +997,22 @@ class VideoPlayerFragment : Fragment() {
             }
         }
         renderBottomProgressBar()
-        textClock.visibility = visibility
+        textClock.visibility = when (uiCoordinator.hudState) {
+            PlaybackUiCoordinator.HudState.Chrome -> View.VISIBLE
+            else -> View.GONE
+        }
     }
 
     private fun renderBottomProgressBar() {
-        if (!::playerSettings.isInitialized) {
+        if (!::slimTimelineRenderer.isInitialized) {
             bottomProgressBar.isVisible = false
             return
         }
-        val shouldShow = playerSettings.showBottomProgressBar && latestControllerVisibility != View.VISIBLE
-        bottomProgressBar.isVisible = shouldShow
-        if (!shouldShow) {
-            return
-        }
-        val durationMs = if (bottomProgressSeekPreviewActive) {
-            bottomProgressSeekPreviewDurationMs
+        if (uiCoordinator.seekState != PlaybackUiCoordinator.SeekState.None) {
+            slimTimelineRenderer.hide()
         } else {
-            latestPlaybackDurationMs
+            slimTimelineRenderer.show(latestPlaybackPositionMs, latestPlaybackDurationMs)
         }
-        val positionMs = if (bottomProgressSeekPreviewActive) {
-            bottomProgressSeekPreviewPositionMs
-        } else {
-            latestPlaybackPositionMs
-        }
-        val safeDuration = durationMs.coerceAtLeast(0L)
-            .coerceAtMost(Int.MAX_VALUE.toLong())
-            .toInt()
-        val safePosition = positionMs.coerceAtLeast(0L)
-            .coerceAtMost(safeDuration.toLong())
-            .toInt()
-        bottomProgressBar.max = safeDuration
-        bottomProgressBar.progress = safePosition
-    }
-
-    private fun clearBottomProgressSeekPreview() {
-        if (!bottomProgressSeekPreviewActive &&
-            bottomProgressSeekPreviewPositionMs == 0L &&
-            bottomProgressSeekPreviewDurationMs == 0L
-        ) {
-            return
-        }
-        bottomProgressSeekPreviewActive = false
-        bottomProgressSeekPreviewPositionMs = 0L
-        bottomProgressSeekPreviewDurationMs = 0L
     }
 
     private fun updateEpisodeNavigationVisibility() {
@@ -1308,5 +1294,22 @@ class VideoPlayerFragment : Fragment() {
                 progressMs = progressMs
             )
         )
+    }
+
+    private fun syncChromeStateToCoordinator(visibility: Int) {
+        uiCoordinator.withState { coord ->
+            coord.chromeState = when (visibility) {
+                View.VISIBLE -> PlaybackUiCoordinator.ChromeState.Full
+                else -> PlaybackUiCoordinator.ChromeState.Hidden
+            }
+            coord.bottomOccupant = when (visibility) {
+                View.VISIBLE -> PlaybackUiCoordinator.BottomOccupant.FullChrome
+                else -> if (playerSettings.showBottomProgressBar) PlaybackUiCoordinator.BottomOccupant.SlimTimeline else PlaybackUiCoordinator.BottomOccupant.None
+            }
+            coord.hudState = when (visibility) {
+                View.VISIBLE -> PlaybackUiCoordinator.HudState.Chrome
+                else -> PlaybackUiCoordinator.HudState.Ambient
+            }
+        }
     }
 }

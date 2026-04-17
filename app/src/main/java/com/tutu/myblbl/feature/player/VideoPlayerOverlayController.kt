@@ -28,6 +28,7 @@ class VideoPlayerOverlayController(
     private val activity: AppCompatActivity,
     private val playerView: MyPlayerView,
     private val overlayCoordinator: PlayerOverlayCoordinator,
+    private val uiCoordinator: PlaybackUiCoordinator,
     private val sessionCoordinator: PlayerSessionCoordinator,
     private val playerProvider: () -> androidx.media3.common.Player?,
     private val latestVideoInfoProvider: () -> VideoDetailModel?,
@@ -51,6 +52,7 @@ class VideoPlayerOverlayController(
         }
         overlayCoordinator.rememberFocusRestoreTarget(PlayerOverlayCoordinator.FocusTarget.EPISODE_BUTTON)
         keepControllerVisibleForOverlay()
+        uiCoordinator.transition(UiEvent.PanelOpened(PanelType.EPISODE))
         playerProvider()?.pause()
 
         val dialog = AppCompatDialog(activity, R.style.DialogTheme)
@@ -104,6 +106,7 @@ class VideoPlayerOverlayController(
         }
 
         dialog.setOnDismissListener {
+            uiCoordinator.transition(UiEvent.PanelClosed)
             if (isViewActive()) {
                 restoreControllerAfterOverlay()
             }
@@ -113,6 +116,7 @@ class VideoPlayerOverlayController(
 
     fun showRelatedPanel() {
         overlayCoordinator.onRelatedPanelShown()
+        uiCoordinator.onRelatedPanelShown()
         keepControllerVisibleForOverlay()
         textMoreTitle.text = activity.getString(R.string.related_video)
         recyclerViewRelated.layoutManager =
@@ -140,6 +144,9 @@ class VideoPlayerOverlayController(
 
     fun hideContentPanel(restoreFocus: Boolean = true) {
         overlayCoordinator.onRelatedPanelHidden()
+        if (uiCoordinator.panelState == PlaybackUiCoordinator.PanelState.Related) {
+            uiCoordinator.transition(UiEvent.PanelClosed)
+        }
         if (!viewRelated.isVisible) {
             if (restoreFocus && isViewActive()) {
                 restoreControllerAfterOverlay()
@@ -176,6 +183,7 @@ class VideoPlayerOverlayController(
         if (restorePlayerFocus) {
             keepControllerVisibleForOverlay()
             playerView.rememberCurrentFocusTarget()
+            uiCoordinator.transition(UiEvent.PanelOpened(PanelType.ACTION))
         }
         VideoInfoDialog(
             context = activity,
@@ -184,6 +192,9 @@ class VideoPlayerOverlayController(
             description = video.desc
         ).apply {
             setOnDismissListener {
+                if (restorePlayerFocus) {
+                    uiCoordinator.transition(UiEvent.PanelClosed)
+                }
                 if (restorePlayerFocus && isViewActive()) {
                     playerView.showController()
                     playerView.restoreRememberedFocus()
@@ -254,6 +265,7 @@ class VideoPlayerOverlayController(
         }
         overlayCoordinator.rememberFocusRestoreTarget(PlayerOverlayCoordinator.FocusTarget.MORE_BUTTON)
         keepControllerVisibleForOverlay()
+        uiCoordinator.transition(UiEvent.PanelOpened(PanelType.ACTION))
         PlayerActionDialog(
             context = activity,
             aid = aid,
@@ -261,6 +273,7 @@ class VideoPlayerOverlayController(
             ownerMid = view?.owner?.mid ?: 0L
         ).apply {
             setOnDismissListener {
+                uiCoordinator.transition(UiEvent.PanelClosed)
                 if (isViewActive()) {
                     restoreControllerAfterOverlay()
                 }
@@ -278,6 +291,7 @@ class VideoPlayerOverlayController(
         }
         overlayCoordinator.rememberFocusRestoreTarget(PlayerOverlayCoordinator.FocusTarget.OWNER_BUTTON)
         keepControllerVisibleForOverlay()
+        uiCoordinator.transition(UiEvent.PanelOpened(PanelType.OWNER))
         OwnerDetailDialog(
             context = activity,
             owner = owner,
@@ -293,6 +307,7 @@ class VideoPlayerOverlayController(
             currentVideoId = view.bvid
         ).apply {
             setOnDismissListener {
+                uiCoordinator.transition(UiEvent.PanelClosed)
                 if (isViewActive()) {
                     restoreControllerAfterOverlay()
                 }

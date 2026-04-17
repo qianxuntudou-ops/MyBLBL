@@ -4,12 +4,15 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Bitmap
+import android.graphics.Outline
+import android.graphics.drawable.BitmapDrawable
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
 import android.util.AttributeSet
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -48,15 +51,21 @@ class SecondsView @JvmOverloads constructor(
     private var iconRes: Int = R.drawable.ic_play_triangle
     private val secondaryTextColor by lazy { Color.argb(196, 255, 255, 255) }
 
+    private val previewSurface: FrameLayout
+
     init {
         val view = LayoutInflater.from(context).inflate(R.layout.yt_seconds_view, this, true)
         previewContainer = view.findViewById(R.id.preview_container)
+        previewSurface = view.findViewById(R.id.preview_surface)
         triangleContainer = view.findViewById(R.id.triangle_container)
         previewImage = view.findViewById(R.id.image_preview)
         tvSeconds = view.findViewById(R.id.tv_seconds)
         icon1 = view.findViewById(R.id.icon_1)
         icon2 = view.findViewById(R.id.icon_2)
         icon3 = view.findViewById(R.id.icon_3)
+
+        previewSurface.clipToOutline = true
+        previewImage.clipToOutline = true
 
         initAnimators()
         setForward(true)

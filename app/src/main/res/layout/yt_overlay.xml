@@ -21,17 +21,4 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.41" />
-    <ProgressBar
-        android:id="@+id/progress_bar"
-        android:layout_width="match_parent"
-        android:layout_height="4dp"
-        android:max="100"
-        android:progress="0"
-        android:progressDrawable="@drawable/progress_bar_horizontal"
-        android:layout_marginStart="@dimen/px70"
-        android:layout_marginEnd="@dimen/px70"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.9"
-        style="?android:attr/progressBarStyleHorizontal"/>
 </androidx.constraintlayout.widget.ConstraintLayout>

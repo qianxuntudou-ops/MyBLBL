@@ -10,7 +10,7 @@ import com.tutu.myblbl.model.user.OfficialVerifySimple
 import java.io.Serializable
 
 data class VideoModel(
-    @SerializedName("aid")
+    @SerializedName(value = "aid", alternate = ["id"])
     val aid: Long = 0,
     
     @SerializedName("bvid")

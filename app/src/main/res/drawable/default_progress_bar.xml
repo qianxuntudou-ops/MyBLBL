@@ -2,19 +2,9 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@android:id/background">
         <shape>
-            <solid android:color="#4c000000" />
+            <solid android:color="@android:color/transparent" />
             <size android:height="2dp" />
-            <corners android:radius="1dp" />
         </shape>
-    </item>
-    <item android:id="@android:id/secondaryProgress">
-        <clip>
-            <shape>
-                <solid android:color="#e0e0e0" />
-                <size android:height="2dp" />
-                <corners android:radius="1dp" />
-            </shape>
-        </clip>
     </item>
     <item android:id="@android:id/progress">
         <clip>

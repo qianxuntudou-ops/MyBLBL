@@ -44,6 +44,12 @@ class VideoRepository(
             source = "video.getWatchLaterList"
         )
         val list = if (response.isSuccess) response.data?.list.orEmpty() else emptyList()
+        // DEBUG: log PGC fields for toview items
+        list.forEach { v ->
+            if (v.playbackEpId > 0 || v.playbackSeasonId > 0 || v.bangumi != null || v.redirectUrl.contains("/bangumi/")) {
+                AppLog.d("PGC_DEBUG", "ToView PGC item: title=${v.title}, bvid=${v.bvid}, cid=${v.cid}, epid=${v.epid}, sid=${v.sid}, redirectUrl=${v.redirectUrl}, isPgc=${v.isPgc}, playbackEpId=${v.playbackEpId}, playbackSeasonId=${v.playbackSeasonId}, bangumi=${v.bangumi}")
+            }
+        }
         watchLaterCache = list
         watchLaterCacheTimeMs = now
         return list

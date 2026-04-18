@@ -29,14 +29,6 @@ import com.kuaishou.akdanmaku.data.DanmakuItem
 import com.kuaishou.akdanmaku.ext.*
 import com.kuaishou.akdanmaku.ui.DanmakuDisplayer
 
-/**
- * 基于动态轨道的弹幕保持器（顶端对齐）
- *
- * 相比原版改进：
- * 1. findGap 使用 displayer.margin 作为行间距，消除视觉重叠
- * 2. 采用 least-loaded（最少负载优先）策略分配行，均匀分散弹幕
- * 3. allowOverlap 不再清空所有行，改为放入最少负载行
- */
 internal class AkTopRetainer(
   private val startRatio: Float = 1f,
   private val endRatio: Float = 1f
@@ -111,19 +103,6 @@ internal class AkTopRetainer(
             topPos = -1
             visibility = false
           }
-        } else if (drawItem.data.isImportant) {
-          val importantRow = rows.minByOrNull { row ->
-            row.items.minOfOrNull { (it.drawState.rect.left).toInt() } ?: displayer.width
-          }
-          if (importantRow != null) {
-            importantRow.items.add(drawItem)
-            itemToRow[drawItem] = importantRow
-            topPos = importantRow.top
-            visibility = true
-          } else {
-            topPos = -1
-            visibility = false
-          }
         } else {
           topPos = -1
           visibility = false
@@ -175,10 +154,6 @@ internal class AkTopRetainer(
   }
 
   override fun update(start: Int, end: Int) {
-    com.kuaishou.akdanmaku.ext.AkLog.w(
-      "DanmakuEngine",
-      "[AkTopRetainer] update: start=$start, end=$end, startRatio=$startRatio, endRatio=$endRatio -> maxEnd=${(end * endRatio).toInt()}"
-    )
     maxEnd = (end * endRatio).toInt()
     clear()
   }

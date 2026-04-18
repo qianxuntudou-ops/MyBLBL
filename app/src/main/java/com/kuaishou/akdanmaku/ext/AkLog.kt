@@ -31,6 +31,8 @@ object AkLog {
     if (!BuildConfig.DEBUG) return
     if (throwable != null) {
       Log.w(tag, message, throwable)
+    } else {
+      Log.w(tag, message)
     }
   }
 }

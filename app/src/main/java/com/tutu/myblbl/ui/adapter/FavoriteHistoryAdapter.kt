@@ -24,7 +24,8 @@ import com.tutu.myblbl.ui.dialog.VideoCardMenuDialog
 
 class FavoriteHistoryAdapter(
     private val onItemClick: (HistoryVideoModel) -> Unit,
-    private val onItemFocused: ((Int) -> Unit)? = null
+    private val onItemFocused: ((Int) -> Unit)? = null,
+    private val onItemFavoriteRemoved: ((HistoryVideoModel) -> Unit)? = null
 ) : ListAdapter<HistoryVideoModel, FavoriteHistoryAdapter.ViewHolder>(DiffCallback) {
 
     private var focusedPosition = RecyclerView.NO_POSITION
@@ -78,7 +79,8 @@ class FavoriteHistoryAdapter(
                 setFocusedState(view, false)
             },
             onItemDisliked = { item -> removeDislikedItem(item) },
-            onUpDisliked = { upName -> removeBlockedItems(upName) }
+            onUpDisliked = { upName -> removeBlockedItems(upName) },
+            onItemFavoriteRemoved = { item -> removeDislikedItem(item) }
         )
     }
 
@@ -110,7 +112,8 @@ class FavoriteHistoryAdapter(
         private val updateFocusedPosition: (View, Int) -> Unit,
         private val clearFocusedPosition: (View) -> Unit,
         private val onItemDisliked: ((HistoryVideoModel) -> Unit)? = null,
-        private val onUpDisliked: ((String) -> Unit)? = null
+        private val onUpDisliked: ((String) -> Unit)? = null,
+        private val onItemFavoriteRemoved: ((HistoryVideoModel) -> Unit)? = null
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private var currentItem: HistoryVideoModel? = null
@@ -147,7 +150,8 @@ class FavoriteHistoryAdapter(
                 context = itemView.context,
                 video = video,
                 onDislikeVideo = { onItemDisliked?.invoke(item) },
-                onDislikeUp = { upName -> onUpDisliked?.invoke(upName) }
+                onDislikeUp = { upName -> onUpDisliked?.invoke(upName) },
+                onFavoriteRemoved = { onItemFavoriteRemoved?.invoke(item) }
             ).show()
         }
 

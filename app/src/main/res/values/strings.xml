@@ -433,7 +433,7 @@
     <string name="t9_keyboard">T9键盘</string>
     <string name="theme">主题</string>
     <string name="thursday">周四</string>
-    <string name="tip_play_from_history">即将从上次位置开始播放，此时按返回可以重新播放</string>
+    <string name="tip_play_from_history">即将从（%1$s）恢复播放，按返回可以取消</string>
     <string name="total_rank">综合排序</string>
     <string name="triple_action">一键三连</string>
     <string name="tuesday">周二</string>

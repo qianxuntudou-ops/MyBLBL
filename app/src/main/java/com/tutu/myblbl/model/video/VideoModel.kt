@@ -124,6 +124,7 @@ data class VideoModel(
     @SerializedName("teenage_mode")
     val teenageMode: Int = 0,
 
+    @SerializedName("progress")
     val historyProgress: Long = 0,
     val historyViewAt: Long = 0,
     val historyBadge: String = "",

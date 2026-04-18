@@ -8,6 +8,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.log.AppLog
+import java.util.Locale
 
 @UnstableApi
 class VideoPlayerResumeHintController(
@@ -60,9 +61,10 @@ class VideoPlayerResumeHintController(
         lastTraceTimestampMs = 0L
 
         resumeHintToast?.cancel()
+        val timeStr = formatTime(hint.targetPositionMs)
         resumeHintToast = Toast.makeText(
-activity,
-                activity.getString(R.string.tip_play_from_history),
+            activity,
+            activity.getString(R.string.tip_play_from_history, timeStr),
             Toast.LENGTH_LONG
         ).also { it.show() }
 
@@ -145,5 +147,18 @@ activity,
         resumeHintRunnable = null
         resumeHintToast?.cancel()
         resumeHintToast = null
+    }
+
+    private fun formatTime(timeMs: Long): String {
+        if (timeMs < 0) return "00:00"
+        val totalSeconds = timeMs / 1000
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+        val seconds = totalSeconds % 60
+        return if (hours > 0) {
+            String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
+        }
     }
 }

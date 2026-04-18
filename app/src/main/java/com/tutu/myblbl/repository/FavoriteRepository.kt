@@ -7,7 +7,7 @@ class FavoriteRepository(
 ) {
     suspend fun checkFavorite(aid: Long?) = delegate.checkFavorite(aid)
 
-    suspend fun getFavoriteFolders(upMid: Long) = delegate.getFavoriteFolders(upMid)
+    suspend fun getFavoriteFolders(upMid: Long, rid: Long? = null) = delegate.getFavoriteFolders(upMid, rid)
 
     suspend fun getFavoriteFolderInfo(mediaId: Long) = delegate.getFavoriteFolderInfo(mediaId)
 

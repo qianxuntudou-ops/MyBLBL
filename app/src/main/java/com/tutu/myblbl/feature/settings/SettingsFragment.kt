@@ -84,7 +84,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         private const val KEY_GAIA_VGATE_V_VOUCHER = "gaia_vgate_v_voucher"
         private const val KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS = "gaia_vgate_v_voucher_saved_at_ms"
         private const val KEY_IPV4_ONLY = "ipv4_only"
-        private const val COMMON_POSITION_RISK_CONTROL = 8
+        private const val COMMON_POSITION_RISK_CONTROL = 7
         private val DM_SMART_FILTER_OPTIONS = arrayOf("关", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
 
         private val HOME_START_PAGE_OPTIONS = arrayOf("推荐", "热门", "番剧", "影视")
@@ -142,11 +142,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
     private fun initSettings() {
         commonSettings = mutableListOf(
             SettingModel(getString(R.string.clear_cache), "0.0kb"),
-            SettingModel(getString(R.string.cache_limit), "不限制"),
+            SettingModel(getString(R.string.cache_limit), "1 GB"),
             SettingModel(getString(R.string.default_start_page), "热门"),
             SettingModel(getString(R.string.image_quality), "中尺寸"),
             SettingModel(getString(R.string.theme), "黑色"),
-            SettingModel(getString(R.string.fullscreen_app), "开"),
             SettingModel(getString(R.string.live_entry), "关"),
             SettingModel(getString(R.string.minor_protection), "开"),
             SettingModel(getString(R.string.risk_control_verify), "无")
@@ -158,18 +157,14 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             SettingModel(getString(R.string.default_play_speed), "1.0"),
             SettingModel(getString(R.string.after_play), "播推荐视频"),
             SettingModel(getString(R.string.play_finish_exit_player), "开"),
-            SettingModel(getString(R.string.show_re_ff), "关"),
             SettingModel(getString(R.string.video_codec), "HEVC"),
             SettingModel(getString(R.string.show_subtitle_default), "关"),
             SettingModel(getString(R.string.subtitle_text_size), "45"),
             SettingModel(getString(R.string.show_debug), "关"),
-            SettingModel(getString(R.string.show_video_detail), "关"),
             SettingModel(getString(R.string.show_bottom_progress_bar), "关"),
-            SettingModel(getString(R.string.simple_key_press), "关"),
             SettingModel(getString(R.string.give_coin_number), "2"),
             SettingModel(getString(R.string.show_next_previous), "关"),
             SettingModel(getString(R.string.show_dm_switch), "关"),
-            SettingModel(getString(R.string.ff_seek_second), "10s"),
             SettingModel(getString(R.string.ipv4_only), "开")
         )
 
@@ -207,6 +202,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         )
         binding.recyclerViewSetting.layoutManager = layoutManager
         binding.recyclerViewSetting.adapter = adapter
+        binding.recyclerViewSetting.itemAnimator = null
     }
 
     private fun setupCategoryButtons() {
@@ -278,13 +274,12 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             2 -> showCommonChoiceDialog(position, KEY_DEFAULT_START_PAGE, HOME_START_PAGE_OPTIONS)
             3 -> showCommonChoiceDialog(position, KEY_IMAGE_QUALITY, arrayOf("低尺寸", "中尺寸", "高尺寸"))
             4 -> showCommonChoiceDialog(position, KEY_THEME, resources.getStringArray(R.array.themes).drop(1).toTypedArray())
-            5 -> toggleSetting(commonSettings, 5, KEY_FULLSCREEN_APP)
-            6 -> toggleSetting(commonSettings, 6, KEY_LIVE_ENTRY) { value ->
+            5 -> toggleSetting(commonSettings, 5, KEY_LIVE_ENTRY) { value ->
                 appSettings.putStringAsync(KEY_LIVE_ENTRY, value)
                 val activity = activity as? com.tutu.myblbl.ui.activity.MainActivity
                 activity?.applyLiveEntryVisibility()
             }
-            7 -> toggleSetting(commonSettings, 7, KEY_MINOR_PROTECTION)
+            6 -> toggleSetting(commonSettings, 6, KEY_MINOR_PROTECTION)
             COMMON_POSITION_RISK_CONTROL -> showRiskControlDialog()
         }
     }
@@ -296,19 +291,15 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             2 -> showPlayerChoiceDialog(position, KEY_DEFAULT_PLAY_SPEED, arrayOf("0.25", "0.5", "0.75", "1.0", "1.25", "1.5", "2.0"))
             3 -> showPlayerChoiceDialog(position, KEY_AFTER_PLAY, arrayOf("什么都不做", "播推荐视频", "播列表中的下一个", "播剧集和PV中的下一个"))
             4 -> toggleSetting(playerSettings, 4, KEY_PLAY_FINISH_EXIT_PLAYER)
-            5 -> toggleSetting(playerSettings, 5, KEY_SHOW_RE_FF)
-            6 -> showPlayerChoiceDialog(position, KEY_VIDEO_CODEC, arrayOf("AVC", "HEVC", "AV1"))
-            7 -> toggleSetting(playerSettings, 7, KEY_SHOW_SUBTITLE_DEFAULT)
-            8 -> showPlayerChoiceDialog(position, KEY_SUBTITLE_TEXT_SIZE, arrayOf("35", "40", "45", "50", "55", "60"))
-            9 -> toggleSetting(playerSettings, 9, KEY_SHOW_DEBUG)
-            10 -> toggleSetting(playerSettings, 10, KEY_SHOW_VIDEO_DETAIL)
-            11 -> toggleSetting(playerSettings, 11, KEY_SHOW_BOTTOM_PROGRESS_BAR)
-            12 -> toggleSetting(playerSettings, 12, KEY_SIMPLE_KEY_PRESS)
-            13 -> showPlayerChoiceDialog(position, KEY_GIVE_COIN_NUMBER, arrayOf("1", "2"))
-            14 -> toggleSetting(playerSettings, 14, KEY_SHOW_NEXT_PREVIOUS)
-            15 -> toggleSetting(playerSettings, 15, KEY_SHOW_DM_SWITCH)
-            16 -> showPlayerChoiceDialog(position, KEY_FF_SEEK_SECOND, arrayOf("10s", "15s", "20s", "25s", "30s", "35s", "40s", "45s", "50s", "55s", "60s"))
-            17 -> toggleSetting(playerSettings, 17, KEY_IPV4_ONLY)
+            5 -> showPlayerChoiceDialog(position, KEY_VIDEO_CODEC, arrayOf("AVC", "HEVC", "AV1"))
+            6 -> toggleSetting(playerSettings, 6, KEY_SHOW_SUBTITLE_DEFAULT)
+            7 -> showPlayerChoiceDialog(position, KEY_SUBTITLE_TEXT_SIZE, arrayOf("35", "40", "45", "50", "55", "60"))
+            8 -> toggleSetting(playerSettings, 8, KEY_SHOW_DEBUG)
+            9 -> toggleSetting(playerSettings, 9, KEY_SHOW_BOTTOM_PROGRESS_BAR)
+            10 -> showPlayerChoiceDialog(position, KEY_GIVE_COIN_NUMBER, arrayOf("1", "2"))
+            11 -> toggleSetting(playerSettings, 11, KEY_SHOW_NEXT_PREVIOUS)
+            12 -> toggleSetting(playerSettings, 12, KEY_SHOW_DM_SWITCH)
+            13 -> toggleSetting(playerSettings, 13, KEY_IPV4_ONLY)
         }
     }
 
@@ -424,9 +415,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         applySavedValue(commonSettings, 3, KEY_IMAGE_QUALITY)
         val theme = appSettings.getCachedInt("theme", 1)
         commonSettings[4].info = theme.toThemeName()
-        applySavedValue(commonSettings, 5, KEY_FULLSCREEN_APP)
-        applySavedValue(commonSettings, 6, KEY_LIVE_ENTRY)
-        applySavedValue(commonSettings, 7, KEY_MINOR_PROTECTION)
+        applySavedValue(commonSettings, 5, KEY_LIVE_ENTRY)
+        applySavedValue(commonSettings, 6, KEY_MINOR_PROTECTION)
         updateRiskControlStatus()
 
         applySavedValue(playerSettings, 0, KEY_DEFAULT_VIDEO_QUALITY)
@@ -434,19 +424,15 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         applySavedValue(playerSettings, 2, KEY_DEFAULT_PLAY_SPEED)
         applySavedValue(playerSettings, 3, KEY_AFTER_PLAY)
         applySavedValue(playerSettings, 4, KEY_PLAY_FINISH_EXIT_PLAYER)
-        applySavedValue(playerSettings, 5, KEY_SHOW_RE_FF)
-        applySavedValue(playerSettings, 6, KEY_VIDEO_CODEC)
-        applySavedValue(playerSettings, 7, KEY_SHOW_SUBTITLE_DEFAULT)
-        applySavedValue(playerSettings, 8, KEY_SUBTITLE_TEXT_SIZE)
-        applySavedValue(playerSettings, 9, KEY_SHOW_DEBUG)
-        applySavedValue(playerSettings, 10, KEY_SHOW_VIDEO_DETAIL)
-        applySavedValue(playerSettings, 11, KEY_SHOW_BOTTOM_PROGRESS_BAR)
-        applySavedValue(playerSettings, 12, KEY_SIMPLE_KEY_PRESS)
-        applySavedValue(playerSettings, 13, KEY_GIVE_COIN_NUMBER)
-        applySavedValue(playerSettings, 14, KEY_SHOW_NEXT_PREVIOUS)
-        applySavedValue(playerSettings, 15, KEY_SHOW_DM_SWITCH)
-        applySavedValue(playerSettings, 16, KEY_FF_SEEK_SECOND)
-        applySavedValue(playerSettings, 17, KEY_IPV4_ONLY)
+        applySavedValue(playerSettings, 5, KEY_VIDEO_CODEC)
+        applySavedValue(playerSettings, 6, KEY_SHOW_SUBTITLE_DEFAULT)
+        applySavedValue(playerSettings, 7, KEY_SUBTITLE_TEXT_SIZE)
+        applySavedValue(playerSettings, 8, KEY_SHOW_DEBUG)
+        applySavedValue(playerSettings, 9, KEY_SHOW_BOTTOM_PROGRESS_BAR)
+        applySavedValue(playerSettings, 10, KEY_GIVE_COIN_NUMBER)
+        applySavedValue(playerSettings, 11, KEY_SHOW_NEXT_PREVIOUS)
+        applySavedValue(playerSettings, 12, KEY_SHOW_DM_SWITCH)
+        applySavedValue(playerSettings, 13, KEY_IPV4_ONLY)
 
         applySavedValue(dmSettings, 0, KEY_DM_SWITCH)
         applySavedValue(dmSettings, 1, KEY_DM_ALPHA)

@@ -32,7 +32,8 @@ class VideoCardMenuDialog(
     context: Context,
     private val video: VideoModel,
     private val onDislikeVideo: (() -> Unit)? = null,
-    private val onDislikeUp: ((String) -> Unit)? = null
+    private val onDislikeUp: ((String) -> Unit)? = null,
+    private val onFavoriteRemoved: (() -> Unit)? = null
 ) : AppCompatDialog(context, R.style.DialogTheme), KoinComponent {
 
     companion object {
@@ -289,28 +290,41 @@ class VideoCardMenuDialog(
                 setActionInProgress(false)
                 return@launch
             }
-            val folderResult = favoriteRepository.getFavoriteFolders(currentUserMid)
+            val folderResult = favoriteRepository.getFavoriteFolders(currentUserMid, rid = video.aid)
             val folders = folderResult.getOrNull()?.data?.list.orEmpty()
-            val defaultFolder = folders.firstOrNull()
-            if (defaultFolder == null) {
+            if (folders.isEmpty()) {
                 toast("暂无可用收藏夹")
                 setActionInProgress(false)
                 return@launch
             }
-            val folderId = defaultFolder.id.toString()
-            val result = if (isFavorited) {
+            val actualIsFavorited = folders.any { it.favState == 1 }
+            val targetFolder = if (actualIsFavorited) {
+                folders.firstOrNull { it.favState == 1 }
+            } else {
+                folders.firstOrNull()
+            }
+            if (targetFolder == null) {
+                toast("暂无可用收藏夹")
+                setActionInProgress(false)
+                return@launch
+            }
+            val folderId = targetFolder.id.toString()
+            val result = if (actualIsFavorited) {
                 favoriteRepository.removeFavorite(video.aid, folderId)
             } else {
                 favoriteRepository.addFavorite(video.aid, folderId)
             }
             result.onSuccess { response ->
                 if (response.isSuccess) {
-                    isFavorited = !isFavorited
+                    isFavorited = !actualIsFavorited
                     renderFavoriteState()
                     toast(
                         if (isFavorited) context.getString(R.string.collection_)
                         else context.getString(R.string.collection)
                     )
+                    if (!isFavorited) {
+                        onFavoriteRemoved?.invoke()
+                    }
                     dismiss()
                 } else {
                     toast(response.errorMessage)
@@ -332,7 +346,7 @@ class VideoCardMenuDialog(
             return
         }
         scope.launch {
-            favoriteRepository.getFavoriteFolders(currentUserMid)
+            favoriteRepository.getFavoriteFolders(currentUserMid, rid = video.aid)
                 .onSuccess { response ->
                     if (!response.isSuccess) {
                         toast(response.errorMessage)
@@ -342,6 +356,11 @@ class VideoCardMenuDialog(
                     if (folders.isEmpty()) {
                         toast("暂无可用收藏夹")
                         return@onSuccess
+                    }
+                    val actualIsFavorited = folders.any { it.favState == 1 }
+                    if (actualIsFavorited != isFavorited) {
+                        isFavorited = actualIsFavorited
+                        renderFavoriteState()
                     }
                     displayFavoriteFolderChooser(folders)
                 }
@@ -371,6 +390,7 @@ class VideoCardMenuDialog(
                 }
                 result.onSuccess { response ->
                     if (response.isSuccess) {
+                        val wasFavorited = isFavorited
                         isFavorited = !isFavorited
                         renderFavoriteState()
                         toast(
@@ -380,6 +400,9 @@ class VideoCardMenuDialog(
                                 "已从 ${folder.title} 取消收藏"
                             }
                         )
+                        if (wasFavorited && !isFavorited) {
+                            onFavoriteRemoved?.invoke()
+                        }
                     } else {
                         toast(response.errorMessage)
                     }
@@ -409,10 +432,11 @@ class VideoCardMenuDialog(
     private fun refreshFavoriteState() {
         if (!sessionGateway.isLoggedIn()) return
         scope.launch {
-            favoriteRepository.checkFavorite(video.aid)
+            val currentUserMid = sessionGateway.getUserInfo()?.mid?.takeIf { it > 0L } ?: return@launch
+            favoriteRepository.getFavoriteFolders(currentUserMid, rid = video.aid)
                 .onSuccess { response ->
                     if (response.isSuccess) {
-                        isFavorited = response.data?.favoured == true
+                        isFavorited = response.data?.list.orEmpty().any { it.favState == 1 }
                         renderFavoriteState()
                     }
                 }

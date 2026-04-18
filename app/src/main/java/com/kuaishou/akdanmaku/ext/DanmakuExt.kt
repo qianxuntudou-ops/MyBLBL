@@ -70,8 +70,6 @@ internal fun DanmakuItem.willCollision(
     checkCollisionAtTime(this, danmaku, displayer, current + durationMs, durationMs)
 }
 
-private const val MIN_COLLISION_GAP = 40f
-
 private fun checkCollisionAtTime(
   d1: DanmakuItem,
   d2: DanmakuItem,
@@ -86,9 +84,7 @@ private fun checkCollisionAtTime(
   val dt2 = current - d2.timePosition
   val r1 = width - (width + w1) * (dt1.toFloat() / durationMs) + w1
   val l2 = width - (width + w2) * (dt2.toFloat() / durationMs)
-  return l2 < r1 + MIN_COLLISION_GAP
-// 这是一个用于加速运算的简化公式，但是没有经过验证
-// return current * (w2 - w1) + d1.position * (width + w1) - d2.position * (width + w2) - w1 * duration <= 0
+  return l2 < r1
 }
 
 const val RETAINER_BILIBILI = 0

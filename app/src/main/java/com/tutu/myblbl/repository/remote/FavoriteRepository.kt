@@ -23,10 +23,10 @@ class FavoriteRepository(
             )
         }
 
-    suspend fun getFavoriteFolders(upMid: Long): Result<BaseResponse<FavoriteFoldersWrapper>> =
+    suspend fun getFavoriteFolders(upMid: Long, rid: Long? = null): Result<BaseResponse<FavoriteFoldersWrapper>> =
         runCatching {
             sessionGateway.syncAuthState(
-                apiService.getFavoriteFolders(upMid),
+                apiService.getFavoriteFolders(upMid, rid = rid),
                 source = "favorite.getFavoriteFolders"
             )
         }

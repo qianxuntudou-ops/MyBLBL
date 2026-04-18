@@ -339,8 +339,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private fun handleIntent(intent: Intent) {
         val launchContext = intent.serializableExtraCompat<PlayerLaunchContext>(EXTRA_LAUNCH_CONTEXT)
             ?: PlayerLaunchContext.create()
-        AppLog.d(TAG, "cardClick:start aid=${launchContext.aid}, bvid=${launchContext.bvid}, cid=${launchContext.cid}, clickElapsedRealtime=${SystemClock.elapsedRealtime()}")
-        AppLog.d(TAG, "handleIntent: aid=${launchContext.aid}, bvid=${launchContext.bvid}, cid=${launchContext.cid}")
+        AppLog.d(TAG, "cardClick:start aid=${launchContext.aid}, bvid=${launchContext.bvid}, cid=${launchContext.cid}, epId=${launchContext.epId}, seasonId=${launchContext.seasonId}, clickElapsedRealtime=${SystemClock.elapsedRealtime()}")
+        AppLog.d(TAG, "handleIntent: aid=${launchContext.aid}, bvid=${launchContext.bvid}, cid=${launchContext.cid}, epId=${launchContext.epId}, seasonId=${launchContext.seasonId}")
         if (
             launchContext.aid <= 0L &&
             launchContext.bvid.isBlank() &&

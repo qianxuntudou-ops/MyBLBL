@@ -283,7 +283,6 @@ class VideoAdapter(
         }
 
         private fun bindDefault(video: VideoModel) {
-            binding.progressBar.visibility = View.GONE
             binding.iconPlayCount.visibility = View.VISIBLE
             binding.textPlayCount.visibility = View.VISIBLE
             binding.iconDanmaku.visibility = View.VISIBLE
@@ -309,7 +308,23 @@ class VideoAdapter(
                 binding.imageAvatar.visibility = if (ownerName.isNotBlank()) View.VISIBLE else View.GONE
                 binding.textPortraitBadge.visibility = View.GONE
             }
-            binding.textDuration.text = NumberUtils.formatDuration(video.durationValue.coerceAtLeast(0L))
+
+            val duration = video.durationValue
+            val progress = video.historyProgress.coerceAtLeast(0L)
+            if (duration > 0 && progress > 0) {
+                binding.progressBar.visibility = View.VISIBLE
+                binding.progressBar.max = duration.toInt()
+                binding.progressBar.progress = progress.coerceAtMost(duration).toInt()
+                if (duration > 3 && progress >= duration - 3) {
+                    binding.textDuration.text = "已看完"
+                } else {
+                    binding.textDuration.text = "${NumberUtils.formatDuration(progress)}/${NumberUtils.formatDuration(duration)}"
+                }
+            } else {
+                binding.progressBar.visibility = View.GONE
+                binding.textDuration.text = NumberUtils.formatDuration(duration.coerceAtLeast(0L))
+            }
+
             binding.textPlayCount.text = NumberUtils.formatCount(video.viewCount)
             binding.textDanmakuCount.text = NumberUtils.formatCount(video.danmakuCount)
             binding.textChargeBadge.visibility = if (video.isChargingExclusive) View.VISIBLE else View.GONE

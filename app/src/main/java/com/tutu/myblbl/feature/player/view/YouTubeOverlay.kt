@@ -316,8 +316,10 @@ class YouTubeOverlay @JvmOverloads constructor(
             secondsView.hidePreview()
         }
 
-        val overlayX = if (forward) width * 0.7f else width * 0.3f
-        val overlayY = height / 2f
+        val refWidth = width.takeIf { it > 0 } ?: playerView?.width ?: width
+        val refHeight = height.takeIf { it > 0 } ?: playerView?.height ?: height
+        val overlayX = if (forward) refWidth * 0.7f else refWidth * 0.3f
+        val overlayY = refHeight / 2f
         circleClipTapView.animate {
             circleClipTapView.setTapPosition(overlayX, overlayY)
         }
@@ -378,9 +380,11 @@ class YouTubeOverlay @JvmOverloads constructor(
 
         secondsView.visibility = View.VISIBLE
         secondsView.setSpeedText(speed)
-        val overlayX = if (forward) width * 0.7f else width * 0.3f
+        val refWidth = width.takeIf { it > 0 } ?: playerView?.width ?: width
+        val refHeight = height.takeIf { it > 0 } ?: playerView?.height ?: height
+        val overlayX = if (forward) refWidth * 0.7f else refWidth * 0.3f
         circleClipTapView.animate {
-            circleClipTapView.setTapPosition(overlayX, height / 2f)
+            circleClipTapView.setTapPosition(overlayX, refHeight / 2f)
         }
         val currentPlayer = player ?: return
         updateProgress(currentPlayer.currentPosition, currentPlayer.duration)

@@ -45,7 +45,7 @@ data class HistoryVideoModel(
     val isFinish: Int = 0,
     @SerializedName("is_fav")
     val isFav: Int = 0,
-    @SerializedName("kid")
+    @SerializedName(value = "kid", alternate = ["id"])
     val kid: Long = 0,
     @SerializedName("tag_name")
     val tagName: String = "",
@@ -84,10 +84,10 @@ data class HistoryVideoModel(
         get() = dimension?.isPortrait == true
     fun toVideoModel(): VideoModel {
         val historyInfo = history
-        val aid = historyInfo?.oid ?: 0L
+        val aid = historyInfo?.oid ?: kid
         val cid = historyInfo?.cid ?: 0L
         val mappedBvid = historyInfo?.bvid?.ifEmpty { bvid } ?: bvid
-        return VideoModel(
+        val model = VideoModel(
             aid = aid,
             bvid = mappedBvid,
             title = title.ifEmpty { showTitle },
@@ -111,6 +111,8 @@ data class HistoryVideoModel(
             elecArcBadge = elecArcBadge,
             privilegeType = privilegeType
         )
+        android.util.Log.d("PGC_DEBUG", "HistoryVideoModel.toVideoModel: title=$title, bvid=$mappedBvid, cid=$cid, epid=${historyInfo?.epid ?: 0L}, uri=$uri, business=${historyInfo?.business}, playbackEpId=${model.playbackEpId}, playbackSeasonId=${model.playbackSeasonId}, isPgc=${model.isPgc}")
+        return model
     }
 }
 

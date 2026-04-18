@@ -80,8 +80,9 @@ class CircleClipTapView @JvmOverloads constructor(
 
     fun animate(performAction: () -> Unit) {
         isAnimating = true
-        circleAnimator?.end()
+        circleAnimator?.cancel()
         performAction()
+        circleRadius = 0f
         isAnimating = false
         circleAnimator?.start()
     }

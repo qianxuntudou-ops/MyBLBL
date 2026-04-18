@@ -458,6 +458,7 @@ class VideoPlayerViewModel(
         currentCid = cid
         currentSeasonId = seasonId.takeIf { it > 0L }
         currentEpId = epId.takeIf { it > 0L }
+        AppLog.d(TAG, "loadVideoInfo: aid=$aid, bvid=$bvid, cid=$cid, epId=$epId, seasonId=$seasonId, isPgc=${(epId ?: 0L) > 0L || (seasonId ?: 0L) > 0L}")
         currentPlayInfo = null
         currentSubtitleData = null
         currentGraphVersion = 0L
@@ -1062,6 +1063,19 @@ class VideoPlayerViewModel(
         _videoInfo.value = detail
         currentAid = detail.view?.aid ?: currentAid
         currentBvid = detail.view?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
+
+        // Auto-detect PGC from redirectUrl: if video detail points to a bangumi page,
+        // switch to PGC playback path so the episode list shows all episodes.
+        val redirectUrl = detail.view?.redirectUrl.orEmpty()
+        val pgcEpId = parseEpIdFromBangumiUrl(redirectUrl)
+        if (pgcEpId > 0L) {
+            val pgcSeasonId = parseSeasonIdFromBangumiUrl(redirectUrl)
+            AppLog.d(TAG, "loadUgcVideoInfo: detected PGC redirectUrl=$redirectUrl, epId=$pgcEpId, seasonId=$pgcSeasonId, switching to PGC path")
+            currentEpId = pgcEpId
+            currentSeasonId = pgcSeasonId.takeIf { it > 0L }
+            loadPgcVideoInfo(loadGeneration)
+            return@coroutineScope
+        }
 
         val episodeItems = episodeCatalogBuilder.buildUgcEpisodes(detail)
         _episodes.value = episodeItems
@@ -2631,6 +2645,20 @@ class VideoPlayerViewModel(
 
     private fun isPgcPlayback(): Boolean {
         return (currentEpId ?: 0L) > 0L || (currentSeasonId ?: 0L) > 0L
+    }
+
+    private fun parseEpIdFromBangumiUrl(url: String): Long {
+        if (!url.contains("/bangumi/play/ep")) return 0L
+        return url.substringAfter("/bangumi/play/ep", "")
+            .takeWhile { it.isDigit() }
+            .toLongOrNull() ?: 0L
+    }
+
+    private fun parseSeasonIdFromBangumiUrl(url: String): Long {
+        if (!url.contains("/bangumi/play/ss")) return 0L
+        return url.substringAfter("/bangumi/play/ss", "")
+            .takeWhile { it.isDigit() }
+            .toLongOrNull() ?: 0L
     }
 
     private suspend fun preconnectCdnHosts(videoUrls: List<String>, audioUrls: List<String>) {

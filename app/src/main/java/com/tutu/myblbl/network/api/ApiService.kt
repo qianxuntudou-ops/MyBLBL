@@ -350,7 +350,8 @@ interface ApiService {
     @GET("x/v3/fav/folder/created/list-all")
     suspend fun getFavoriteFolders(
         @Query("up_mid") upMid: Long,
-        @Query("type") type: Int = 2
+        @Query("type") type: Int = 2,
+        @Query("rid") rid: Long? = null
     ): BaseResponse<FavoriteFoldersWrapper>
 
     @GET("x/v3/fav/folder/info")

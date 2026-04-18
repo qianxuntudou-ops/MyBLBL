@@ -90,6 +90,12 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
             },
             onItemFocused = { position ->
                 lastFocusedPosition = position
+            },
+            onItemFavoriteRemoved = { _ ->
+                if (!isAdded) return@FavoriteHistoryAdapter
+                if (favoriteAdapter.itemCount <= 1) {
+                    parentFragmentManager.popBackStack()
+                }
             }
         )
         binding.recyclerViewVideos.layoutManager = WrapContentGridLayoutManager(requireContext(), 4)

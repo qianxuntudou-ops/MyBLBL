@@ -732,13 +732,35 @@ class MyPlayerView @JvmOverloads constructor(
         } else if (event.action == KeyEvent.ACTION_UP) {
             heldSeekKeyCodes.remove(event.keyCode)
             if (heldSeekKeyCodes.isEmpty() && session.isActive()) {
-                // 延迟整个 session 结束：保持 seekState 不变，防止细进度条闪现
+                val wasSpeedMode = session.isInSpeedMode()
+                val wasForward = session.isForwardDirection()
                 val finishRunnable = Runnable {
                     if (seekSession?.isActive() == true) {
                         seekSession?.finishSeek()
                         controller?.exitSeekProgressOnly()
+                        if (!wasSpeedMode && wasForward) {
+                            val currentPlayer = player ?: return@Runnable
+                            val positionMs = currentPlayer.currentPosition.coerceAtLeast(0L)
+                            val durationMs = currentPlayer.duration
+                            val seekDeltaMs = (tapOverlayView?.seekSeconds ?: 10) * 1000L
+                            tapOverlayView?.showControllerSeek(
+                                targetPositionMs = positionMs,
+                                durationMs = durationMs,
+                                deltaMs = seekDeltaMs,
+                                showBottomProgress = false
+                            )
+                        }
                         tapOverlayView?.finishControllerSeek()
                     }
+                    postDelayed({
+                        if (seekSession?.isActive() != true) {
+                            val pos = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
+                            syncDanmakuPosition(pos, forceSeek = true)
+                            if (player?.isPlaying == true) {
+                                resumeDanmaku()
+                            }
+                        }
+                    }, 120L)
                 }
                 pendingExitSeekProgressOnly = finishRunnable
                 postDelayed(finishRunnable, 150L)
@@ -811,8 +833,6 @@ class MyPlayerView @JvmOverloads constructor(
         val runnable = Runnable {
             if (timebarSeekActive) {
                 timebarSeekActive = false
-                // 从 ONLY_PROGRESS_VISIBLE 平滑过渡到 ALL_VISIBLE（不经过 GONE）
-                // show() 内部调用 showAllBars() → animateShowMainBar() → resetHideCallbacks()
                 controller?.show()
                 controller?.startProgressUpdates()
             }

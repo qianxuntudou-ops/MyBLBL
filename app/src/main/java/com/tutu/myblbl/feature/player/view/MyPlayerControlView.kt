@@ -791,6 +791,10 @@ class MyPlayerControlView @JvmOverloads constructor(
         focusCoordinator.restoreRememberedFocus()
     }
 
+    fun requestTimeBarFocus() {
+        focusCoordinator.requestTimeBarFocus()
+    }
+
     fun beginSeekPreview(positionMs: Long) {
         removeCallbacks(externalSeekPreviewFinishRunnable)
         if (!externalSeekPreviewActive) {

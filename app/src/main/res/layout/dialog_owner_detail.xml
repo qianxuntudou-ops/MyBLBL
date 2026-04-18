@@ -2,11 +2,13 @@
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
     android:background="@drawable/dialog_background"
     android:clickable="true"
-    android:focusable="true"
+    android:focusable="false"
+    android:descendantFocusability="afterDescendants"
     android:layout_width="@dimen/px1400"
     android:layout_height="@dimen/px935">
     <com.tutu.myblbl.core.ui.image.AvatarBadgeView
         android:id="@+id/image_avatar"
+        android:focusable="false"
         android:layout_width="@dimen/px80"
         android:layout_height="@dimen/px80"
         android:layout_marginLeft="@dimen/px35"
@@ -20,6 +22,8 @@
         android:textStyle="bold"
         android:textColor="@color/textColor"
         android:id="@+id/text_name"
+        android:focusable="false"
+        android:clickable="false"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/choose_episode"

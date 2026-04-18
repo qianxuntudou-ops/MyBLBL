@@ -194,6 +194,7 @@ class VideoPlayerFragment : Fragment() {
 
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
+            val isSeeking = playerView.seekSession?.isActive() == true
             when (playbackState) {
                 Player.STATE_BUFFERING -> {
                     viewModel.setLoading(true)
@@ -210,7 +211,7 @@ class VideoPlayerFragment : Fragment() {
                             )
                         }
                     viewModel.setLoading(false)
-                    if (player?.playWhenReady == true) {
+                    if (player?.playWhenReady == true && !isSeeking) {
                         playerView.resumeDanmaku()
                     }
                     hideNextPreview()
@@ -238,10 +239,11 @@ class VideoPlayerFragment : Fragment() {
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
-            if (isPlaying) {
+            val isSeeking = playerView.seekSession?.isActive() == true
+            if (isPlaying && !isSeeking) {
                 playerView.resumeDanmaku()
                 progressCoordinator.restart()
-            } else {
+            } else if (!isPlaying) {
                 playerView.pauseDanmaku()
                 progressCoordinator.stop()
                 progressCoordinator.syncNow(publishProgressState = true)

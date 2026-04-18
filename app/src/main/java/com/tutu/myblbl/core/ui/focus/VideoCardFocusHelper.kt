@@ -56,10 +56,10 @@ object VideoCardFocusHelper {
                             "card key: position=$position key=RIGHT atRightEdge=$atRightEdge hasRightHandler=${onRightEdge != null}"
                         )
                     }
-                    if (onRightEdge == null || !atRightEdge) {
+                    if (!atRightEdge) {
                         return@setOnKeyListener false
                     }
-                    val handled = onRightEdge()
+                    val handled = onRightEdge?.invoke() ?: true
                     debugTag?.let {
                         AppLog.d(
                             it,

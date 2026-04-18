@@ -177,6 +177,8 @@
     <string name="later_watch_empty">暂无稍后观看内容</string>
     <string name="following_animation_empty">暂无追番内容</string>
     <string name="following_series_empty">暂无追剧内容</string>
+    <string name="following_animation_title">我的追番</string>
+    <string name="following_series_title">我的追剧</string>
     <string name="ff_duration">快进快退时间间隔</string>
     <string name="ff_seek_second">点击屏幕快进快退时间间隔</string>
     <string name="film_and_television">影视</string>

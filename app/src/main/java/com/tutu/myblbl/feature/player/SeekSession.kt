@@ -32,11 +32,16 @@ class SeekSession(
     private var originalSpeed = 1f
     private var speedStepRunnable: Runnable? = null
     private var rewindTickRunnable: Runnable? = null
-    private val speeds = floatArrayOf(2f, 4f, 8f, 16f, 32f)
+    private val speeds = floatArrayOf(2f, 3f, 4f, 6f, 8f)
+    private val speedMuteThreshold = 4f
     private val longPressThresholdMs = 300L
     private val speedStepIntervalMs = 500L
-    private val rewindTickIntervalMs = 100L
+    private val rewindTickIntervalMs = 250L
+    private val rewindStepMs = 5_000L
+    private val exitSpeedTransitionDelayMs = 80L
     private var pendingRunnable: Runnable? = null
+    private var originalVolume = 1f
+    private var exitSpeedRunnable: Runnable? = null
     var speedChangedListener: ((Boolean, Float) -> Unit)? = null
 
     fun startTapSeek(forward: Boolean, seekMs: Long) {
@@ -130,6 +135,7 @@ class SeekSession(
             if (isSpeedMode && isForward) {
                 val player = playerProvider()
                 if (player != null) {
+                    player.volume = originalVolume
                     player.playbackParameters = PlaybackParameters(originalSpeed)
                 }
                 coordinator.transition(UiEvent.SpeedModeFinished)
@@ -164,7 +170,7 @@ class SeekSession(
         val player = playerProvider() ?: return
         val duration = player.duration
         if (duration <= 0L || !player.isCurrentMediaItemSeekable) return
-        val deltaMs = seekMs
+        val deltaMs = rewindStepMs
         val targetMs = (player.currentPosition - deltaMs).coerceAtLeast(0L)
         player.seekTo(targetMs)
         danmakuSync(targetMs)
@@ -191,8 +197,13 @@ class SeekSession(
         if (isSpeedMode) {
             isSpeedMode = false
             speedIndex = 0
+            if (isForward) {
+                exitSpeedModeGradually()
+                return
+            }
             val player = playerProvider()
-            if (player != null && isForward) {
+            if (player != null) {
+                player.volume = originalVolume
                 player.playbackParameters = PlaybackParameters(originalSpeed)
             }
             coordinator.transition(UiEvent.SpeedModeFinished)
@@ -207,11 +218,13 @@ class SeekSession(
         cancelPendingRunnable()
         cancelSpeedStepRunnable()
         cancelRewindTickRunnable()
+        cancelExitSpeedRunnable()
         isSpeedMode = false
         speedIndex = 0
         if (mode == Mode.SPEED_MODE && isForward) {
             val player = playerProvider()
             if (player != null) {
+                player.volume = originalVolume
                 player.playbackParameters = PlaybackParameters(originalSpeed)
             }
             coordinator.transition(UiEvent.SpeedModeFinished)
@@ -231,7 +244,9 @@ class SeekSession(
     private fun enterSpeedMode() {
         val player = playerProvider() ?: return
         if (!player.isPlaying) player.play()
+        originalVolume = player.volume
         player.playbackParameters = PlaybackParameters(speeds[0])
+        applyVolumeForSpeed(speeds[0])
         speedChangedListener?.invoke(isForward, speeds[0])
         scheduleNextSpeedStep()
     }
@@ -242,7 +257,9 @@ class SeekSession(
         val runnable = Runnable {
             speedIndex++
             val speed = speeds[speedIndex]
-            playerProvider()?.playbackParameters = PlaybackParameters(speed)
+            val player = playerProvider() ?: return@Runnable
+            player.playbackParameters = PlaybackParameters(speed)
+            applyVolumeForSpeed(speed)
             speedChangedListener?.invoke(isForward, speed)
             scheduleNextSpeedStep()
         }
@@ -275,5 +292,47 @@ class SeekSession(
     private fun cancelRewindTickRunnable() {
         rewindTickRunnable?.let { handler.removeCallbacks(it) }
         rewindTickRunnable = null
+    }
+
+    private fun applyVolumeForSpeed(speed: Float) {
+        val player = playerProvider() ?: return
+        player.volume = if (speed >= speedMuteThreshold) 0f else originalVolume
+    }
+
+    private fun exitSpeedModeGradually() {
+        cancelExitSpeedRunnable()
+        val player = playerProvider()
+        if (player == null) {
+            mode = Mode.NONE
+            coordinator.transition(UiEvent.SpeedModeFinished)
+            coordinator.transition(UiEvent.SeekFinished)
+            return
+        }
+        val currentSpeed = player.playbackParameters.speed
+        if (currentSpeed <= 2f) {
+            player.volume = originalVolume
+            player.playbackParameters = PlaybackParameters(originalSpeed)
+            coordinator.transition(UiEvent.SpeedModeFinished)
+            mode = Mode.NONE
+            coordinator.transition(UiEvent.SeekFinished)
+            return
+        }
+        val intermediateSpeed = 2f
+        player.playbackParameters = PlaybackParameters(intermediateSpeed)
+        applyVolumeForSpeed(intermediateSpeed)
+        val runnable = Runnable {
+            player.volume = originalVolume
+            player.playbackParameters = PlaybackParameters(originalSpeed)
+            coordinator.transition(UiEvent.SpeedModeFinished)
+            mode = Mode.NONE
+            coordinator.transition(UiEvent.SeekFinished)
+        }
+        exitSpeedRunnable = runnable
+        handler.postDelayed(runnable, exitSpeedTransitionDelayMs)
+    }
+
+    private fun cancelExitSpeedRunnable() {
+        exitSpeedRunnable?.let { handler.removeCallbacks(it) }
+        exitSpeedRunnable = null
     }
 }

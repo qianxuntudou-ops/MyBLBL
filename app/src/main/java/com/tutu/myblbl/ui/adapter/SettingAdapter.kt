@@ -56,6 +56,7 @@ class SettingAdapter(
         if (payloads.isEmpty()) {
             super.onBindViewHolder(holder, position, payloads)
         } else {
+            holder.bindContent(getItem(position))
             holder.bindFocusState(position == focusedPosition)
             holder.bindDivider(position == currentList.lastIndex)
         }
@@ -94,10 +95,14 @@ class SettingAdapter(
         }
 
         fun bind(item: SettingModel, isLast: Boolean) {
-            binding.tvTitle.text = item.title
-            binding.tvInfo.text = item.info
+            bindContent(item)
             bindDivider(isLast)
             bindFocusState(bindingAdapterPosition == focusedPosition)
+        }
+
+        fun bindContent(item: SettingModel) {
+            binding.tvTitle.text = item.title
+            binding.tvInfo.text = item.info
         }
 
         fun bindDivider(isLast: Boolean) {

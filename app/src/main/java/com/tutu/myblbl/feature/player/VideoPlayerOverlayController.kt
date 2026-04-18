@@ -1,6 +1,7 @@
 package com.tutu.myblbl.feature.player
 
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
 import android.widget.TextView
@@ -115,6 +116,8 @@ class VideoPlayerOverlayController(
         dialog.show()
     }
 
+    private var relatedPanelFocusListener: ViewTreeObserver.OnGlobalFocusChangeListener? = null
+
     fun showRelatedPanel() {
         overlayCoordinator.onRelatedPanelShown()
         uiCoordinator.onRelatedPanelShown()
@@ -143,10 +146,12 @@ class VideoPlayerOverlayController(
             })
             viewRelated.startAnimation(this)
         }
+        setupRelatedPanelFocusTrap()
     }
 
     fun hideContentPanel(restoreFocus: Boolean = true) {
         overlayCoordinator.onRelatedPanelHidden()
+        removeRelatedPanelFocusTrap()
         if (uiCoordinator.panelState == PlaybackUiCoordinator.PanelState.Related) {
             uiCoordinator.transition(UiEvent.PanelClosed)
         }
@@ -345,5 +350,30 @@ class VideoPlayerOverlayController(
         } else {
             recyclerView.requestFocus()
         }
+    }
+
+    private fun setupRelatedPanelFocusTrap() {
+        removeRelatedPanelFocusTrap()
+        val listener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
+            if (!viewRelated.isVisible || newFocus == null) return@OnGlobalFocusChangeListener
+            var v: View? = newFocus
+            while (v != null) {
+                if (v === viewRelated) return@OnGlobalFocusChangeListener
+                v = v.parent as? View
+            }
+            // Focus escaped the panel — bring it back
+            recyclerViewRelated.post { recyclerViewRelated.requestFocus() }
+        }
+        viewRelated.viewTreeObserver.addOnGlobalFocusChangeListener(listener)
+        relatedPanelFocusListener = listener
+    }
+
+    private fun removeRelatedPanelFocusTrap() {
+        relatedPanelFocusListener?.let { listener ->
+            if (viewRelated.viewTreeObserver.isAlive) {
+                viewRelated.viewTreeObserver.removeOnGlobalFocusChangeListener(listener)
+            }
+        }
+        relatedPanelFocusListener = null
     }
 }

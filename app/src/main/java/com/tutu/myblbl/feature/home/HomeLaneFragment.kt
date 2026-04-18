@@ -18,6 +18,7 @@ import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.feature.series.AllSeriesFragment
 import com.tutu.myblbl.feature.series.SeriesDetailFragment
+import com.tutu.myblbl.ui.dialog.MyFollowingDialog
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
@@ -88,7 +89,10 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
                 }
             },
             onTopEdgeUp = ::focusTopTab,
-            defaultMoreSeasonType = type
+            defaultMoreSeasonType = type,
+            onFollowSectionClick = { followType ->
+                showMyFollowingDialog(followType)
+            }
         )
     }
 
@@ -419,6 +423,24 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
 
     private fun focusTopTab(): Boolean {
         return (parentFragment as? HomeFragment)?.focusCurrentTab() == true
+    }
+
+    private fun showMyFollowingDialog(followType: Int) {
+        if (!isAdded || view == null) return
+        val dialog = MyFollowingDialog(
+            context = requireContext(),
+            type = followType,
+            onSeriesClick = { series ->
+                if (series.seasonId > 0) {
+                    openInHostContainer(
+                        SeriesDetailFragment.newInstance(
+                            seasonId = series.seasonId
+                        )
+                    )
+                }
+            }
+        )
+        dialog.show()
     }
 
 }

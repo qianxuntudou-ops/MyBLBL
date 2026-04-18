@@ -24,7 +24,8 @@ class HomeLaneAdapter(
     private val onMoreClick: (Int, String, String) -> Unit,
     private val onTimelineClick: (SeriesTimeLineModel) -> Unit,
     private val defaultMoreSeasonType: Int? = null,
-    private val onTopEdgeUp: () -> Boolean = { false }
+    private val onTopEdgeUp: () -> Boolean = { false },
+    private val onFollowSectionClick: ((Int) -> Unit)? = null
 ) : BaseAdapter<HomeLaneSection, RecyclerView.ViewHolder>() {
 
     companion object {
@@ -105,7 +106,8 @@ class HomeLaneAdapter(
                     onMoreClick,
                     defaultMoreSeasonType,
                     onTopEdgeUp,
-                    ::rememberFocusedView
+                    ::rememberFocusedView,
+                    onFollowSectionClick
                 )
             }
         }
@@ -128,7 +130,8 @@ class HomeLaneAdapter(
         private val onMoreClick: (Int, String, String) -> Unit,
         private val defaultMoreSeasonType: Int?,
         private val onTopEdgeUp: () -> Boolean,
-        private val onViewFocused: (View) -> Unit
+        private val onViewFocused: (View) -> Unit,
+        private val onFollowSectionClick: ((Int) -> Unit)? = null
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private val adapter = LaneItemAdapter(
@@ -137,6 +140,7 @@ class HomeLaneAdapter(
         )
         private var moreSeasonType: Int? = null
         private var currentMoreUrl: String = ""
+        private var currentSection: HomeLaneSection? = null
 
         init {
             binding.recyclerView.layoutManager = GridLayoutManager(binding.root.context, 6)
@@ -159,7 +163,14 @@ class HomeLaneAdapter(
                 }
             }
             val openMore = View.OnClickListener {
-                moreSeasonType?.let { onMoreClick(it, currentMoreUrl, binding.topTitle.text.toString()) }
+                val section = currentSection
+                if (section?.disableMore == true && section.style == "follow") {
+                    val title = section.title
+                    val type = if (title.contains("追剧")) 2 else 1
+                    onFollowSectionClick?.invoke(type)
+                } else {
+                    moreSeasonType?.let { onMoreClick(it, currentMoreUrl, binding.topTitle.text.toString()) }
+                }
             }
             val trackFocus = View.OnFocusChangeListener { view, hasFocus ->
                 if (hasFocus) {
@@ -172,10 +183,16 @@ class HomeLaneAdapter(
         }
 
         fun bind(item: HomeLaneSection) {
-            moreSeasonType = if (item.disableMore) null else (item.moreSeasonType ?: defaultMoreSeasonType)
+            currentSection = item
+            val isFollow = item.style == "follow" && item.disableMore
+            moreSeasonType = if (item.disableMore) {
+                if (isFollow) defaultMoreSeasonType else null
+            } else {
+                item.moreSeasonType ?: defaultMoreSeasonType
+            }
             currentMoreUrl = item.moreUrl
             binding.topTitle.text = item.title
-            if (moreSeasonType != null) {
+            if (moreSeasonType != null || isFollow) {
                 val arrow = ResourcesCompat.getDrawable(
                     binding.root.context.resources,
                     R.drawable.ic_arrow_right,

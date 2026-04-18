@@ -44,6 +44,9 @@ class OwnerDetailDialog(
     private val videoAdapter = VideoAdapter()
 
     private var relationAttribute = 0
+    private var currentPage = 1
+    private var hasMore = true
+    private var isLoading = false
 
     init {
         supportRequestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -74,12 +77,19 @@ class OwnerDetailDialog(
             if (!checkLogin()) return@setOnClickListener
             toggleFollow()
         }
-        val openSpace = {
-            dismiss()
-            onOpenSpace(owner.mid)
-        }
-        binding.imageAvatar.setOnClickListener { openSpace() }
-        binding.textName.setOnClickListener { openSpace() }
+        binding.recyclerView.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+            override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                if (dy <= 0) return
+                val layoutManager = recyclerView.layoutManager ?: return
+                val lastVisibleItem = (layoutManager as? androidx.recyclerview.widget.GridLayoutManager)
+                    ?.findLastVisibleItemPosition() ?: return
+                val totalItems = recyclerView.adapter?.itemCount ?: return
+                if (!isLoading && hasMore && lastVisibleItem >= totalItems - 3) {
+                    currentPage++
+                    loadOwnerVideos()
+                }
+            }
+        })
     }
 
     private fun bindOwnerHeader() {
@@ -148,20 +158,35 @@ class OwnerDetailDialog(
     }
 
     private fun loadOwnerVideos() {
-        binding.progressBar.isVisible = true
+        if (isLoading || !hasMore) return
+        isLoading = true
+        if (currentPage == 1) {
+            binding.progressBar.isVisible = true
+        }
         scope.launch {
-            val result = userRepository.getUserDynamic(owner.mid, page = 1, pageSize = 20)
+            val result = userRepository.getUserDynamic(owner.mid, page = currentPage, pageSize = 20)
             result.onSuccess { response ->
                 binding.progressBar.isVisible = false
+                isLoading = false
                 if (response.isSuccess) {
                     val videos = ContentFilter.filterVideos(binding.root.context, response.data?.archives.orEmpty())
-                    videoAdapter.setData(videos)
-                    scrollToCurrentVideo(videos)
+                    hasMore = response.data?.hasMore ?: false
+                    if (currentPage == 1) {
+                        videoAdapter.setData(videos)
+                        scrollToCurrentVideo(videos)
+                    } else {
+                        videoAdapter.addData(videos)
+                    }
+                    if (!hasMore) {
+                        videoAdapter.setShowLoadMore(false)
+                    }
                 } else {
                     toast(response.message)
                 }
             }.onFailure {
                 binding.progressBar.isVisible = false
+                isLoading = false
+                currentPage--
                 toast(it.message ?: "加载失败")
             }
         }

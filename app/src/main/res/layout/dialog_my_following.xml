@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/backgroundColor"
+    android:descendantFocusability="afterDescendants">
+
+    <androidx.appcompat.widget.LinearLayoutCompat
+        android:id="@+id/view_top"
+        android:layout_width="0dp"
+        android:layout_height="@dimen/px100"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:descendantFocusability="afterDescendants"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/button_back"
+            android:layout_width="@dimen/px100"
+            android:layout_height="@dimen/px100"
+            android:layout_marginStart="@dimen/px30"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="@dimen/px35"
+            app:srcCompat="@drawable/ic_back"
+            app:tint="?android:attr/textColorPrimary" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="@dimen/px40"
+            android:textStyle="bold" />
+    </androidx.appcompat.widget.LinearLayoutCompat>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:clipToPadding="false"
+        android:paddingStart="@dimen/px5"
+        android:paddingEnd="@dimen/px5"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/view_top" />
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/view_info"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:descendantFocusability="afterDescendants"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/view_top">
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <androidx.appcompat.widget.AppCompatImageView
+            android:id="@+id/image_info"
+            android:layout_width="@dimen/px400"
+            android:layout_height="@dimen/px250"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.4"
+            app:srcCompat="@drawable/net_error" />
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_info"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/px30"
+            android:text="@string/net_error"
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="@dimen/px30"
+            android:visibility="gone"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/image_info" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

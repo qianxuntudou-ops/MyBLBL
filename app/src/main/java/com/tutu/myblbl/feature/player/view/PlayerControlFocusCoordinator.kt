@@ -180,6 +180,12 @@ internal class PlayerControlFocusCoordinator(
         AppLog.d("KeyTrace", "requestPlayPauseFocus: buttonVisible=${buttonPlay.visibility == View.VISIBLE}, requestFocusResult=$result, actuallyFocused=${buttonPlay.isFocused}")
     }
 
+    fun requestTimeBarFocus() {
+        if (timeBar.visibility == View.VISIBLE) {
+            timeBar.requestFocus()
+        }
+    }
+
     fun requestSettingButtonFocus() {
         requestFocusOrFallback(buttonSettings)
     }

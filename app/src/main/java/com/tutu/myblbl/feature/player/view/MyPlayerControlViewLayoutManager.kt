@@ -105,7 +105,8 @@ class MyPlayerControlViewLayoutManager(
     }
 
     fun show() {
-        AppLog.d("KeyTrace", "LayoutManager.show: currentUxState=$uxState, isVisible=${playerControlView.isVisible()}")
+        val fromSeekProgress = uxState == UX_STATE_ONLY_PROGRESS_VISIBLE
+        AppLog.d("KeyTrace", "LayoutManager.show: currentUxState=$uxState, isVisible=${playerControlView.isVisible()}, fromSeekProgress=$fromSeekProgress")
         if (!playerControlView.isVisible()) {
             playerControlView.visibility = View.VISIBLE
             playerControlView.updateAll()
@@ -114,8 +115,12 @@ class MyPlayerControlViewLayoutManager(
         updateAdaptiveLayout()
         showAllBars()
         playerControlView.post {
-            AppLog.d("KeyTrace", "LayoutManager.show.post: requesting playPauseFocus, uxState=$uxState")
-            playerControlView.requestPlayPauseFocus()
+            if (fromSeekProgress) {
+                playerControlView.requestTimeBarFocus()
+            } else {
+                AppLog.d("KeyTrace", "LayoutManager.show.post: requesting playPauseFocus, uxState=$uxState")
+                playerControlView.requestPlayPauseFocus()
+            }
         }
     }
 

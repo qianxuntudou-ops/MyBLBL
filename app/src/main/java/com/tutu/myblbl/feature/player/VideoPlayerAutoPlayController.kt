@@ -11,12 +11,14 @@ import androidx.core.view.isVisible
 import androidx.appcompat.app.AppCompatActivity
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.ui.image.ImageLoader
+import com.tutu.myblbl.feature.player.view.CountdownView
 
 class VideoPlayerAutoPlayController(
     private val activity: AppCompatActivity,
     private val viewNext: View,
     private val imageNext: AppCompatImageView,
     private val textNext: TextView,
+    private val countdownView: CountdownView,
     private val canExecutePendingAction: () -> Boolean
 ) {
 
@@ -33,9 +35,9 @@ class VideoPlayerAutoPlayController(
         action.invoke()
     }
 
-    fun queueNextAction(title: String, coverUrl: String, action: () -> Unit, delayMs: Long = 1200L) {
+    fun queueNextAction(title: String, coverUrl: String, action: () -> Unit, delayMs: Long = 5000L) {
         pendingAutoPlayAction = action
-        showNextPreview(title, coverUrl)
+        showNextPreview(title, coverUrl, delayMs)
         handler.removeCallbacks(autoNextRunnable)
         handler.postDelayed(autoNextRunnable, delayMs)
     }
@@ -49,9 +51,10 @@ class VideoPlayerAutoPlayController(
         hideNextPreview(clearPendingAction = true)
     }
 
-    private fun showNextPreview(title: String, coverUrl: String) {
+    private fun showNextPreview(title: String, coverUrl: String, delayMs: Long) {
         textNext.text = title
         ImageLoader.loadVideoCover(imageNext, coverUrl)
+        countdownView.startCountdown(delayMs)
         if (viewNext.isVisible) {
             return
         }
@@ -67,6 +70,7 @@ class VideoPlayerAutoPlayController(
         if (clearPendingAction) {
             pendingAutoPlayAction = null
         }
+        countdownView.stopCountdown()
         if (!viewNext.isVisible) {
             return
         }

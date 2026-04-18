@@ -41,9 +41,7 @@ class MyPlayerDanmakuController(
         private const val SEEK_DEDUP_WINDOW_MS = 300L
         private const val SEEK_DEDUP_POSITION_TOLERANCE_MS = 80L
         private const val SMART_FILTER_LEVEL_OFF = 0
-        private const val SMART_FILTER_LEVEL_LOW = 1
-        private const val SMART_FILTER_LEVEL_MEDIUM = 2
-        private const val SMART_FILTER_LEVEL_HIGH = 3
+        private const val SMART_FILTER_LEVEL_MAX = 10
     }
 
     data class SettingsSnapshot(
@@ -576,25 +574,8 @@ class MyPlayerDanmakuController(
     }
 
     private fun resolveSmartFilterThreshold(level: Int, maxPositiveScore: Int): Int {
-        return when {
-            maxPositiveScore <= 3 -> when (level) {
-                SMART_FILTER_LEVEL_LOW -> 3
-                SMART_FILTER_LEVEL_MEDIUM -> 2
-                else -> 1
-            }
-
-            maxPositiveScore <= 10 -> when (level) {
-                SMART_FILTER_LEVEL_LOW -> 7
-                SMART_FILTER_LEVEL_MEDIUM -> 4
-                else -> 2
-            }
-
-            else -> when (level) {
-                SMART_FILTER_LEVEL_LOW -> max(1, (maxPositiveScore * 3) / 4)
-                SMART_FILTER_LEVEL_MEDIUM -> max(1, maxPositiveScore / 2)
-                else -> max(1, maxPositiveScore / 4)
-            }
-        }
+        val ratio = (SMART_FILTER_LEVEL_MAX - level).toFloat() / SMART_FILTER_LEVEL_MAX
+        return max(1, (maxPositiveScore * ratio).toInt())
     }
 
     private data class MergeDuplicateKey(
@@ -671,7 +652,7 @@ class MyPlayerDanmakuController(
     }
 
     private fun Int.normalizeSmartFilterLevel(): Int {
-        return coerceIn(SMART_FILTER_LEVEL_OFF, SMART_FILTER_LEVEL_HIGH)
+        return coerceIn(SMART_FILTER_LEVEL_OFF, SMART_FILTER_LEVEL_MAX)
     }
 
     private fun Int.toDanmakuTextScale(): Float {

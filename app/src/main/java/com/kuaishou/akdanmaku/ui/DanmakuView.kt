@@ -74,7 +74,7 @@ class DanmakuView : View {
   class ViewDisplayer : DanmakuDisplayer {
     override var height: Int = 0
     override var width: Int = 0
-    override var margin: Int = 4
+    override var margin: Int = 8
     override var allMarginTop: Float = 0f
     override var density: Float = 1f
     override var scaleDensity: Float = 1f

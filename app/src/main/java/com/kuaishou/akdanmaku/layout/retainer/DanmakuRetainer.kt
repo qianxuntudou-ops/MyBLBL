@@ -173,6 +173,8 @@ internal interface DanmakuRetainer {
 
     companion object {
 
+      private const val MIN_COLLISION_GAP = 40f
+
       private fun checkCollisionAtTime(
         h1: SpaceHolder,
         h2: SpaceHolder,
@@ -187,7 +189,7 @@ internal interface DanmakuRetainer {
         val r1 = width - (width + w1) * (dt1.toFloat() / duration) + w1
         val dt2 = current - h2.timePosition
         val l2 = width - (width + w2) * (dt2.toFloat() / duration)
-        return l2 < r1
+        return l2 < r1 + MIN_COLLISION_GAP
         // 这是一个用于加速运算的简化公式，但是没有经过验证
         // return current * (w2 - w1) + d1.position * (width + w1) - d2.position * (width + w2) - w1 * duration <= 0
       }

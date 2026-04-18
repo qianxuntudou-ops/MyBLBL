@@ -69,18 +69,26 @@
             android:shadowColor="@color/systemBackgroundColor"
             android:shadowRadius="4"
             android:layout_marginStart="@dimen/px17"/>
-        <androidx.appcompat.widget.AppCompatImageView
-            android:id="@+id/imageView_next"
-            android:background="@drawable/default_video"
-            android:visibility="visible"
+        <FrameLayout
             android:layout_width="@dimen/px350"
             android:layout_height="@dimen/px197"
             android:layout_marginLeft="@dimen/px15"
             android:layout_marginTop="@dimen/px20"
             android:layout_marginRight="@dimen/px15"
-            android:scaleType="centerCrop"
             android:layout_marginStart="@dimen/px15"
-            android:layout_marginEnd="@dimen/px15"/>
+            android:layout_marginEnd="@dimen/px15">
+            <androidx.appcompat.widget.AppCompatImageView
+                android:id="@+id/imageView_next"
+                android:background="@drawable/default_video"
+                android:visibility="visible"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scaleType="centerCrop"/>
+            <com.tutu.myblbl.feature.player.view.CountdownView
+                android:id="@+id/countdown_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"/>
+        </FrameLayout>
         <androidx.appcompat.widget.AppCompatTextView
             android:textSize="@dimen/px30"
             android:textStyle="bold"

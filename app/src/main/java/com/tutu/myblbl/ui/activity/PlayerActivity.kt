@@ -205,6 +205,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private lateinit var buttonCloseRelated: View
     private lateinit var imageNext: AppCompatImageView
     private lateinit var textNext: TextView
+    private lateinit var countdownView: com.tutu.myblbl.feature.player.view.CountdownView
     private lateinit var interactionView: InteractionVideoHandleView
 
     private lateinit var relatedAdapter: VideoAdapter
@@ -398,6 +399,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         buttonCloseRelated = binding.root.findViewById(R.id.button_close_related)
         imageNext = binding.root.findViewById(R.id.imageView_next)
         textNext = binding.root.findViewById(R.id.text_next)
+        countdownView = binding.root.findViewById(R.id.countdown_view)
         interactionView = binding.interactionView
 
         viewDebug.visibility = View.GONE
@@ -435,6 +437,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             viewNext = viewNext,
             imageNext = imageNext,
             textNext = textNext,
+            countdownView = countdownView,
             canExecutePendingAction = { player?.playbackState == Player.STATE_ENDED }
         )
         overlayUiController = VideoPlayerOverlayController(

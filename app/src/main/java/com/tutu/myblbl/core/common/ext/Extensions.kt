@@ -18,9 +18,8 @@ import java.io.Serializable
 
 private const val VALUE_ON = "开"
 private const val VALUE_OFF = "关"
-private const val VALUE_FILTER_LEVEL_1 = "1"
-private const val VALUE_FILTER_LEVEL_2 = "2"
-private const val VALUE_FILTER_LEVEL_3 = "3"
+private const val VALUE_FILTER_LEVEL_MIN = 1
+private const val VALUE_FILTER_LEVEL_MAX = 10
 private val DEFAULT_START_PAGE_OPTIONS = arrayOf("推荐", "热门", "番剧", "影视")
 
 private val appSettings: AppSettingsDataStore
@@ -59,13 +58,15 @@ fun Context.isSimpleOperationKeyEnabled(): Boolean {
 }
 
 fun Context.getDanmakuSmartFilterLevel(): Int {
-    return when (appSettings.getCachedString("dm_filter_weight")?.trim()) {
-        VALUE_FILTER_LEVEL_1 -> 1
-        VALUE_FILTER_LEVEL_2 -> 2
-        VALUE_FILTER_LEVEL_3 -> 3
+    val raw = appSettings.getCachedString("dm_filter_weight")?.trim() ?: return 0
+    val parsed = raw.toIntOrNull()
+    if (parsed != null && parsed in VALUE_FILTER_LEVEL_MIN..VALUE_FILTER_LEVEL_MAX) {
+        return parsed
+    }
+    return when (raw) {
         "低" -> 1
-        "中" -> 2
-        "高" -> 3
+        "中" -> 5
+        "高" -> 10
         VALUE_ON -> 1
         else -> 0
     }
@@ -76,14 +77,16 @@ fun Context.isDanmakuSmartFilterEnabled(): Boolean {
 }
 
 fun normalizeDanmakuSmartFilterValue(value: String?): String {
-    return when (value?.trim()) {
-        VALUE_FILTER_LEVEL_1 -> VALUE_FILTER_LEVEL_1
-        VALUE_FILTER_LEVEL_2 -> VALUE_FILTER_LEVEL_2
-        VALUE_FILTER_LEVEL_3 -> VALUE_FILTER_LEVEL_3
-        "低" -> VALUE_FILTER_LEVEL_1
-        "中" -> VALUE_FILTER_LEVEL_2
-        "高" -> VALUE_FILTER_LEVEL_3
-        VALUE_ON -> VALUE_FILTER_LEVEL_1
+    val trimmed = value?.trim()
+    val parsed = trimmed?.toIntOrNull()
+    if (parsed != null && parsed in VALUE_FILTER_LEVEL_MIN..VALUE_FILTER_LEVEL_MAX) {
+        return trimmed
+    }
+    return when (trimmed) {
+        "低" -> "1"
+        "中" -> "5"
+        "高" -> "10"
+        VALUE_ON -> "1"
         else -> VALUE_OFF
     }
 }

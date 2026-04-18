@@ -54,6 +54,7 @@ class BiliSecurityCoordinator(
 
     private val prewarmMutex = Mutex()
     private val ensureHealthyMutex = Mutex()
+    private val wbiKeysMutex = Mutex()
 
     private var lastPrewarmTimestampMs: Long = 0L
     private var lastEnsureHealthyForPlayMs: Long = 0L
@@ -185,6 +186,12 @@ class BiliSecurityCoordinator(
         }
     }
 
+    suspend fun ensureWbiKeys() {
+        wbiKeysMutex.withLock {
+            ensureBiliTicket()
+        }
+    }
+
     fun resetRuntimeState() {
         lastPrewarmTimestampMs = 0L
         lastEnsureHealthyForPlayMs = 0L
@@ -248,9 +255,10 @@ class BiliSecurityCoordinator(
 
             runCatching {
                 val ts = (nowMs / 1000).toString()
+                val csrf = cookieManager.getCsrfToken()
                 val hexsign = hmacSha256Hex(key = BILI_TICKET_HMAC_KEY, message = "ts$ts")
                 val url = "https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket" +
-                    "?key_id=$BILI_TICKET_KEY_ID&hexsign=$hexsign&context[ts]=$ts"
+                    "?key_id=$BILI_TICKET_KEY_ID&hexsign=$hexsign&context[ts]=$ts&csrf=$csrf"
                 val request = okhttp3.Request.Builder()
                     .url(url)
                     .post(ByteArray(0).toRequestBody("application/json".toMediaType()))

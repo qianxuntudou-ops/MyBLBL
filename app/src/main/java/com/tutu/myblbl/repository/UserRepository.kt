@@ -38,6 +38,7 @@ class UserRepository(
     }
     
     suspend fun getUserSpace(mid: Long): BaseResponse<UserSpaceInfo> {
+        ensureWbiKeysIfNeeded()
         val params = mapOf("mid" to mid.toString())
         val wbiKeys = sessionGateway.getWbiKeys()
         val signedParams = WbiGenerator.generateWbiParams(params, wbiKeys.first, wbiKeys.second)
@@ -123,6 +124,7 @@ class UserRepository(
         pageSize: Int = 20
     ): Result<BaseResponse<UserDynamicResponse>> =
         runCatching {
+            ensureWbiKeysIfNeeded()
             val params = mapOf(
                 "mid" to mid.toString(),
                 "pn" to page.toString(),
@@ -167,4 +169,11 @@ class UserRepository(
                 ?: refreshCurrentUserInfo().getOrThrow().mid.takeIf { it > 0L }
                 ?: throw IllegalStateException("未获取到当前用户信息")
         }
+
+    private suspend fun ensureWbiKeysIfNeeded() {
+        val keys = sessionGateway.getWbiKeys()
+        if (keys.first.isBlank() || keys.second.isBlank() || sessionGateway.areWbiKeysStale()) {
+            runCatching { sessionGateway.ensureWbiKeys() }
+        }
+    }
 }

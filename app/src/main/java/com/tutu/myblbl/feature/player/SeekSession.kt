@@ -31,10 +31,13 @@ class SeekSession(
     private var speedIndex = 0
     private var originalSpeed = 1f
     private var speedStepRunnable: Runnable? = null
-    private val speeds = floatArrayOf(2f, 4f, 8f, 16f)
+    private var rewindTickRunnable: Runnable? = null
+    private val speeds = floatArrayOf(2f, 4f, 8f, 16f, 32f)
     private val longPressThresholdMs = 300L
-    private val speedStepIntervalMs = 1500L
+    private val speedStepIntervalMs = 500L
+    private val rewindTickIntervalMs = 100L
     private var pendingRunnable: Runnable? = null
+    var speedChangedListener: ((Boolean, Float) -> Unit)? = null
 
     fun startTapSeek(forward: Boolean, seekMs: Long) {
         val player = playerProvider() ?: return
@@ -74,6 +77,11 @@ class SeekSession(
 
         if (!forward) {
             doRewindTick()
+            val pending = Runnable {
+                scheduleNextRewindTick()
+            }
+            pendingRunnable = pending
+            handler.postDelayed(pending, longPressThresholdMs)
         } else {
             originalSpeed = player.playbackParameters.speed
             val pending = Runnable {
@@ -118,6 +126,7 @@ class SeekSession(
         if (mode == Mode.HOLD || mode == Mode.SPEED_MODE) {
             cancelPendingRunnable()
             cancelSpeedStepRunnable()
+            cancelRewindTickRunnable()
             if (isSpeedMode && isForward) {
                 val player = playerProvider()
                 if (player != null) {
@@ -132,6 +141,11 @@ class SeekSession(
             coordinator.transition(UiEvent.SeekTypeChanged(SeekType.HOLD))
             if (!forward) {
                 doRewindTick()
+                val pending = Runnable {
+                    scheduleNextRewindTick()
+                }
+                pendingRunnable = pending
+                handler.postDelayed(pending, longPressThresholdMs)
             } else {
                 originalSpeed = playerProvider()?.playbackParameters?.speed ?: 1f
                 val pending = Runnable {
@@ -173,6 +187,7 @@ class SeekSession(
     fun finishSeek() {
         cancelPendingRunnable()
         cancelSpeedStepRunnable()
+        cancelRewindTickRunnable()
         if (isSpeedMode) {
             isSpeedMode = false
             speedIndex = 0
@@ -191,6 +206,7 @@ class SeekSession(
     fun cancel() {
         cancelPendingRunnable()
         cancelSpeedStepRunnable()
+        cancelRewindTickRunnable()
         isSpeedMode = false
         speedIndex = 0
         if (mode == Mode.SPEED_MODE && isForward) {
@@ -216,6 +232,7 @@ class SeekSession(
         val player = playerProvider() ?: return
         if (!player.isPlaying) player.play()
         player.playbackParameters = PlaybackParameters(speeds[0])
+        speedChangedListener?.invoke(isForward, speeds[0])
         scheduleNextSpeedStep()
     }
 
@@ -226,10 +243,23 @@ class SeekSession(
             speedIndex++
             val speed = speeds[speedIndex]
             playerProvider()?.playbackParameters = PlaybackParameters(speed)
+            speedChangedListener?.invoke(isForward, speed)
             scheduleNextSpeedStep()
         }
         speedStepRunnable = runnable
         handler.postDelayed(runnable, speedStepIntervalMs)
+    }
+
+    private fun scheduleNextRewindTick() {
+        cancelRewindTickRunnable()
+        val runnable = Runnable {
+            if (mode == Mode.HOLD && !isForward) {
+                doRewindTick()
+                scheduleNextRewindTick()
+            }
+        }
+        rewindTickRunnable = runnable
+        handler.postDelayed(runnable, rewindTickIntervalMs)
     }
 
     private fun cancelPendingRunnable() {
@@ -240,5 +270,10 @@ class SeekSession(
     private fun cancelSpeedStepRunnable() {
         speedStepRunnable?.let { handler.removeCallbacks(it) }
         speedStepRunnable = null
+    }
+
+    private fun cancelRewindTickRunnable() {
+        rewindTickRunnable?.let { handler.removeCallbacks(it) }
+        rewindTickRunnable = null
     }
 }

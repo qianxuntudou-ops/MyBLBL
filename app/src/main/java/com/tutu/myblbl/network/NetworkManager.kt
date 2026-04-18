@@ -199,6 +199,10 @@ object NetworkManager {
         return securityCoordinator.buildPiliWebHeaders(targetUrl, includeCookie)
     }
 
+    suspend fun ensureWbiKeys() {
+        securityCoordinator.ensureWbiKeys()
+    }
+
     fun getUserInfo(): UserDetailInfoModel? {
         return sessionStore.getUserInfo()
     }

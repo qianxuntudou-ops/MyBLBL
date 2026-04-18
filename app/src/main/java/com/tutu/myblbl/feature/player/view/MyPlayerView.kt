@@ -133,6 +133,12 @@ class MyPlayerView @JvmOverloads constructor(
     private var uiCoordinator: com.tutu.myblbl.feature.player.PlaybackUiCoordinator? = null
 
     var seekSession: com.tutu.myblbl.feature.player.SeekSession? = null
+        set(value) {
+            field = value
+            value?.speedChangedListener = { forward, speed ->
+                tapOverlayView?.showSpeedSeek(forward, speed)
+            }
+        }
     private val heldSeekKeyCodes = mutableSetOf<Int>()
     private var pendingExitSeekProgressOnly: Runnable? = null
 
@@ -715,21 +721,13 @@ class MyPlayerView @JvmOverloads constructor(
             if (event.repeatCount == 0) {
                 heldSeekKeyCodes.add(event.keyCode)
             }
-            if (event.repeatCount == 0 && !session.isActive()) {
-                // 无活跃 session：单次即时 seek，只显示中央图标+秒数
-                doSingleKeySeek(forward)
-            } else {
-                // 长按 或 反向键切换
-                if (!session.isActive()) {
-                    controller?.enterSeekProgressOnly()
-                    session.startHoldSeek(forward)
-                } else if (session.isForwardDirection() != forward) {
-                    session.changeDirection(forward)
-                } else if (!session.isForwardDirection() && !session.isInSpeedMode()) {
-                    session.doRewindTick()
-                }
-                updateHoldSeekOverlay(session, forward)
+            if (!session.isActive()) {
+                controller?.enterSeekProgressOnly()
+                session.startHoldSeek(forward)
+            } else if (session.isForwardDirection() != forward) {
+                session.changeDirection(forward)
             }
+            updateHoldSeekOverlay(session, forward)
             return true
         } else if (event.action == KeyEvent.ACTION_UP) {
             heldSeekKeyCodes.remove(event.keyCode)
@@ -835,8 +833,6 @@ class MyPlayerView @JvmOverloads constructor(
         val positionMs = currentPlayer.currentPosition.coerceAtLeast(0L)
         val durationMs = currentPlayer.duration
         if (session.isInSpeedMode()) {
-            // 倍速模式：显示速度指示器 + 更新进度条位置
-            tapOverlayView?.showSpeedSeek(forward, currentPlayer.playbackParameters.speed)
             controller?.beginSeekPreview(positionMs)
         } else if (!forward) {
             // 快退：每次 tick 累积秒数（beginSeekPreview 由 seekPreviewRenderer 调用）

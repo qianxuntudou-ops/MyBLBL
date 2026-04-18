@@ -316,7 +316,7 @@ class YouTubeOverlay @JvmOverloads constructor(
             secondsView.hidePreview()
         }
 
-        val overlayX = if (forward) width * 0.75f else width * 0.25f
+        val overlayX = if (forward) width * 0.7f else width * 0.3f
         val overlayY = height / 2f
         circleClipTapView.animate {
             circleClipTapView.setTapPosition(overlayX, overlayY)
@@ -378,7 +378,7 @@ class YouTubeOverlay @JvmOverloads constructor(
 
         secondsView.visibility = View.VISIBLE
         secondsView.setSpeedText(speed)
-        val overlayX = if (forward) width * 0.75f else width * 0.25f
+        val overlayX = if (forward) width * 0.7f else width * 0.3f
         circleClipTapView.animate {
             circleClipTapView.setTapPosition(overlayX, height / 2f)
         }
@@ -551,10 +551,14 @@ class YouTubeOverlay @JvmOverloads constructor(
         when (mode) {
             IndicatorLayoutMode.START -> {
                 constraintSet.connect(secondsView.id, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+                constraintSet.connect(secondsView.id, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+                constraintSet.setHorizontalBias(secondsView.id, 0.3f)
             }
 
             IndicatorLayoutMode.END -> {
+                constraintSet.connect(secondsView.id, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
                 constraintSet.connect(secondsView.id, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+                constraintSet.setHorizontalBias(secondsView.id, 0.7f)
             }
 
             IndicatorLayoutMode.CENTER -> {

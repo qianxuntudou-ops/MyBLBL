@@ -69,9 +69,9 @@
         android:letterSpacing="0.01"
         android:padding="4dp"
         android:shadowColor="@color/black"
-        android:shadowDx="1.2"
-        android:shadowDy="1.0"
-        android:shadowRadius="2.2"
+        android:shadowDx="0"
+        android:shadowDy="0"
+        android:shadowRadius="5"
         android:textColor="@android:color/white"
         android:textSize="23sp" />
 </LinearLayout>

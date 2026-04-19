@@ -28,9 +28,12 @@
 
 
 ## APP 截图
-
+APP主界面
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b746a1dd-8243-4378-a1ea-c023460323b7" />
+播放主界面和弹幕
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/4a0199e0-64a0-4762-9d45-8ec2ff58524a" />
+屏蔽功能
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/cae6be14-85cb-41e0-bfee-098214ffbb43" />
 
 
 ## 🙏 感谢

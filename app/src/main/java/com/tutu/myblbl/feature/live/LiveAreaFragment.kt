@@ -10,7 +10,6 @@ import com.tutu.myblbl.model.live.LiveAreaCategoryParent
 import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.common.ext.serializableCompat
@@ -19,7 +18,6 @@ import androidx.recyclerview.widget.RecyclerView
 class LiveAreaFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveTabPage {
 
     companion object {
-        private const val TAG = "MainEntryFocus"
         private const val ARG_CATEGORY = "category"
 
         fun newInstance(category: LiveAreaCategoryParent): LiveAreaFragment {
@@ -64,16 +62,11 @@ class LiveAreaFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveTabPag
 
     override fun focusPrimaryContent(): Boolean {
         if (!isAdded || view == null || adapter.itemCount == 0) {
-            AppLog.d(TAG, "LiveAreaFragment.focusPrimaryContent failed: itemCount=${adapter.itemCount}")
             return false
         }
         val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
             recyclerView = binding.recyclerView,
             itemCount = adapter.itemCount
-        )
-        AppLog.d(
-            TAG,
-            "LiveAreaFragment.focusPrimaryContent recycler: handled=${result.handled} deferred=${result.deferred} pos=${result.position} source=${result.source}"
         )
         return result.resolved
     }
@@ -86,7 +79,6 @@ class LiveAreaFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveTabPag
                 direction = View.FOCUS_RIGHT,
                 fallback = null
             )
-            AppLog.d(TAG, "LiveAreaFragment.focusPrimaryContent spatialEntry: handled=$handled")
             if (handled) {
                 return true
             }

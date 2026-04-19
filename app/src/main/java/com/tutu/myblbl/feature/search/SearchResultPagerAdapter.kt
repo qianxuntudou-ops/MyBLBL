@@ -3,7 +3,7 @@ package com.tutu.myblbl.feature.search
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.util.Log
+
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
@@ -65,7 +65,6 @@ class SearchResultPagerAdapter(
         initialHasMore: Map<SearchType, Boolean> = emptyMap()
     ) {
         val existing = currentList.associateBy { it.type }
-        Log.d("SearchPager", "setPages: categories=${categories.size}, existingPages=${existing.keys}")
         val newPages = categories.map { category ->
             val existingItems = existing[category.type]?.items
             val items = initialItems[category.type]?.toMutableList()
@@ -103,7 +102,6 @@ class SearchResultPagerAdapter(
     }
 
     fun submitState(type: SearchType, items: List<SearchItemModel>, loading: Boolean, hasMore: Boolean) {
-        Log.d("SearchPager", "submitState: type=$type, items=${items.size}, loading=$loading, hasMore=$hasMore, hasHolder=${holders.containsKey(type)}")
         val state = PendingState(items, loading, hasMore)
         pendingStates[type] = state
         val page = currentList.firstOrNull { it.type == type }
@@ -201,7 +199,6 @@ class SearchResultPagerAdapter(
 
         fun submit(page: SearchResultPage) {
             val filteredItems = ContentFilter.filterSearchItems(binding.root.context, page.items)
-            Log.d("SearchPager", "submit: type=${page.type}, rawItems=${page.items.size}, filteredItems=${filteredItems.size}, loading=${page.loading}, showEmpty=${!page.loading && filteredItems.isEmpty()}")
             val applyUiState = {
                 currentAdapter?.setItems(filteredItems)
                 binding.recyclerViewResult.isVisible = filteredItems.isNotEmpty()

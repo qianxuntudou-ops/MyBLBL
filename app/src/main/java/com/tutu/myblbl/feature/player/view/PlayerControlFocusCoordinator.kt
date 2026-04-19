@@ -4,7 +4,6 @@ import android.os.Handler
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import com.tutu.myblbl.core.common.log.AppLog
 
 /**
  * Centralizes focus routing and focus restoration for the controller chrome.
@@ -68,10 +67,6 @@ internal class PlayerControlFocusCoordinator(
         this.onVisibleFocusSettled = onVisibleFocusSettled
         views.forEach { view ->
             view.setOnFocusChangeListener { focusedView, hasFocus ->
-                AppLog.d(
-                    "FocusDebug",
-                    "controlFocus: view=${focusedView.javaClass.simpleName}#${focusedView.idName()}, hasFocus=$hasFocus"
-                )
                 handler.removeCallbacks(focusStabilizeRunnable)
                 if (hasFocus && isHostVisible()) {
                     handler.postDelayed(focusStabilizeRunnable, 80)
@@ -85,10 +80,6 @@ internal class PlayerControlFocusCoordinator(
     }
 
     fun handleDpadWhenSuperNotHandled(event: KeyEvent, focused: View?): Boolean {
-        AppLog.d(
-            "FocusDebug",
-            "handleDpad: keyCode=${event.keyCode}, focused=${focused?.javaClass?.simpleName}#${focused?.idName()}"
-        )
         when (event.keyCode) {
             KeyEvent.KEYCODE_DPAD_UP -> {
                 if (focused == null) {
@@ -152,7 +143,6 @@ internal class PlayerControlFocusCoordinator(
         onRewind: () -> Unit,
         onFastForward: () -> Unit
     ) {
-        AppLog.d("KeyTrace", "focusButtonByKeyDown: keyCode=${event.keyCode}, action=${event.action}")
         if (event.action != KeyEvent.ACTION_DOWN) {
             return
         }
@@ -177,7 +167,6 @@ internal class PlayerControlFocusCoordinator(
         val result = if (buttonPlay.visibility == View.VISIBLE) {
             buttonPlay.requestFocus()
         } else false
-        AppLog.d("KeyTrace", "requestPlayPauseFocus: buttonVisible=${buttonPlay.visibility == View.VISIBLE}, requestFocusResult=$result, actuallyFocused=${buttonPlay.isFocused}")
     }
 
     fun requestTimeBarFocus() {

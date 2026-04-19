@@ -16,7 +16,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellVideoBinding
 import com.tutu.myblbl.model.video.HistoryVideoModel
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.common.format.NumberUtils
 import com.tutu.myblbl.core.common.time.TimeUtils

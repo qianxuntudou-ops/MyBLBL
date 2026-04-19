@@ -27,7 +27,6 @@ import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
 import com.tutu.myblbl.core.ui.decoration.LinearSpacingItemDecoration
-import com.tutu.myblbl.core.common.log.AppLog
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
@@ -40,7 +39,6 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
     }
 
     companion object {
-        private const val TAG = "AllSeriesFocus"
         private const val ARG_SEASON_TYPE = "seasonType"
         private const val ARG_MORE_URL = "moreUrl"
         private const val ARG_ENTRY_TITLE = "entryTitle"
@@ -116,7 +114,6 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             onRightEdge = ::focusFilterPanel,
             onItemFocused = {
                 lastFocusedArea = FocusArea.CONTENT
-                AppLog.d(TAG, "content onItemFocused: currentFocus=${describeView(binding.root.findFocus())}")
                 setFilterExpanded(false, animate = false)
             }
         )
@@ -124,7 +121,6 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             onItemClick = ::showFilterOptions,
             onItemFocused = {
                 lastFocusedArea = FocusArea.FILTER
-                AppLog.d(TAG, "filter onItemFocused: currentFocus=${describeView(binding.root.findFocus())}")
                 setFilterExpanded(true, animate = false)
             },
             onTopEdgeUp = ::focusBackButton,
@@ -144,12 +140,10 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         binding.buttonBack1.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
                 lastFocusedArea = FocusArea.BACK
-                AppLog.d(TAG, "back focused: currentFocus=${describeView(binding.root.findFocus())}")
             }
         }
         binding.buttonBack1.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                AppLog.d(TAG, "back key DOWN: currentFocus=${describeView(binding.root.findFocus())}")
                 focusContentGrid() || focusFilterPanel()
             } else {
                 false
@@ -366,10 +360,6 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             FocusArea.FILTER -> focusFilterPanel() || focusContentGrid() || focusBackButton()
             FocusArea.BACK -> focusBackButton() || focusContentGrid() || focusFilterPanel()
         }
-        AppLog.d(
-            TAG,
-            "restoreFocus: area=$lastFocusedArea handled=$handled currentFocus=${describeView(binding.root.findFocus())}"
-        )
         return handled
     }
 
@@ -379,24 +369,17 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
 
     private fun focusBackButton(): Boolean {
         val handled = binding.buttonBack1.requestFocus()
-        AppLog.d(TAG, "focusBackButton: handled=$handled currentFocus=${describeView(binding.root.findFocus())}")
         return handled
     }
 
     private fun focusFilterPanel(): Boolean {
         lastFocusedArea = FocusArea.FILTER
-        AppLog.d(
-            TAG,
-            "focusFilterPanel start: expanded=$isFilterExpanded currentFocus=${describeView(binding.root.findFocus())}"
-        )
         setFilterExpanded(true, animate = false)
         val restoredNow = filterAdapter.requestSavedItemFocus(binding.recyclerViewFilter)
-        AppLog.d(TAG, "focusFilterPanel immediate requestSavedItemFocus: handled=$restoredNow")
         if (restoredNow) {
             return true
         }
         val firstHandledNow = requestFirstFilterFocus()
-        AppLog.d(TAG, "focusFilterPanel immediate requestFirstFilterFocus: handled=$firstHandledNow")
         if (firstHandledNow) {
             return true
         }
@@ -404,24 +387,17 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             if (!isAdded || view == null) {
                 return@post
             }
-            AppLog.d(
-                TAG,
-                "focusFilterPanel post: currentFocus=${describeView(binding.root.findFocus())}"
-            )
             val restored = filterAdapter.requestSavedItemFocus(binding.recyclerViewFilter)
-            AppLog.d(TAG, "focusFilterPanel requestSavedItemFocus: handled=$restored")
             if (restored) {
                 return@post
             }
             val firstHandled = requestFirstFilterFocus()
-            AppLog.d(TAG, "focusFilterPanel requestFirstFilterFocus: handled=$firstHandled")
         }
         return true
     }
 
     private fun requestFirstFilterFocus(): Boolean {
         val handled = filterAdapter.requestItemFocus(binding.recyclerViewFilter, 0)
-        AppLog.d(TAG, "requestFirstFilterFocus: handled=$handled")
         return handled
     }
 
@@ -442,7 +418,6 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             return true
         }
         val handled = adapter.requestFocusedView() || requestFirstContentCardFocus()
-        AppLog.d(TAG, "focusContentGrid: handled=$handled currentFocus=${describeView(binding.root.findFocus())}")
         return handled
     }
 
@@ -486,7 +461,6 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             recyclerView = binding.recyclerView,
             position = 0
         )
-        AppLog.d(TAG, "requestFirstContentCardFocus deferred: handled=${result.handled} deferred=${result.deferred}")
         return true
     }
 
@@ -508,17 +482,9 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         )
         val currentWidth = binding.viewFilter.layoutParams.width.takeIf { it > 0 } ?: targetWidth
         if (isFilterExpanded == expanded && currentWidth == targetWidth) {
-            AppLog.d(
-                TAG,
-                "setFilterExpanded skip: expanded=$expanded animate=$animate currentFocus=${describeView(binding.root.findFocus())}"
-            )
             return
         }
         isFilterExpanded = expanded
-        AppLog.d(
-            TAG,
-            "setFilterExpanded: expanded=$expanded animate=$animate currentFocus=${describeView(binding.root.findFocus())}"
-        )
         filterAdapter.setExpanded(expanded)
         binding.viewFilter.animate().cancel()
         if (animate) {
@@ -581,10 +547,6 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         }
         val spanCount = fixedSpanCount
         if (force || gridLayoutManager.spanCount != spanCount) {
-            AppLog.d(
-                TAG,
-                "updateContentGridMetrics: width=$availableWidth spanCount=${gridLayoutManager.spanCount}->$spanCount"
-            )
             gridLayoutManager.spanCount = spanCount
         }
     }

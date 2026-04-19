@@ -51,10 +51,6 @@ class LiveRepository(
             )
             if (v2Response.code == 0 && v2Response.data != null) {
                 parseV2PlayInfo(v2Response.data)?.let { playInfo ->
-                    AppLog.d(
-                        TAG,
-                        "getLivePlayInfo v2 success: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, qn=$quality, urls=${playInfo.durl?.size ?: 0}"
-                    )
                     return@runCatching playInfo
                 }
                 AppLog.e(
@@ -70,10 +66,6 @@ class LiveRepository(
 
             val legacyResponse = apiService.getLivePlayInfo(roomInfo.realRoomId, quality)
             if (legacyResponse.code == 0 && legacyResponse.data != null) {
-                AppLog.d(
-                    TAG,
-                    "getLivePlayInfo legacy success: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, qn=$quality, urls=${legacyResponse.data.durl?.size ?: 0}"
-                )
                 legacyResponse.data
             } else {
                 AppLog.e(
@@ -84,7 +76,7 @@ class LiveRepository(
             }
         }
     }
-    
+
     suspend fun getRecommendLive(@Suppress("UNUSED_PARAMETER") page: Int, pageSize: Int): Result<List<LiveRoomItem>> {
         return runCatching {
             val response = apiService.getLiveHomeList()
@@ -109,7 +101,7 @@ class LiveRepository(
             }
         }
     }
-    
+
     suspend fun getAreaLive(
         parentAreaId: Long,
         areaId: Long,
@@ -132,7 +124,7 @@ class LiveRepository(
             }
         }
     }
-    
+
     suspend fun getLiveAreas(): Result<List<LiveAreaCategoryParent>> {
         return runCatching {
             val response = apiService.getLiveArea()
@@ -322,9 +314,6 @@ class LiveRepository(
 
     private fun buildWbiParams(params: Map<String, String>): Map<String, String> {
         val (imgKey, subKey) = sessionGateway.getWbiKeys()
-        AppLog.d(TAG, "buildWbiParams: imgKey=${imgKey.take(8)}..., subKey=${subKey.take(8)}..., params=$params")
-        val result = com.tutu.myblbl.network.WbiGenerator.generateWbiParams(params, imgKey, subKey)
-        AppLog.d(TAG, "buildWbiParams result: w_rid=${result["w_rid"]}, wts=${result["wts"]}")
-        return result
+        return com.tutu.myblbl.network.WbiGenerator.generateWbiParams(params, imgKey, subKey)
     }
 }

@@ -11,14 +11,12 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.tutu.myblbl.databinding.FragmentBaseListBinding
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 
 abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>() {
 
     companion object {
-        private const val TAG = "MainEntryFocus"
         val sharedVideoPool by lazy {
             RecyclerView.RecycledViewPool().apply {
                 setMaxRecycledViews(0, 20)
@@ -157,7 +155,6 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
     open fun focusPrimaryContent(): Boolean {
         if (!isAdded || view == null) return false
         if (TabContentFocusHelper.requestVisibleFocus(buttonRetry, viewError)) {
-            AppLog.d(TAG, "${javaClass.simpleName}.focusPrimaryContent stateTarget: handled=true")
             return true
         }
         val rv = recyclerView ?: return false
@@ -168,10 +165,6 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
                 val handled = fv.requestFocus()
                 val pos = findRecyclerViewChild(rv, fv)?.let { rv.getChildAdapterPosition(it) }
                     ?: RecyclerView.NO_POSITION
-                AppLog.d(
-                    TAG,
-                    "${javaClass.simpleName}.focusPrimaryContent restoreFocusedView: handled=$handled pos=$pos view=${describeView(fv)}"
-                )
                 return handled
             }
         }
@@ -185,10 +178,6 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
                 scrollIfMissing = false
             )
             if (restoreResult.handled || restoreResult.deferred) {
-                AppLog.d(
-                    TAG,
-                    "${javaClass.simpleName}.focusPrimaryContent remembered: handled=${restoreResult.handled} deferred=${restoreResult.deferred} pos=$boundedPosition"
-                )
                 return true
             }
         }
@@ -198,17 +187,9 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
             itemCount = adp.contentCount()
         )
         if (focusResult.resolved) {
-            AppLog.d(
-                TAG,
-                "${javaClass.simpleName}.focusPrimaryContent recycler: handled=${focusResult.handled} deferred=${focusResult.deferred} pos=${focusResult.position} source=${focusResult.source}"
-            )
             return true
         }
 
-        AppLog.d(
-            TAG,
-            "${javaClass.simpleName}.focusPrimaryContent failed: childCount=${rv.childCount} itemCount=${adp.contentCount()} focusedView=${describeView(adp.focusedView)}"
-        )
         return false
     }
 
@@ -221,10 +202,6 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
                     root = rv,
                     direction = View.FOCUS_RIGHT,
                     fallback = null
-                )
-                AppLog.d(
-                    TAG,
-                    "${javaClass.simpleName}.focusPrimaryContent spatialEntry: handled=$handled anchor=${describeView(anchorView)}"
                 )
                 if (handled) {
                     return true
@@ -240,10 +217,6 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
             val rv = recyclerView ?: return
             val currentFocusedView = activity?.currentFocus
             if (currentFocusedView != null && !currentFocusedView.isDescendantOf(rv)) {
-                AppLog.d(
-                    TAG,
-                    "${javaClass.simpleName}.onHiddenChanged skipRestore: currentFocus=${describeView(currentFocusedView)}"
-                )
                 return
             }
             val fv = adapter?.focusedView

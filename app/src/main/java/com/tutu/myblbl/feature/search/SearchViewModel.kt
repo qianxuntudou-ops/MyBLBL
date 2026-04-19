@@ -11,7 +11,7 @@ import com.tutu.myblbl.model.search.SearchType
 import com.tutu.myblbl.model.search.SearchVideoOrder
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.repository.SearchRepository
-import android.util.Log
+import com.tutu.myblbl.core.common.log.AppLog
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -105,13 +105,11 @@ class SearchViewModel(
         searchAllJob = viewModelScope.launch {
             val requestKeyword = keyword
             _loading.value = true
-            Log.d("SearchVM", "searchAll start: keyword=$keyword")
             _searchOverview.value = null
             _searchCategories.value = emptyList()
             _searchPageStates.value = emptyMap()
 
             val result = searchRepository.searchAll(keyword)
-            Log.d("SearchVM", "searchAll api done: keyword=$requestKeyword, cancelled=${activeKeyword != requestKeyword}")
             if (activeKeyword != requestKeyword) {
                 return@launch
             }
@@ -120,13 +118,12 @@ class SearchViewModel(
                 onSuccess = { overview ->
                     val categories = buildCategories(overview)
                     val pageStates = buildInitialPageStates(overview, categories)
-                    Log.d("SearchVM", "searchAll success: categories=${categories.size}, pageStates=${pageStates.map { "${it.key}=items:${it.value.items.size},page:${it.value.page}" }}")
                     _searchOverview.value = overview
                     _searchPageStates.value = pageStates
                     _searchCategories.value = categories
                 },
                 onFailure = {
-                    Log.e("SearchVM", "searchAll failure: keyword=$requestKeyword", it)
+                    AppLog.e("SearchVM", "searchAll failure: keyword=$requestKeyword", it)
                     _searchOverview.value = null
                     _searchCategories.value = emptyList()
                     _searchPageStates.value = emptyMap()

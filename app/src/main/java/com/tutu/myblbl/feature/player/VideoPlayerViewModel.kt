@@ -458,7 +458,6 @@ class VideoPlayerViewModel(
         currentCid = cid
         currentSeasonId = seasonId.takeIf { it > 0L }
         currentEpId = epId.takeIf { it > 0L }
-        AppLog.d(TAG, "loadVideoInfo: aid=$aid, bvid=$bvid, cid=$cid, epId=$epId, seasonId=$seasonId, isPgc=${(epId ?: 0L) > 0L || (seasonId ?: 0L) > 0L}")
         currentPlayInfo = null
         currentSubtitleData = null
         currentGraphVersion = 0L
@@ -733,7 +732,6 @@ class VideoPlayerViewModel(
 
         // Temporarily disabled LIST_TOUCH prefetch due to Koin dependency issues
         if (target?.source == PlaybackPreloadTarget.Source.LIST_TOUCH) {
-            AppLog.d(TAG, "preloadPlayback:skipped source=LIST_TOUCH disabled")
             return
         }
 
@@ -749,7 +747,6 @@ class VideoPlayerViewModel(
             return
         }
 
-        AppLog.d(TAG, "playurlPrefetch:start source=${target.source} bvid=${identity.bvid} cid=${identity.cid} aid=${identity.aid} epId=${identity.epId}")
 
         preloadJob?.cancel()
         preloadedPlayback = null
@@ -771,16 +768,11 @@ class VideoPlayerViewModel(
             preloadingIdentity = null
             preloadJob = null
             if (preparedPlayback == null) {
-                AppLog.d(TAG, "playurlPrefetch:failed source=${target.source} cid=${identity.cid}")
                 return@launch
             }
             preloadedPlayback = PreloadedPlayback(
                 source = target.source,
                 preparedPlayback = preparedPlayback
-            )
-            AppLog.d(
-                TAG,
-                "playurlPrefetch:done source=${target.source} cid=${identity.cid} quality=${preparedPlayback.selectionSnapshot.selectedQualityId} cost=${preparedPlayback.requestDurationMs}ms"
             )
         }
     }
@@ -833,7 +825,6 @@ class VideoPlayerViewModel(
                 if (result.isSuccess) break
                 attempt++
                 if (attempt < 2) {
-                    AppLog.w(TAG, "reportPlaybackHeartbeat attempt $attempt failed, retrying: ${result.exceptionOrNull()?.message}")
                     delay(2000L)
                 } else {
                     AppLog.e(TAG, "reportPlaybackHeartbeat failed after retries: ${result.exceptionOrNull()?.message}", result.exceptionOrNull())
@@ -930,9 +921,7 @@ class VideoPlayerViewModel(
                     replaceInPlace = replaceInPlace
                 )
                 if (preparedPlayback != null) {
-                    AppLog.d(TAG, "loadPlayUrl: preload path totalCost=${System.currentTimeMillis() - loadStartMs}ms cid=${identity.cid}")
                 } else {
-                    AppLog.d(TAG, "loadPlayUrl: fresh request path cid=${identity.cid}")
                 }
                 val resolvedPlayback = preparedPlayback ?: requestPreparedPlayback(
                     identity = identity,
@@ -946,7 +935,6 @@ class VideoPlayerViewModel(
                     _error.value = "播放地址请求失败"
                     return@launch
                 }
-                AppLog.d(TAG, "loadPlayUrl: prepared, applying... cid=${identity.cid}")
                 applyPreparedPlayback(resolvedPlayback)
             } catch (e: Exception) {
                 AppLog.e(TAG, "loadPlayUrl exception: ${e.message}", e)
@@ -965,10 +953,6 @@ class VideoPlayerViewModel(
         val detail = detailResponse.result
         if (!detailResponse.isSuccess || detail == null) {
             if (shouldFallbackToUgcPlayback(detailResponse)) {
-                AppLog.d(
-                    TAG,
-                    "loadPgcVideoInfo fallback to ugc: seasonId=${seasonId ?: 0L}, epId=${epId ?: 0L}, aid=${currentAid ?: 0L}, bvid=${currentBvid.orEmpty()}, cid=$currentCid"
-                )
                 currentSeasonId = null
                 currentEpId = null
                 loadUgcVideoInfo(preferLastPlayTime = true, loadGeneration = loadGeneration)
@@ -1019,10 +1003,6 @@ class VideoPlayerViewModel(
         _relatedVideos.value = emptyList()
         _subtitles.value = emptyList()
 
-        AppLog.d(
-            TAG,
-            "loadPgcVideoInfo success: seasonId=${currentSeasonId ?: 0L}, epId=${currentEpId ?: 0L}, aid=${currentAid ?: 0L}, bvid=${currentBvid.orEmpty()}, cid=$currentCid, episodes=${episodeItems.size}, selectedIndex=$selectedIndex"
-        )
 
         if (currentCid <= 0L) {
             _error.value = "未找到可播放剧集"
@@ -1037,7 +1017,6 @@ class VideoPlayerViewModel(
         val preparedPlaybackDeferred = initialIdentity
             ?.takeIf { it.cid > 0L && !it.bvid.isNullOrBlank() }
             ?.let { identity ->
-                AppLog.d(TAG, "detailPrefetch:speculative playurl:start cid=${identity.cid} bvid=${identity.bvid}")
                 async {
                     requestPreparedPlayback(
                         identity = identity,
@@ -1047,7 +1026,6 @@ class VideoPlayerViewModel(
                 }
             }
         if (preparedPlaybackDeferred == null && initialIdentity != null) {
-            AppLog.d(TAG, "detailPrefetch:speculative playurl:skipped cid=${initialIdentity.cid} bvid=${initialIdentity.bvid}")
         }
         val detailResponse = apiService.getVideoDetail(currentAid, currentBvid)
         if (!detailResponse.isSuccess || detailResponse.data == null) {
@@ -1070,7 +1048,6 @@ class VideoPlayerViewModel(
         val pgcEpId = parseEpIdFromBangumiUrl(redirectUrl)
         if (pgcEpId > 0L) {
             val pgcSeasonId = parseSeasonIdFromBangumiUrl(redirectUrl)
-            AppLog.d(TAG, "loadUgcVideoInfo: detected PGC redirectUrl=$redirectUrl, epId=$pgcEpId, seasonId=$pgcSeasonId, switching to PGC path")
             currentEpId = pgcEpId
             currentSeasonId = pgcSeasonId.takeIf { it > 0L }
             loadPgcVideoInfo(loadGeneration)
@@ -1106,11 +1083,9 @@ class VideoPlayerViewModel(
             preparedPlaybackDeferred != null &&
             canReusePreparedPlayback(initialIdentity, resolvedIdentity)
         ) {
-            AppLog.d(TAG, "detailPrefetch:speculative playurl:reusing cid=${resolvedIdentity?.cid}")
             preparedPlaybackDeferred.await()
         } else {
             if (preparedPlaybackDeferred != null) {
-                AppLog.d(TAG, "detailPrefetch:speculative playurl:discarded identityChanged initialCid=${initialIdentity?.cid} resolvedCid=${resolvedIdentity?.cid}")
             }
             null
         }
@@ -1167,7 +1142,6 @@ class VideoPlayerViewModel(
         suppressUiSignals: Boolean = false
     ): PreparedPlayback? {
         val requestStartMs = System.currentTimeMillis()
-        AppLog.d(TAG, "playurl:start cid=${identity.cid}")
         val preferredQualityId = qualityCandidates.firstOrNull()
             ?: requestedQualityId
             ?: selectedQualityId
@@ -1183,9 +1157,7 @@ class VideoPlayerViewModel(
         }
 
         if (cachedPlayInfo != null) {
-            AppLog.d(TAG, "playurlCache:hit bvid=${identity.bvid} cid=${identity.cid}")
         } else {
-            AppLog.d(TAG, "playurlCache:miss bvid=${identity.bvid} cid=${identity.cid} hasBvid=${!identity.bvid.isNullOrBlank()} replaceInPlace=$replaceInPlace preferLastPlayTime=$preferLastPlayTime")
         }
 
         val (initialPlayInfo, effectiveRequestedQualityId) = if (cachedPlayInfo != null) {
@@ -1204,7 +1176,6 @@ class VideoPlayerViewModel(
             if (!response.isSuccess || response.data == null) {
                 val vVoucher = response.vVoucher.trim()
                 if (vVoucher.isNotBlank()) {
-                    AppLog.w(TAG, "loadPlayUrl v_voucher detected, posting to UI: vVoucherLen=${vVoucher.length}")
                     if (!suppressUiSignals) {
                         appSettings.putStringAsync("gaia_vgate_v_voucher", vVoucher)
                         appSettings.putStringAsync("gaia_vgate_v_voucher_saved_at_ms", System.currentTimeMillis().toString())
@@ -1252,9 +1223,7 @@ class VideoPlayerViewModel(
         if (selectionSnapshot.selectedQualityId != resolvedQualityId) {
             selectionSnapshot = selectionSnapshot.copy(selectedQualityId = resolvedQualityId)
         }
-        AppLog.d(TAG, "playurl:done cost=${System.currentTimeMillis() - requestStartMs}ms cid=${identity.cid}")
 
-        AppLog.d(TAG, "useDashPlayback=$useDashPlayback cid=${identity.cid}")
 
         var dashMediaSource: MediaSource? = null
         if (useDashPlayback) {
@@ -1267,7 +1236,6 @@ class VideoPlayerViewModel(
             )
             if (dashRoutePlan != null && dashRoutePlan.routes.isNotEmpty()) {
                 val firstRoute = dashRoutePlan.routes.first()
-                AppLog.d(TAG, "dashRoute:resolved cid=${identity.cid} codec=${firstRoute.codec} routes=${dashRoutePlan.routes.size}")
 
                 viewModelScope.launch(Dispatchers.IO) {
                     triggerCdnPreconnectForRoute(firstRoute)
@@ -1294,19 +1262,16 @@ class VideoPlayerViewModel(
                         currentRoute = firstRoute,
                         expiresAtMs = sessionExpiryMs
                     )
-                    AppLog.d(TAG, "dashMediaSource:created cid=${identity.cid}")
                 } catch (e: Exception) {
                     AppLog.e(TAG, "dashMediaSource:failed cid=${identity.cid} error=${e.message}", e)
                     dashMediaSource = null
                     currentDashSession = null
                 }
             } else {
-                AppLog.d(TAG, "dashRoute:unavailable cid=${identity.cid}, falling back to progressive")
             }
         }
 
         val mediaSource: MediaSource = dashMediaSource ?: run {
-            AppLog.d(TAG, "progressiveMediaSource:build:start cid=${identity.cid}")
             val progressiveSelection = streamResolver.buildMediaSource(
                 playInfo = initialPlayInfo,
                 selectedQualityId = resolvedQualityId,
@@ -1335,8 +1300,6 @@ class VideoPlayerViewModel(
 
         val resumeHintPositionMs = startPosition.takeIf { shouldResume && !replaceInPlace }
         val seekToStart = if (resumeHintPositionMs != null) 0L else startPosition
-        AppLog.d(TAG, "playerPrepare:start cid=${identity.cid} totalCost=${System.currentTimeMillis() - requestStartMs}ms")
-        AppLog.d(TAG, "requestPreparedPlayback: returning, thread=${Thread.currentThread().name}")
         return PreparedPlayback(
             identity = identity,
             playInfo = initialPlayInfo,
@@ -1356,7 +1319,6 @@ class VideoPlayerViewModel(
         countCurrentAttemptAsFallback: Boolean = false
     ) {
         val applyStartMs = System.currentTimeMillis()
-        AppLog.d(TAG, "applyPreparedPlayback: cost=${preparedPlayback.requestDurationMs}ms replaceInPlace=${preparedPlayback.replaceInPlace} cid=${preparedPlayback.identity.cid}")
         clearPreloadedPlayback(cancelJob = false)
         currentPlayInfo = preparedPlayback.playInfo
         applySelectionSnapshot(preparedPlayback.selectionSnapshot)
@@ -1397,7 +1359,6 @@ class VideoPlayerViewModel(
                 durationMs = preparedPlayback.playInfo.timeLength
             )
         }
-        AppLog.d(TAG, "applyPreparedPlayback: cost=${System.currentTimeMillis() - applyStartMs}ms, fallback deferred")
 
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
             val fbStartMs = System.currentTimeMillis()
@@ -1421,7 +1382,6 @@ class VideoPlayerViewModel(
                 fallbackRouteIndex = routeIdx
                 fallbackCdnIndex = 0
             }
-            AppLog.d(TAG, "initializeFallbackPlan: deferred cost=${System.currentTimeMillis() - fbStartMs}ms")
         }
     }
 
@@ -1455,10 +1415,6 @@ class VideoPlayerViewModel(
 
         val errorType = classifyPlaybackError(error)
         val isDash = currentDashSession != null && useDashPlayback
-        AppLog.d(
-            TAG,
-            "handlePlaybackError: isDash=$isDash, type=$errorType, code=${error.errorCode}, message=${error.message}, attempts=$fallbackAttemptCount/$MAX_FALLBACK_ATTEMPTS"
-        )
 
         val handled = when (errorType) {
             PlaybackErrorType.DECODER -> {
@@ -1498,10 +1454,6 @@ class VideoPlayerViewModel(
                 tryRefreshPlayInfo(reason = "stall_${stalledMs}ms_refresh") ||
                 trySwitchCodec(lastPlaybackPositionMs, reason = "stall_${stalledMs}ms_codec_switch")
         if (handled) {
-            AppLog.w(
-                TAG,
-                "handlePlaybackStall: position=$positionMs, stalledMs=$stalledMs, codec=$selectedCodec"
-            )
         }
         return handled
     }
@@ -1615,10 +1567,6 @@ class VideoPlayerViewModel(
             return false
         }
         playInfoRefreshRetryCount += 1
-        AppLog.d(
-            TAG,
-            "fallback refresh playurl: reason=$reason, retry=$playInfoRefreshRetryCount/$MAX_PLAYINFO_REFRESH_RETRY"
-        )
         return loadPlayUrlWithCurrentContext(reason = reason)
     }
 
@@ -1639,10 +1587,6 @@ class VideoPlayerViewModel(
                     preparedPlayback = preparedPlayback,
                     resetFallbackAttempts = false,
                     countCurrentAttemptAsFallback = true
-                )
-                AppLog.d(
-                    TAG,
-                    "refresh playurl success: reason=$reason, requestedQuality=$lockedQualityId, actualQuality=${preparedPlayback.selectionSnapshot.selectedQualityId}"
                 )
                 return@launch
             }
@@ -1702,10 +1646,6 @@ class VideoPlayerViewModel(
                 playWhenReady = true,
                 replaceInPlace = true
             )
-            AppLog.d(
-                TAG,
-                "fallback dispatch: reason=$reason, quality=${plan.qualityId}, codec=${route.codec}, routeIndex=$routeIndex/${plan.routes.lastIndex}, cdnIndex=$cdnIndex/${totalVariants - 1}, attempts=$fallbackAttemptCount/$MAX_FALLBACK_ATTEMPTS"
-            )
             return true
         }
         return false
@@ -1746,10 +1686,6 @@ class VideoPlayerViewModel(
                 seekPositionMs = seekPositionMs,
                 playWhenReady = true,
                 replaceInPlace = true
-            )
-            AppLog.d(
-                TAG,
-                "fallback:codec: dash route=$routeIndex/${routePlan.routes.lastIndex}, codec=${route.codec}, reason=$reason, attempts=$fallbackAttemptCount/$MAX_FALLBACK_ATTEMPTS"
             )
             return true
         } catch (e: Exception) {
@@ -1853,16 +1789,8 @@ class VideoPlayerViewModel(
             val playInfo = response.data
             if (response.isSuccess && hasPlayableMedia(playInfo)) {
                 if (qualityId != requestedQualityId) {
-                    AppLog.w(
-                        TAG,
-                        "playurl fallback request succeeded: requested=$requestedQualityId, actualRequest=$qualityId, cid=${identity.cid}"
-                    )
                 }
                 if (response.isTryLookBypass) {
-                    AppLog.w(
-                        TAG,
-                        "playurl try_look bypass activated: requested=$requestedQualityId, actualRequest=$qualityId, cid=${identity.cid}"
-                    )
                     if (!suppressUiSignals) {
                         _riskControlTryLookBypass.value = true
                     }
@@ -1870,30 +1798,14 @@ class VideoPlayerViewModel(
                 return lastResult
             }
             if (response.code == -351 || response.code == -412 || response.code == -352) {
-                AppLog.w(
-                    TAG,
-                    "playurl risk-control detected: code=${response.code}, tried=$qualityId, cid=${identity.cid}, stopFurtherFallback=true"
-                )
                 return lastResult
             }
             if (response.code == 0 && playInfo != null && !hasPlayableMedia(playInfo)) {
                 if (shouldContinueQualityFallback(qualityId, response.message, playInfo)) {
-                    AppLog.w(
-                        TAG,
-                        "playurl empty media payload but quality fallback should continue: tried=$qualityId, cid=${identity.cid}, declared=${playInfo.acceptQuality.orEmpty()}, responseQuality=${playInfo.quality}, message=${response.message}"
-                    )
                     return@forEach
                 }
-                AppLog.w(
-                    TAG,
-                    "playurl empty media payload (soft risk-control): tried=$qualityId, cid=${identity.cid}, stopFurtherFallback=true"
-                )
                 return lastResult
             }
-            AppLog.w(
-                TAG,
-                "playurl fallback request skipped: requested=$requestedQualityId, tried=$qualityId, code=${response.code}, hasData=${playInfo != null}, dashVideo=${playInfo?.dash?.video?.size ?: 0}, durl=${playInfo?.durl?.size ?: 0}, quality=${playInfo?.quality ?: 0}"
-            )
         }
         return lastResult
     }
@@ -1949,10 +1861,6 @@ class VideoPlayerViewModel(
                 .takeIf { it in streamQualityIds }
                 ?: streamQualityIds.maxOrNull()
                 ?: requestedQualityId
-            AppLog.w(
-                TAG,
-                "quality fallback: reason=$reason, requested=$requestedQualityId, fallback=$fallbackQualityId, streamAvailable=$streamQualityIds, declared=${availableQualities.map { it.id }}, responseQuality=${playInfo.quality}"
-            )
             return fallbackQualityId
         }
         if (availableQualities.isEmpty()) {
@@ -1964,10 +1872,6 @@ class VideoPlayerViewModel(
         val fallbackQualityId = availableQualities.maxByOrNull { it.id }?.id
             ?: availableQualities.firstOrNull()?.id
             ?: requestedQualityId
-        AppLog.w(
-            TAG,
-            "quality fallback: reason=$reason, requested=$requestedQualityId, fallback=$fallbackQualityId, available=${availableQualities.map { it.id }}"
-        )
         return fallbackQualityId
     }
 
@@ -2003,19 +1907,15 @@ class VideoPlayerViewModel(
         replaceInPlace: Boolean
     ): PreparedPlayback? {
         if (preferLastPlayTime || replaceInPlace) {
-            AppLog.d(TAG, "playurlPrefetch:skip reason=preferLastPlayTime=$preferLastPlayTime replaceInPlace=$replaceInPlace cid=${identity.cid}")
             return null
         }
         val preloaded = preloadedPlayback ?: run {
-            AppLog.d(TAG, "playurlPrefetch:miss reason=no_preloaded cid=${identity.cid}")
             return null
         }
         if (preloaded.preparedPlayback.identity != identity) {
-            AppLog.d(TAG, "playurlPrefetch:miss reason=identity_mismatch cid=${identity.cid} preloadedCid=${preloaded.preparedPlayback.identity.cid}")
             return null
         }
         preloadedPlayback = null
-        AppLog.d(TAG, "playurlPrefetch:hit source=${preloaded.source} cid=${identity.cid} requestDurationMs=${preloaded.preparedPlayback.requestDurationMs}")
         return preloaded.preparedPlayback.copy(
             playWhenReady = pendingPlayWhenReady,
             replaceInPlace = false
@@ -2373,18 +2273,10 @@ class VideoPlayerViewModel(
         danmakuView: DmWebViewReplyProto?
     ) {
         if (danmakuView == null) {
-            AppLog.w(
-                TAG,
-                "loadDanmaku meta unavailable: cid=$cid, aid=$aid, durationMs=$durationMs, fallbackSegments=$segmentCount"
-            )
             return
         }
         val specialCount = danmakuView.specialDanmakuUrls.size
         if (specialCount > 0) {
-            AppLog.w(
-                TAG,
-                "loadDanmaku found $specialCount special BAS package(s): ${danmakuView.specialDanmakuUrls.take(2)}"
-            )
         }
     }
 
@@ -2399,16 +2291,8 @@ class VideoPlayerViewModel(
         val advancedCount = items.count { it.mode == 7 }
         val unsupportedCount = items.count { it.mode !in setOf(1, 4, 5, 6, 7) }
         if (advancedCount > 0) {
-            AppLog.w(
-                TAG,
-                "loadDanmaku diagnostics[$label]: advanced mode=7 danmaku will be downgraded to plain text rendering"
-            )
         }
         if (unsupportedCount > 0) {
-            AppLog.w(
-                TAG,
-                "loadDanmaku diagnostics[$label]: found $unsupportedCount unsupported danmaku item(s) whose mode is outside rolling/top/bottom/reverse/advanced"
-            )
         }
         logSpecialColorCandidates(label, items)
     }
@@ -2443,10 +2327,6 @@ class VideoPlayerViewModel(
             .entries
             .sortedByDescending { it.value }
             .joinToString(separator = ",") { "${it.key}:${it.value}" }
-        AppLog.w(
-            TAG,
-            "loadDanmaku candidates[$label]: found ${candidates.size} rolling candidate(s) with extra style fields, colorfulSummary=$colorfulSummary, attrSummary=$attrSummary"
-        )
         if (!verboseDanmakuCandidateLog) {
             return
         }
@@ -2460,10 +2340,6 @@ class VideoPlayerViewModel(
             .distinctBy { Triple("${it.attr}/${it.colorful}", it.color, it.content.take(12)) }
             .take(8)
             .forEachIndexed { index, item ->
-                AppLog.w(
-                    TAG,
-                    "loadDanmaku candidate[$label][$index]: id=${item.id}, progress=${item.progress}, mode=${item.mode}, color=${item.color.toColorHex()}, colorful=${item.colorful}, colorfulSrc=${item.colorfulSrc.toPreview(120)}, pool=${item.pool}, attr=${item.attr}, ai=${item.aiFlagScore}, action=${item.action.toPreview(120)}, animation=${item.animation.toPreview(120)}, content=${item.content.toPreview(60)}"
-                )
             }
     }
 
@@ -2682,7 +2558,6 @@ class VideoPlayerViewModel(
             return
         }
 
-        AppLog.d(TAG, "cdnPreconnect:start hosts=${uniqueHosts.joinToString(",")} count=${uniqueHosts.size}")
 
         coroutineScope {
             uniqueHosts.forEach { host ->
@@ -2697,16 +2572,13 @@ class VideoPlayerViewModel(
                         val response = call.execute()
                         response.close()
                         val elapsed = System.currentTimeMillis() - preconnectStart
-                        AppLog.d(TAG, "cdnPreconnect:done host=$host elapsed=${elapsed}ms")
                     }.onFailure { e ->
-                        AppLog.d(TAG, "cdnPreconnect:failed host=$host error=${e.message}")
                     }
                 }
             }
         }
 
         val totalElapsed = System.currentTimeMillis() - startTime
-        AppLog.d(TAG, "cdnPreconnect:total elapsed=${totalElapsed}ms count=${uniqueHosts.size}")
     }
 
     private suspend fun triggerCdnPreconnectForRoute(route: DashRoute?) {
@@ -2716,7 +2588,6 @@ class VideoPlayerViewModel(
             if (allUrls.isEmpty()) return
             preconnectCdnHosts(route.videoUrls, route.audioUrls)
         } catch (e: Exception) {
-            AppLog.w(TAG, "cdnPreconnect:error cid=${currentCid} error=${e.message}")
         }
     }
 
@@ -2729,7 +2600,6 @@ class VideoPlayerViewModel(
             if (allUrls.isEmpty()) return
             preconnectCdnHosts(videoUrls, audioUrls)
         } catch (e: Exception) {
-            AppLog.w(TAG, "cdnPreconnect:early error=${e.message}")
         }
     }
 }

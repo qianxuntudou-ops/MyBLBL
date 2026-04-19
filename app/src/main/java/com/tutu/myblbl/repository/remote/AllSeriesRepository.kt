@@ -21,9 +21,7 @@ class AllSeriesRepository(
     ): Result<AllSeriesPage> {
         return runCatching {
             val params = buildParams(type, page, filters)
-            android.util.Log.d("AllSeriesRepo", "getAllSeries params: $params")
             val response = apiService.getAllSeries(params)
-            android.util.Log.d("AllSeriesRepo", "getAllSeries response: code=${response.code}, listSize=${response.data?.list?.size}")
             if (response.code != 0 || response.data == null) {
                 throw IllegalStateException(response.message.ifEmpty { response.msg })
             }

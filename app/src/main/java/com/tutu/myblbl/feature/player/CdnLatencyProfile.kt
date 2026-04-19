@@ -5,8 +5,6 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 internal object CdnLatencyProfile {
-
-    private const val TAG = "CdnLatencyProfile"
     private const val MAX_ENTRIES = 32
     private const val RECORD_TTL_MS = 10 * 60 * 1000L
 

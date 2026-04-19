@@ -12,7 +12,6 @@ import com.kuaishou.akdanmaku.render.SimpleRenderer
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.DanmakuView
 import com.tutu.myblbl.model.dm.DmModel
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.ext.isVipColorfulDanmakuAllowed
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,7 +32,6 @@ class MyPlayerDanmakuController(
 ) {
 
     companion object {
-        private const val TAG = "MyPlayerDanmaku"
         private const val MERGE_DUPLICATE_WINDOW_MS = 15_000
         private const val MERGE_DUPLICATE_MIN_COUNT = 2
         private const val MAX_SYNC_DRIFT_MS = 1200L
@@ -391,10 +389,6 @@ class MyPlayerDanmakuController(
         bypassDedup: Boolean = false
     ) {
         if (!bypassDedup && shouldSuppressDuplicateSeek(targetPositionMs, currentTimeMs)) {
-            AppLog.d(
-                TAG,
-                "skip duplicate danmaku seek[$reason]: target=$targetPositionMs, current=${currentTimeMs ?: -1}, force=$forceSeek"
-            )
             return
         }
         player.seekTo(targetPositionMs)
@@ -567,10 +561,6 @@ class MyPlayerDanmakuController(
             val score = item.aiFlagScore
             score <= 0 || score < threshold
         }
-        AppLog.d(
-            TAG,
-            "smartFilter[$stage]: level=$normalizedLevel, threshold=$threshold, maxScore=$maxPositiveScore, before=${size}, after=${filtered.size}, filtered=${size - filtered.size}"
-        )
         return filtered
     }
 

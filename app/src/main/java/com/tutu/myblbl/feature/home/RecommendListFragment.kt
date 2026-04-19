@@ -189,14 +189,12 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
                     }
                     when (event) {
                         is MainNavigationViewModel.Event.MainTabReselected -> {
-                            AppLog.d(TAG, "received MainTabReselected: index=${event.index}, isLoading=$isLoading")
                             if (event.index == 0 && !isLoading) {
                                 refresh()
                             }
                         }
 
                         is MainNavigationViewModel.Event.SecondaryTabReselected -> {
-                            AppLog.d(TAG, "received SecondaryTabReselected: host=${event.host}, position=${event.position}, isLoading=$isLoading")
                             if (event.host == MainNavigationViewModel.SecondaryTabHost.HOME &&
                                 event.position == 0 &&
                                 !isLoading
@@ -206,7 +204,6 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
                         }
 
                         MainNavigationViewModel.Event.MenuPressed -> {
-                            AppLog.d(TAG, "received MenuPressed: isLoading=$isLoading")
                             if (!isLoading) {
                                 refresh()
                             }

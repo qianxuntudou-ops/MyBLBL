@@ -152,7 +152,6 @@ class LivePlayerFragment : Fragment() {
             viewModel.playUrl.collect { url ->
                 url?.let {
                     binding.textError.visibility = View.GONE
-                    AppLog.d(TAG, "apply live play url: ${it.take(160)}")
                     val mediaItem = MediaItem.Builder()
                         .setUri(it)
                         .setMimeType(resolveMimeType(it))

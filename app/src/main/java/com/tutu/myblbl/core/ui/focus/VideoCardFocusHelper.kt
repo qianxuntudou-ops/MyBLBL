@@ -8,7 +8,6 @@ import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.ui.activity.MainActivity
-import com.tutu.myblbl.core.common.log.AppLog
 
 object VideoCardFocusHelper {
 
@@ -29,10 +28,6 @@ object VideoCardFocusHelper {
                 KeyEvent.KEYCODE_DPAD_LEFT -> {
                     val atLeftEdge = isAtLeftEdge(target)
                     debugTag?.let {
-                        AppLog.d(
-                            it,
-                            "card key: position=$position key=LEFT atLeftEdge=$atLeftEdge"
-                        )
                     }
                     if (!atLeftEdge) {
                         return@setOnKeyListener false
@@ -40,10 +35,6 @@ object VideoCardFocusHelper {
                     val handled = onLeftEdge?.invoke()
                         ?: (target.context.findMainActivity()?.focusLeftFunctionArea() == true)
                     debugTag?.let {
-                        AppLog.d(
-                            it,
-                            "card key handled: position=$position key=LEFT handled=$handled"
-                        )
                     }
                     handled
                 }
@@ -51,20 +42,12 @@ object VideoCardFocusHelper {
                 KeyEvent.KEYCODE_DPAD_RIGHT -> {
                     val atRightEdge = isAtRightEdge(target)
                     debugTag?.let {
-                        AppLog.d(
-                            it,
-                            "card key: position=$position key=RIGHT atRightEdge=$atRightEdge hasRightHandler=${onRightEdge != null}"
-                        )
                     }
                     if (!atRightEdge) {
                         return@setOnKeyListener false
                     }
                     val handled = onRightEdge?.invoke() ?: true
                     debugTag?.let {
-                        AppLog.d(
-                            it,
-                            "card key handled: position=$position key=RIGHT handled=$handled"
-                        )
                     }
                     handled
                 }
@@ -72,20 +55,12 @@ object VideoCardFocusHelper {
                 KeyEvent.KEYCODE_DPAD_UP -> {
                     val atTopEdge = isAtTopEdge(target)
                     debugTag?.let {
-                        AppLog.d(
-                            it,
-                            "card key: position=$position key=UP atTopEdge=$atTopEdge hasTopHandler=${onTopEdgeUp != null}"
-                        )
                     }
                     if (onTopEdgeUp == null || !atTopEdge) {
                         return@setOnKeyListener false
                     }
                     val handled = onTopEdgeUp()
                     debugTag?.let {
-                        AppLog.d(
-                            it,
-                            "card key handled: position=$position key=UP handled=$handled"
-                        )
                     }
                     handled
                 }
@@ -93,20 +68,12 @@ object VideoCardFocusHelper {
                 KeyEvent.KEYCODE_DPAD_DOWN -> {
                     val atBottomEdge = isAtBottomEdge(target)
                     debugTag?.let {
-                        AppLog.d(
-                            it,
-                            "card key: position=$position key=DOWN atBottomEdge=$atBottomEdge hasBottomHandler=${onBottomEdgeDown != null}"
-                        )
                     }
                     if (onBottomEdgeDown == null || !atBottomEdge) {
                         return@setOnKeyListener false
                     }
                     val handled = onBottomEdgeDown()
                     debugTag?.let {
-                        AppLog.d(
-                            it,
-                            "card key handled: position=$position key=DOWN handled=$handled"
-                        )
                     }
                     handled
                 }

@@ -22,7 +22,6 @@ import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
-import com.tutu.myblbl.core.common.log.AppLog
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.android.ext.android.inject
@@ -30,7 +29,6 @@ import org.koin.android.ext.android.inject
 class SeriesTimelineFragment : BaseFragment<FragmentSeriesTimelineBinding>() {
 
     companion object {
-        private const val TAG = "SeriesTimelineFragment"
         private const val ARG_SEASON_TYPE = "season_type"
 
         fun newInstance(seasonType: Int = SeriesType.ANIME): SeriesTimelineFragment {
@@ -302,7 +300,6 @@ class SeriesTimelineFragment : BaseFragment<FragmentSeriesTimelineBinding>() {
             recyclerView = binding.recyclerView,
             position = 0
         )
-        AppLog.d(TAG, "requestFirstTimelineCardFocus deferred: handled=${result.handled} deferred=${result.deferred}")
         return true
     }
 

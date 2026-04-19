@@ -80,10 +80,6 @@ object VipDanmakuTextureCache {
                 if (bitmap != null) {
                     val rawSize = bytes.size
                     if (bitmap.isLikelyPlaceholderTexture(rawSize)) {
-                        AppLog.d(
-                            TAG,
-                            "loadBitmap skip placeholder: url=$normalizedUrl, size=${bitmap.width}x${bitmap.height}, bytes=$rawSize"
-                        )
                         return null
                     }
                     synchronized(bitmapCache) {

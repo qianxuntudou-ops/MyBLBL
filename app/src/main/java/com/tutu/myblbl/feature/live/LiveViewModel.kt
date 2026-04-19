@@ -14,7 +14,6 @@ class LiveViewModel(
 ) : ViewModel() {
 
     companion object {
-        private const val TAG = "LiveViewModel"
     }
 
     private var lastLoadedAt = 0L

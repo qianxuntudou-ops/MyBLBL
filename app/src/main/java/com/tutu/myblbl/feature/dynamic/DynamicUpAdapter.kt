@@ -10,7 +10,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellFollowingBinding
 import com.tutu.myblbl.model.user.FollowingModel
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.image.ImageLoader
 
 class DynamicUpAdapter(
@@ -83,12 +82,6 @@ class DynamicUpAdapter(
                 }
             }
             binding.root.setOnFocusChangeListener { _, hasFocus ->
-                debugTag?.let {
-                    AppLog.d(
-                        it,
-                        "up item focus: position=$bindingAdapterPosition hasFocus=$hasFocus name=${binding.textName.text}"
-                    )
-                }
                 binding.textName.isSelected = hasFocus
                 if (hasFocus) {
                     onItemFocused?.invoke()
@@ -97,12 +90,6 @@ class DynamicUpAdapter(
             binding.root.setOnKeyListener { _, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) {
                     return@setOnKeyListener false
-                }
-                debugTag?.let {
-                    AppLog.d(
-                        it,
-                        "up item key: position=$bindingAdapterPosition key=${keyName(keyCode)}"
-                    )
                 }
                 when (keyCode) {
                     KeyEvent.KEYCODE_DPAD_LEFT -> onLeftEdge()

@@ -19,7 +19,6 @@ import com.tutu.myblbl.model.CategoryModel
 import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
 import com.tutu.myblbl.core.ui.tab.focusSelectedTab
@@ -29,7 +28,6 @@ import kotlinx.coroutines.launch
 class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTarget {
 
     companion object {
-        private const val TAG = "MainEntryFocus"
         fun newInstance(): CategoryFragment = CategoryFragment()
     }
 
@@ -175,10 +173,6 @@ class CategoryFragment : BaseFragment<FragmentCategoryBinding>(), MainTabFocusTa
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
         val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
             focusCurrentTab(anchorView)
-        AppLog.d(
-            TAG,
-            "CategoryFragment.focusEntryFromMainTab: currentItem=${viewPager.currentItem} handled=$handled preferSpatialEntry=$preferSpatialEntry anchor=${anchorView?.javaClass?.simpleName ?: "null"} focus=${view?.findFocus()?.javaClass?.simpleName ?: "null"}"
-        )
         return handled
     }
 

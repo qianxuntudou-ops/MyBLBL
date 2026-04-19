@@ -6,11 +6,8 @@ import android.os.Looper
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
-import com.tutu.myblbl.core.common.log.AppLog
 
 internal object PlayerInstancePool {
-
-    private const val TAG = "PlayerInstancePool"
     private const val IDLE_RELEASE_DELAY_MS = 45_000L
     private const val MIN_BUFFER_MS = 1_000
     private const val MAX_BUFFER_MS = 12_000
@@ -34,9 +31,7 @@ internal object PlayerInstancePool {
         if (reused) {
             val state = player.playbackState
             val hasMedia = player.mediaItemCount
-            AppLog.d(TAG, "acquire reused player state=$state mediaItemCount=$hasMedia")
         } else {
-            AppLog.d(TAG, "acquire created player")
         }
         return player
     }
@@ -53,7 +48,6 @@ internal object PlayerInstancePool {
         player.stop()
         player.clearVideoSurface()
         scheduleRelease()
-        AppLog.d(TAG, "softDetach: stateBefore=$stateBefore mediaCount=$mediaCount paused,stopped, release in ${IDLE_RELEASE_DELAY_MS}ms")
     }
 
     @Synchronized
@@ -64,7 +58,6 @@ internal object PlayerInstancePool {
         player.clearMediaItems()
         player.stop()
         player.playbackParameters = PlaybackParameters(1f)
-        AppLog.d(TAG, "hardReset: cost=${System.currentTimeMillis() - startMs}ms")
     }
 
     @Synchronized
@@ -84,7 +77,6 @@ internal object PlayerInstancePool {
         cachedPlayer?.let(PlayerAudioNormalizer::release)
         cachedPlayer?.release()
         cachedPlayer = null
-        AppLog.d(TAG, "releaseNow: reason=$reason")
     }
 
     @Synchronized
@@ -97,7 +89,6 @@ internal object PlayerInstancePool {
                 cachedPlayer?.release()
                 cachedPlayer = null
                 pendingReleaseRunnable = null
-                AppLog.d(TAG, "cached player released after idle timeout")
             }
         }
         pendingReleaseRunnable = releaseRunnable

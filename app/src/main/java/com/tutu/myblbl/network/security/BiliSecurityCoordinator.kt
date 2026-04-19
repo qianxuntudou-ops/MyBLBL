@@ -202,7 +202,6 @@ class BiliSecurityCoordinator(
                 val subKey = navResponse.data.wbiImg?.subUrl?.let(WbiGenerator::extractKeyFromUrl).orEmpty()
                 if (imgKey.isNotBlank() && subKey.isNotBlank()) {
                     updateWbiKeys(imgKey, subKey)
-                    AppLog.d(tag, "ensureWbiKeysFromNav: got keys img=${imgKey.take(8)}.. sub=${subKey.take(8)}..")
                 }
             }
         }.onFailure {
@@ -324,7 +323,6 @@ class BiliSecurityCoordinator(
                 if (success) return@repeat
                 if (attempt > 0) {
                     delay(EXCLIMB_RETRY_DELAY_MS)
-                    AppLog.d(tag, "ensureBuvidActiveOncePerDay retry #$attempt for mid=$mid")
                 }
                 runCatching {
                     val rand = ByteArray(32 + 8 + 4)
@@ -370,7 +368,6 @@ class BiliSecurityCoordinator(
                             buvidActivatedMid = mid
                             buvidActivatedDay = epochDay
                             success = true
-                            AppLog.d(tag, "ensureBuvidActiveOncePerDay success for mid=$mid attempt=$attempt")
                         }
                     }
                 }.onFailure {
@@ -469,7 +466,7 @@ class BiliSecurityCoordinator(
                     .build()
                 withContext(Dispatchers.IO) {
                     okHttpClient.newCall(confirmRequest).execute().use { resp ->
-                        AppLog.d(tag, "refreshCookie confirm: code=${resp.code}")
+                        resp.body?.string()
                     }
                 }
             }.onFailure {
@@ -477,7 +474,6 @@ class BiliSecurityCoordinator(
             }
 
             cookieRefreshCheckedDay = epochDay
-            AppLog.d(tag, "refreshCookie success")
         }.onFailure {
             AppLog.w(tag, "refreshCookie failed: ${it.message}")
         }

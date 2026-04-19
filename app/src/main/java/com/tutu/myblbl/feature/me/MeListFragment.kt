@@ -25,7 +25,6 @@ import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.core.common.cache.FileCacheManager
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
@@ -38,7 +37,6 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     companion object {
-        private const val TAG = "MainEntryFocus"
         const val TYPE_HISTORY = "history"
         const val TYPE_LATER = "later"
         private const val CACHE_TTL_MS = 10 * 60 * 1000L
@@ -430,21 +428,15 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         }
         if (binding.emptyContainer.isVisible && binding.btnRetry.isShown) {
             val handled = TabContentFocusHelper.requestVisibleFocus(binding.btnRetry)
-            AppLog.d(TAG, "MeListFragment.focusPrimaryContent retry: type=$type handled=$handled")
             return handled
         }
         val itemCount = binding.recyclerView.adapter?.itemCount ?: 0
         if (itemCount == 0) {
-            AppLog.d(TAG, "MeListFragment.focusPrimaryContent failed: type=$type itemCount=0")
             return false
         }
         val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
             recyclerView = binding.recyclerView,
             itemCount = itemCount
-        )
-        AppLog.d(
-            TAG,
-            "MeListFragment.focusPrimaryContent recycler: type=$type handled=${result.handled} deferred=${result.deferred} pos=${result.position} source=${result.source}"
         )
         return result.resolved
     }
@@ -457,7 +449,6 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                 direction = View.FOCUS_RIGHT,
                 fallback = null
             )
-            AppLog.d(TAG, "MeListFragment.focusPrimaryContent spatialEntry: type=$type handled=$handled")
             if (handled) {
                 return true
             }
@@ -500,7 +491,6 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                 binding.recyclerView.post {
                     restoreHistoryViewportAnchor()
                 }
-                AppLog.d(TAG, "restoreContentFocus history targetPosition=$targetPosition handled=$handled anchor=$pendingHistoryAnchorPosition/$pendingHistoryAnchorOffset")
             } else {
                 val handled = videoAdapter?.focusedView?.requestFocus() == true
                 if (!handled) {

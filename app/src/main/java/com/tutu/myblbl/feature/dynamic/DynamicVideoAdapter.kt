@@ -15,7 +15,6 @@ import androidx.recyclerview.widget.RecyclerView.NO_POSITION
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellVideoBinding
 import com.tutu.myblbl.model.video.VideoModel
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.common.format.NumberUtils
 import com.tutu.myblbl.core.common.time.TimeUtils
@@ -105,12 +104,6 @@ class DynamicVideoAdapter(
             }
             binding.root.setOnFocusChangeListener { view, hasFocus ->
                 val position = bindingAdapterPosition
-                debugTag?.let {
-                    AppLog.d(
-                        it,
-                        "video card focus: position=$position hasFocus=$hasFocus title=${currentTitle().take(30)}"
-                    )
-                }
                 if (hasFocus && position != NO_POSITION) {
                     focusedView = view
                     onItemFocused(position)
@@ -133,11 +126,6 @@ class DynamicVideoAdapter(
                     }
                     false
                 } else {
-                    if (event.action == KeyEvent.ACTION_DOWN) {
-                        debugTag?.let {
-                            AppLog.d(it, "video card key: position=$bindingAdapterPosition key=${keyName(keyCode)}")
-                        }
-                    }
                     false
                 }
             }

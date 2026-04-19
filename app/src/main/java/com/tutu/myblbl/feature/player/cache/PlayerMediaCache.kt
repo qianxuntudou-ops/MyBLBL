@@ -33,10 +33,6 @@ object PlayerMediaCache {
 
     private val cacheEventListener = object : CacheDataSource.EventListener {
         override fun onCachedBytesRead(cacheSizeBytes: Long, cachedBytesRead: Long) {
-            AppLog.d(
-                TAG,
-                "cache hit: read=${cachedBytesRead}B, cacheSize=${cacheSizeBytes}B"
-            )
         }
 
         override fun onCacheIgnored(reason: Int) {

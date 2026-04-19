@@ -13,7 +13,6 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellVideoBinding
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.core.ui.base.BaseAdapter
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.common.format.NumberUtils
 import com.tutu.myblbl.core.common.time.TimeUtils
@@ -257,10 +256,6 @@ class VideoAdapter(
             if (onFocusChange != null) {
                 binding.root.setOnFocusChangeListener { view, hasFocus ->
                     focusDebugTag?.let {
-                        AppLog.d(
-                            it,
-                            "card focus: position=$bindingAdapterPosition hasFocus=$hasFocus title=${currentVideo?.title.orEmpty().take(30)}"
-                        )
                     }
                     onFocusChange.invoke(view, bindingAdapterPosition, hasFocus)
                 }

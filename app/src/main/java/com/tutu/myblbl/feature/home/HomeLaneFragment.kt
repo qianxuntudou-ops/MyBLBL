@@ -30,7 +30,6 @@ import org.koin.android.ext.android.inject
 class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
 
     companion object {
-        private const val ENTRY_TAG = "MainEntryFocus"
         private const val TAG = "HomeLaneFragment"
         private const val ARG_TYPE = "type"
 
@@ -120,7 +119,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
                     }
                     when (event) {
                         is MainNavigationViewModel.Event.MainTabReselected -> {
-                            AppLog.d(TAG, "received MainTabReselected: index=${event.index}, type=$type, isLoading=$isLoading")
                             if (event.index == 0 && !isLoading) {
                                 refresh()
                             }
@@ -132,14 +130,12 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
                                     (event.position == 2 && type == TYPE_ANIMATION) ||
                                         (event.position == 3 && type == TYPE_CINEMA)
                                     )
-                            AppLog.d(TAG, "received SecondaryTabReselected: host=${event.host}, position=${event.position}, type=$type, shouldRefresh=$shouldRefresh, isLoading=$isLoading")
                             if (shouldRefresh && !isLoading) {
                                 refresh()
                             }
                         }
 
                         MainNavigationViewModel.Event.MenuPressed -> {
-                            AppLog.d(TAG, "received MenuPressed: type=$type, isLoading=$isLoading")
                             if (!isLoading) {
                                 refresh()
                             }
@@ -157,7 +153,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
         cacheRestoreJob?.cancel()
         cacheRestoreJob = viewLifecycleOwner.lifecycleScope.launch {
             val hasCache = restoreCachedSections()
-            AppLog.d(TAG, "initCache: type=$type, hasCache=$hasCache")
             if (!hasCache) {
                 showLoading(true)
             }
@@ -171,16 +166,13 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
 
     override fun loadData(page: Int) {
         if (isLoading) {
-            AppLog.d(TAG, "loadData ignored because loading: type=$type, page=$page, cursor=$cursor")
             return
         }
         if (!isAdded || view == null) {
-            AppLog.d(TAG, "loadData ignored because fragment not attached: type=$type")
             return
         }
         isLoading = true
         loadingPage = page
-        AppLog.d(TAG, "loadData start: type=$type, page=$page, cursor=$cursor, hasMore=$hasMore, contentCount=${adapter?.contentCount()}")
         if (page == 1) {
             cursor = 0
             hasMore = true
@@ -190,7 +182,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
                 showLoading(true)
             }
         }
-        AppLog.d(TAG, "loadData start: type=$type, page=$page, cursor=$cursor")
 
         viewLifecycleOwner.lifecycleScope.launch {
             repository.getHomeLanes(type = type, cursor = cursor, isRefresh = page == 1)
@@ -205,10 +196,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
                     cursor = page.nextCursor
                     hasMore = page.hasMore
                     laneAdapter?.setShowLoadMore(page.hasMore)
-                    AppLog.d(
-                        TAG,
-                        "loadData success: type=$type, page=$loadingPage, sections=${page.sections.size}, nextCursor=${page.nextCursor}, hasMore=${page.hasMore}"
-                    )
                     if (loadingPage == 1 || adapter?.contentCount() == 0) {
                         adapter?.setData(page.sections)
                         if (page.sections.isNotEmpty()) {
@@ -219,7 +206,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
                         if (page.sections.isNotEmpty() && !added) {
                             hasMore = false
                             laneAdapter?.setShowLoadMore(false)
-                            AppLog.d(TAG, "loadData all sections duplicated, stop loading more: type=$type")
                         }
                     }
                     if (loadingPage == 1 && pendingScrollToTopAfterRefresh) {
@@ -301,17 +287,14 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
             return false
         }
         if (TabContentFocusHelper.requestVisibleFocus(buttonRetry, viewError)) {
-            AppLog.d(ENTRY_TAG, "HomeLaneFragment.focusPrimaryContent stateTarget: handled=true")
             return true
         }
         val recycler = recyclerView ?: return false
         val restored = laneAdapter?.requestFocusedView() == true
         if (restored) {
-            AppLog.d(ENTRY_TAG, "HomeLaneFragment.focusPrimaryContent restoreFocusedView: handled=true")
             return true
         }
         if ((adapter?.contentCount() ?: 0) == 0) {
-            AppLog.d(ENTRY_TAG, "HomeLaneFragment.focusPrimaryContent failed: itemCount=0")
             return false
         }
         val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
@@ -325,10 +308,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
                 }
             }
         )
-        AppLog.d(
-            ENTRY_TAG,
-            "HomeLaneFragment.focusPrimaryContent recycler: handled=${result.handled} deferred=${result.deferred} pos=${result.position} source=${result.source}"
-        )
         return result.resolved
     }
 
@@ -341,10 +320,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
                 direction = View.FOCUS_RIGHT,
                 fallback = null
             )
-            AppLog.d(
-                ENTRY_TAG,
-                "HomeLaneFragment.focusPrimaryContent spatialEntry: handled=$handled anchor=${anchorView?.javaClass?.simpleName ?: "null"}"
-            )
             if (handled) {
                 return true
             }
@@ -353,7 +328,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
     }
 
     override fun refresh() {
-        AppLog.d(TAG, "refresh called: type=$type")
         pendingScrollToTopAfterRefresh = true
         super.refresh()
     }
@@ -372,7 +346,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
             runCatching {
                 val cacheSections = sections.sectionsForCache()
                 HomeCacheStore.writeSections(cacheKey(), cacheSections)
-                AppLog.d(TAG, "cacheSections success: type=$type, count=${cacheSections.size}")
             }.onFailure { throwable ->
                 AppLog.e(TAG, "cacheSections failure: type=$type, message=${throwable.message}", throwable)
             }
@@ -394,7 +367,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
         adapter?.setShowLoadMore(false)
         showContent()
         showLoading(false)
-        AppLog.d(TAG, "restoreCachedSections success: type=$type, count=${cachedSections.size}")
         return true
     }
 

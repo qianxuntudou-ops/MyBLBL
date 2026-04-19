@@ -22,7 +22,6 @@ import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.feature.series.SeriesDetailFragment
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.cache.FileCacheManager
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
@@ -34,7 +33,6 @@ import org.koin.android.ext.android.inject
 class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
 
     companion object {
-        private const val TAG = "MainEntryFocus"
         private const val ARG_TYPE = "type"
         private const val FOLLOWING_ANIMATION_CACHE_KEY = "followingAnimationCacheList"
         private const val FOLLOWING_SERIES_CACHE_KEY = "followingSeriesCacheList"
@@ -274,20 +272,14 @@ class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         }
         if (binding.emptyContainer.visibility == View.VISIBLE && binding.btnRetry.isShown) {
             val handled = TabContentFocusHelper.requestVisibleFocus(binding.btnRetry)
-            AppLog.d(TAG, "MeSeriesFragment.focusPrimaryContent retry: type=$type handled=$handled")
             return handled
         }
         if (adapter.itemCount == 0) {
-            AppLog.d(TAG, "MeSeriesFragment.focusPrimaryContent failed: type=$type itemCount=0")
             return false
         }
         val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
             recyclerView = binding.recyclerView,
             itemCount = adapter.itemCount
-        )
-        AppLog.d(
-            TAG,
-            "MeSeriesFragment.focusPrimaryContent recycler: type=$type handled=${result.handled} deferred=${result.deferred} pos=${result.position} source=${result.source}"
         )
         return result.resolved
     }
@@ -300,7 +292,6 @@ class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                 direction = View.FOCUS_RIGHT,
                 fallback = null
             )
-            AppLog.d(TAG, "MeSeriesFragment.focusPrimaryContent spatialEntry: type=$type handled=$handled")
             if (handled) {
                 return true
             }

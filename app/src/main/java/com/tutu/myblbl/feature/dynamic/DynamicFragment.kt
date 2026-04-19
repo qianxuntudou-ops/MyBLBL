@@ -26,7 +26,6 @@ import com.tutu.myblbl.ui.activity.MainActivity
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
@@ -44,8 +43,6 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     }
 
     companion object {
-        private const val TAG = "MainEntryFocus"
-        private const val FOCUS_TAG = "DynamicFocus"
         private const val CACHE_TTL_MS = 5 * 60 * 1000L
 
         fun newInstance(): DynamicFragment = DynamicFragment()
@@ -101,13 +98,10 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
             },
             onLeftEdge = { (activity as? MainActivity)?.focusLeftFunctionArea() == true },
             onRightEdge = { focusRightContent() },
-            debugTag = FOCUS_TAG
+            debugTag = null
         )
         binding.recyclerViewLeft.layoutManager = LinearLayoutManager(requireContext())
         binding.recyclerViewLeft.adapter = upAdapter
-        binding.recyclerViewLeft.setOnFocusChangeListener { _, hasFocus ->
-            AppLog.d(FOCUS_TAG, "left recycler focus: hasFocus=$hasFocus childCount=${binding.recyclerViewLeft.childCount}")
-        }
         binding.recyclerViewLeft.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 if (dy > 0) checkLoadMoreFollowing()
@@ -123,7 +117,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                 preferredContentFocusTarget = ContentFocusTarget.RIGHT_VIDEO_LIST
             },
             onLeftEdge = { focusSelectedUpItem() },
-            debugTag = FOCUS_TAG
+            debugTag = null
         )
         binding.recyclerViewRight.layoutManager = object : WrapContentGridLayoutManager(requireContext(), 3) {
             override fun onFocusSearchFailed(
@@ -132,25 +126,11 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                 recycler: RecyclerView.Recycler,
                 state: RecyclerView.State
             ): View? {
-                val result = super.onFocusSearchFailed(focused, direction, recycler, state)
-                AppLog.d(
-                    FOCUS_TAG,
-                    "right onFocusSearchFailed: focusedPos=${binding.recyclerViewRight.getChildAdapterPosition(focused)} direction=${directionName(direction)} resultPos=${result?.let { binding.recyclerViewRight.getChildAdapterPosition(it) } ?: RecyclerView.NO_POSITION} childCount=${binding.recyclerViewRight.childCount}"
-                )
-                return result
+                return super.onFocusSearchFailed(focused, direction, recycler, state)
             }
         }
         binding.recyclerViewRight.adapter = videoAdapter
-        binding.recyclerViewRight.setOnFocusChangeListener { _, hasFocus ->
-            AppLog.d(FOCUS_TAG, "right recycler focus: hasFocus=$hasFocus childCount=${binding.recyclerViewRight.childCount}")
-        }
-        binding.recyclerViewRight.setOnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                AppLog.d(
-                    FOCUS_TAG,
-                    "right recycler key: key=${directionName(keyCode)} currentFocus=${view?.findFocus()?.javaClass?.simpleName ?: "null"}"
-                )
-            }
+        binding.recyclerViewRight.setOnKeyListener { _, _, _ ->
             false
         }
         binding.recyclerViewRight.addOnScrollListener(object : RecyclerView.OnScrollListener() {
@@ -449,10 +429,6 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
             recyclerView = binding.recyclerViewRight,
             position = targetPosition
         )
-        AppLog.d(
-            TAG,
-            "restoreVideoFocus deferred: targetPosition=$targetPosition handled=${result.handled} deferred=${result.deferred}"
-        )
     }
 
     private fun scheduleVideoFocusRestore(retries: Int = 8) {
@@ -498,49 +474,31 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         }
         val targetPosition = upAdapter.getSelectedPosition().takeIf { it >= 0 } ?: 0
         binding.recyclerViewLeft.findViewHolderForAdapterPosition(targetPosition)?.itemView?.let { itemView ->
-            val handled = itemView.requestFocus()
-            AppLog.d(FOCUS_TAG, "focusSelectedUpItem visible: targetPosition=$targetPosition handled=$handled")
-            return handled
+            return itemView.requestFocus()
         }
-        val result = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
+        RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
             recyclerView = binding.recyclerViewLeft,
             position = targetPosition
         )
-        AppLog.d(
-            FOCUS_TAG,
-            "focusSelectedUpItem deferred: targetPosition=$targetPosition handled=${result.handled} deferred=${result.deferred}"
-        )
-        AppLog.d(FOCUS_TAG, "focusSelectedUpItem deferred: targetPosition=$targetPosition")
         return true
     }
 
     private fun focusRightContent(): Boolean {
         if (TabContentFocusHelper.requestVisibleFocus(buttonRetry, viewError)) {
-            AppLog.d(TAG, "DynamicFragment.focusRightContent stateOverlay: handled=true")
             return true
         }
         if (videoAdapter.itemCount == 0) {
-            AppLog.d(TAG, "DynamicFragment.focusRightContent failed: itemCount=0")
             return false
         }
         val fv = videoAdapter.focusedView
         if (fv != null && fv.isAttachedToWindow && fv.visibility == View.VISIBLE) {
-            val handled = fv.requestFocus()
-            AppLog.d(
-                TAG,
-                "DynamicFragment.focusRightContent restoreFocusedView: handled=$handled pos=${binding.recyclerViewRight.getChildAdapterPosition(fv)} lastFocusedVideoPosition=$lastFocusedVideoPosition"
-            )
-            return handled
+            return fv.requestFocus()
         }
         val targetPosition = lastFocusedVideoPosition.coerceIn(0, videoAdapter.itemCount - 1)
         val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
             recyclerView = binding.recyclerViewRight,
             itemCount = videoAdapter.itemCount,
             fallbackPosition = targetPosition
-        )
-        AppLog.d(
-            TAG,
-            "DynamicFragment.focusRightContent recycler: targetPosition=$targetPosition handled=${result.handled} deferred=${result.deferred} pos=${result.position} source=${result.source} lastFocused=$lastFocusedVideoPosition"
         )
         return result.resolved
     }
@@ -564,17 +522,13 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
             if (anchorView != null) {
                 when {
                     anchorView.isDescendantOf(binding.recyclerViewRight) -> {
-                        val handled = focusRightContent()
-                        AppLog.d(TAG, "DynamicFragment.focusPrimaryContent spatialEntryRight: handled=$handled")
-                        if (handled) {
+                        if (focusRightContent()) {
                             return true
                         }
                     }
 
                     anchorView.isDescendantOf(binding.recyclerViewLeft) -> {
-                        val handled = focusSelectedUpItem()
-                        AppLog.d(TAG, "DynamicFragment.focusPrimaryContent spatialEntryLeftDirect: handled=$handled")
-                        if (handled) {
+                        if (focusSelectedUpItem()) {
                             return true
                         }
                     }
@@ -586,7 +540,6 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                 direction = View.FOCUS_RIGHT,
                 fallback = null
             )
-            AppLog.d(TAG, "DynamicFragment.focusPrimaryContent spatialEntryLeft: handled=$handled")
             if (handled) {
                 return true
             }
@@ -608,7 +561,6 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                 !currentFocusedView.isDescendantOf(binding.recyclerViewRight) &&
                 !currentFocusedView.isDescendantOf(binding.recyclerViewLeft)
             ) {
-                AppLog.d(TAG, "DynamicFragment.onHiddenChanged skipRestore: currentFocus=${currentFocusedView.javaClass.simpleName}")
                 return
             }
             requestPreferredContentFocus(fallbackToAlternate = true)
@@ -620,12 +572,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     }
 
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
-        val handled = focusPrimaryContent(anchorView, preferSpatialEntry)
-        AppLog.d(
-            TAG,
-            "DynamicFragment.focusEntryFromMainTab: handled=$handled preferSpatialEntry=$preferSpatialEntry currentUpId=$currentUpId lastFocusedVideoPosition=$lastFocusedVideoPosition focus=${view?.findFocus()?.javaClass?.simpleName ?: "null"}"
-        )
-        return handled
+        return focusPrimaryContent(anchorView, preferSpatialEntry)
     }
 
     private var lastRefreshTime = 0L

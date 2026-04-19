@@ -7,7 +7,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.tutu.myblbl.R
-import com.tutu.myblbl.core.common.log.AppLog
 import java.util.Locale
 
 @UnstableApi
@@ -19,7 +18,6 @@ class VideoPlayerResumeHintController(
 ) {
 
     companion object {
-        private const val TAG = "ResumeHintController"
         private const val SEEK_DELAY_MS = 3_000L
         private const val READY_TIMEOUT_MS = 30_000L
         private const val POLL_INTERVAL_MS = 50L
@@ -40,14 +38,12 @@ class VideoPlayerResumeHintController(
         if (!isResumeHintActive) {
             return false
         }
-        AppLog.d(TAG, "cancelResume: cancelling resume progress")
         clearPendingUi(markCancelled = true)
         onCancelResume()
         return true
     }
 
     fun onHintChanged(hint: VideoPlayerViewModel.ResumeProgressHint?) {
-        AppLog.d(TAG, "resumeHint observed: $hint")
         if (hint == null) {
             clearPendingUi(markCancelled = true)
             return
@@ -88,7 +84,6 @@ class VideoPlayerResumeHintController(
     private fun checkResumeHint() {
         val player = playerProvider() ?: return
         if (isResumeHintCancelled) {
-            AppLog.d(TAG, "checkResumeHint: cancelled, skip")
             return
         }
 
@@ -97,13 +92,11 @@ class VideoPlayerResumeHintController(
         val readyDeadlineAtMs = resumeHintStartTimeMs + READY_TIMEOUT_MS
 
         if (currentTimeMs >= readyDeadlineAtMs) {
-            AppLog.d(TAG, "checkResumeHint: timeout, clearing")
             onClearResumeHint()
             return
         }
 
         if (player.playbackState == Player.STATE_ENDED) {
-            AppLog.d(TAG, "checkResumeHint: playback ended, clearing")
             onClearResumeHint()
             return
         }
@@ -116,10 +109,6 @@ class VideoPlayerResumeHintController(
         if (shouldTrace) {
             lastTraceSignature = traceSignature
             lastTraceTimestampMs = currentTimeMs
-            AppLog.d(
-                TAG,
-                "checkResumeHint: state=${player.playbackState}, ready=$playerReady, waitedEnough=$waitedEnough, target=${resumeHintTargetPositionMs}ms"
-            )
         }
 
         if (playerReady && waitedEnough) {
@@ -129,7 +118,6 @@ class VideoPlayerResumeHintController(
             } else {
                 resumeHintTargetPositionMs
             }
-            AppLog.d(TAG, "checkResumeHint: seeking to $clampedTargetPositionMs ms (duration=$durationMs)")
             onClearResumeHint()
             player.seekTo(clampedTargetPositionMs)
             return

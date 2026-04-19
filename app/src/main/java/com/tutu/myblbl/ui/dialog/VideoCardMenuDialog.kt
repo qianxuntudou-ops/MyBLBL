@@ -117,10 +117,6 @@ class VideoCardMenuDialog(
         binding.buttonDislikeVideo.setOnClickListener {
             if (isActionInProgress) return@setOnClickListener
             if (!checkLogin()) return@setOnClickListener
-            AppLog.d(
-                TAG,
-                "click dislike video: aid=${video.aid}, bvid=${video.bvid}, title=${video.title.take(30)}, ownerMid=${video.owner?.mid ?: 0L}"
-            )
             setActionInProgress(true)
             dislikeVideo(REASON_ID_NOT_INTERESTED)
         }
@@ -129,10 +125,6 @@ class VideoCardMenuDialog(
             if (isActionInProgress) return@setOnClickListener
             if (!checkLogin()) return@setOnClickListener
             if (!canDislikeUp()) return@setOnClickListener
-            AppLog.d(
-                TAG,
-                "click dislike up: aid=${video.aid}, bvid=${video.bvid}, ownerMid=${video.owner?.mid ?: 0L}, ownerName=${video.authorName}"
-            )
             setActionInProgress(true)
             dislikeVideo(REASON_ID_DISLIKE_UP)
         }
@@ -140,18 +132,10 @@ class VideoCardMenuDialog(
 
     private fun dislikeVideo(reasonId: Int) {
         val csrf = sessionGateway.getCsrfToken()
-        AppLog.d(
-            TAG,
-            "dislikeVideo start: reasonId=$reasonId, loggedIn=${sessionGateway.isLoggedIn()}, hasCsrf=${csrf.isNotBlank()}, aid=${video.aid}, bvid=${video.bvid}, goto=${video.goto}, roomId=${video.roomId}, isLiveCard=$isLiveFeedbackCard, ownerMid=${video.owner?.mid ?: 0L}, trackId=${video.trackId}"
-        )
         scope.launch {
             runCatching {
                 videoRepository.dislikeFeed(video, reasonId)
             }.onSuccess { response ->
-                AppLog.d(
-                    TAG,
-                    "dislikeVideo response: reasonId=$reasonId, code=${response.code}, message=${response.message}, msg=${response.msg}, success=${response.isSuccess}"
-                )
                 if (response.isSuccess) {
                     if (reasonId == REASON_ID_DISLIKE_UP) {
                         toast(context.getString(R.string.toast_dislike_up_success))
@@ -551,11 +535,9 @@ class VideoCardMenuDialog(
 
     private fun checkLogin(): Boolean {
         if (!sessionGateway.isLoggedIn()) {
-            AppLog.d(TAG, "checkLogin failed: aid=${video.aid}, bvid=${video.bvid}, ownerMid=${video.owner?.mid ?: 0L}")
             toast(context.getString(R.string.toast_need_login))
             return false
         }
-        AppLog.d(TAG, "checkLogin success: hasCsrf=${sessionGateway.getCsrfToken().isNotBlank()}")
         return true
     }
 

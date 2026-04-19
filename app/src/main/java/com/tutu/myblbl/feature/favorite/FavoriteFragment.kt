@@ -25,7 +25,6 @@ import com.tutu.myblbl.feature.me.MeTabPage
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
 import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.cache.FileCacheManager
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
@@ -39,7 +38,6 @@ import org.koin.android.ext.android.inject
 
 class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
     companion object {
-        private const val TAG = "MainEntryFocus"
         private const val ARG_EMBEDDED = "embedded"
         private const val COLLECTION_CACHE_KEY = "collectionCacheList"
 
@@ -316,10 +314,6 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
                 recyclerView = binding.recyclerViewFavorite,
                 itemCount = adapter.itemCount
             )
-            AppLog.d(
-                TAG,
-                "FavoriteFragment.focusPrimaryContent recycler: handled=${result.handled} deferred=${result.deferred} pos=${result.position} source=${result.source}"
-            )
             return result.resolved
         }
         if (binding.tvEmpty.visibility == View.VISIBLE) {
@@ -377,10 +371,6 @@ class FavoriteFragment : BaseFragment<FragmentFavoriteBinding>(), MeTabPage {
             val result = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
                 recyclerView = binding.recyclerViewFavorite,
                 position = targetPosition
-            )
-            AppLog.d(
-                TAG,
-                "restoreFocus targetPosition=$targetPosition handled=${result.handled} deferred=${result.deferred}"
             )
         }
     }

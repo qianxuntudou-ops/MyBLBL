@@ -17,7 +17,6 @@ import com.tutu.myblbl.model.live.LiveAreaCategoryParent
 import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
 import com.tutu.myblbl.core.ui.tab.focusSelectedTab
@@ -28,7 +27,6 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
     companion object {
-        private const val TAG = "MainEntryFocus"
         private const val CATEGORY_CACHE_TTL_MS = 20 * 60 * 1000L
 
         fun newInstance(): LiveFragment = LiveFragment()
@@ -160,10 +158,6 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
         val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
             focusCurrentTab(anchorView)
-        AppLog.d(
-            TAG,
-            "LiveFragment.focusEntryFromMainTab: currentItem=${viewPager.currentItem} handled=$handled preferSpatialEntry=$preferSpatialEntry anchor=${anchorView?.javaClass?.simpleName ?: "null"} focus=${view?.findFocus()?.javaClass?.simpleName ?: "null"}"
-        )
         return handled
     }
 

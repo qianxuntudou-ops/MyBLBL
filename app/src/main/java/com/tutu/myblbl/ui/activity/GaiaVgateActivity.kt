@@ -64,11 +64,9 @@ class GaiaVgateActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                AppLog.i(TAG, "register start vVoucherLen=${vVoucher.length}")
                 val reg = withContext(Dispatchers.IO) {
                     gaiaVgateRegister(vVoucher, sessionGateway, webGateway)
                 }
-                AppLog.i(TAG, "register ok token=${reg.token.take(8)}")
                 status.text = "请完成验证…"
                 val bridge = Bridge(token = reg.token)
                 webView.addJavascriptInterface(bridge, "Android")

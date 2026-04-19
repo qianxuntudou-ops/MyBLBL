@@ -70,7 +70,6 @@ class PlayerActionDialog(
                 runCatching {
                     videoRepository.like(aid, safeBvid, if (isLiked) 0 else 1)
                 }.onSuccess { response ->
-                    AppLog.d("PlayerAction", "like response: code=${response.code}, message=${response.message}")
                     if (response.isSuccess) {
                         isLiked = !isLiked
                         renderState()
@@ -104,7 +103,6 @@ class PlayerActionDialog(
                 runCatching {
                     videoRepository.giveCoin(aid, safeBvid, multiply = selectedCoinMultiply, selectLike = 0)
                 }.onSuccess { response ->
-                    AppLog.d("PlayerAction", "coin response: code=${response.code}, message=${response.message}")
                     if (response.isSuccess) {
                         isCoined = true
                         renderState()
@@ -180,13 +178,11 @@ class PlayerActionDialog(
 
         binding.buttonTriple.setOnClickListener {
             if (!checkLogin()) return@setOnClickListener
-            AppLog.d("PlayerActionDialog", "tripleAction clicked: aid=$aid, bvid=$bvid")
             scope.launch {
                 runCatching {
                     // 只传 bvid，不传 aid，避免大 aid 可能导致的问题
                     videoRepository.tripleAction(null, safeBvid ?: bvid)
                 }.onSuccess { response ->
-                    AppLog.d("PlayerActionDialog", "tripleAction response: code=${response.code}, message=${response.message}, msg=${response.msg}")
                     if (response.isSuccess) {
                         isLiked = true
                         isCoined = true

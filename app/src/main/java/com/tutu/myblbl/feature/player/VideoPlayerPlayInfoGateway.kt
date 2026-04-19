@@ -190,10 +190,6 @@ class VideoPlayerPlayInfoGateway(
         }.getOrNull()
 
         if (wbiResponse != null) {
-            AppLog.d(
-                logTag,
-                "requestPlayInfo wbi response: code=${wbiResponse.code}, success=${wbiResponse.isSuccess}"
-            )
             return PlayInfoResult(
                 code = wbiResponse.code,
                 message = wbiResponse.message,
@@ -230,10 +226,6 @@ class VideoPlayerPlayInfoGateway(
         }.getOrNull()
 
         if (normalResponse != null) {
-            AppLog.d(
-                logTag,
-                "requestPlayInfo normal response: code=${normalResponse.code}, success=${normalResponse.isSuccess}"
-            )
             return PlayInfoResult(
                 code = normalResponse.code,
                 message = normalResponse.message,
@@ -307,10 +299,6 @@ class VideoPlayerPlayInfoGateway(
         }.getOrNull()
 
         if (wbiResponse != null) {
-            AppLog.d(
-                logTag,
-                "requestPlayInfo wbi try_look response: code=${wbiResponse.code}, success=${wbiResponse.isSuccess}"
-            )
             return PlayInfoResult(
                 code = wbiResponse.code,
                 message = wbiResponse.message,
@@ -343,10 +331,6 @@ class VideoPlayerPlayInfoGateway(
         }.getOrNull()
 
         if (response != null) {
-            AppLog.d(
-                logTag,
-                "requestPlayInfo normal try_look response: code=${response.code}, success=${response.isSuccess}"
-            )
             return PlayInfoResult(
                 code = response.code,
                 message = response.message,
@@ -378,10 +362,6 @@ class VideoPlayerPlayInfoGateway(
             AppLog.e(logTag, "loadPlayerInfoData normal exception: ${throwable.message}", throwable)
         }.getOrNull()
         if (normalResponse != null) {
-            AppLog.d(
-                logTag,
-                "loadPlayerInfoData normal response: code=${normalResponse.code}, success=${normalResponse.isSuccess}"
-            )
         }
         normalResponse?.data?.takeIf { normalResponse.isSuccess }?.let { return it }
 
@@ -398,10 +378,6 @@ class VideoPlayerPlayInfoGateway(
             AppLog.e(logTag, "loadPlayerInfoData wbi exception: ${throwable.message}", throwable)
         }.getOrNull()
         if (wbiResponse != null) {
-            AppLog.d(
-                logTag,
-                "loadPlayerInfoData wbi response: code=${wbiResponse.code}, success=${wbiResponse.isSuccess}"
-            )
         }
         return wbiResponse?.takeIf { it.isSuccess }?.data
     }
@@ -429,10 +405,6 @@ class VideoPlayerPlayInfoGateway(
         }.getOrNull()
 
         if (response != null) {
-            AppLog.d(
-                logTag,
-                "requestVideoSnapshot response: code=${response.code}, success=${response.isSuccess}, images=${response.data?.images?.size ?: 0}, indexSize=${response.data?.index?.size ?: 0}, cid=$cid"
-            )
         }
 
         return response?.data?.takeIf { response.isSuccess }
@@ -533,10 +505,6 @@ class VideoPlayerPlayInfoGateway(
         segmentIndex: Int,
         probe: DanmakuSegmentProbe?
     ) {
-        AppLog.d(
-            logTag,
-            "requestDanmakuSegment[$source]: cid=$cid, aid=$aid, segment=$segmentIndex, bytes=${probe?.bytes?.size ?: 0}, elems=${probe?.elemCount ?: -1}, state=${probe?.state ?: -1}"
-        )
     }
 
     suspend fun requestDanmakuViewBytes(
@@ -670,10 +638,6 @@ class VideoPlayerPlayInfoGateway(
             }.getOrNull()
             lastResponse = response
             if (response != null) {
-                AppLog.d(
-                    logTag,
-                    "requestPgcPlayInfo[$label] response: code=${response.code}, success=${response.isSuccess}, message=${response.message}, epId=$epId, cid=$cid, hasResult=${response.result != null}"
-                )
                 if (response.isSuccess && response.result != null) {
                     return response.toPlayInfoResult()
                 }
@@ -684,10 +648,6 @@ class VideoPlayerPlayInfoGateway(
         }
 
         if (lastResponse != null) {
-            AppLog.d(
-                logTag,
-                "requestPgcPlayInfo final failure: code=${lastResponse?.code}, message=${lastResponse?.message}, epId=$epId, cid=$cid"
-            )
         }
         return lastResponse?.toPlayInfoResult()
     }
@@ -744,12 +704,10 @@ class VideoPlayerPlayInfoGateway(
             AppLog.e(logTag, "ensureWbiKeys exception: ${throwable.message}", throwable)
         }.getOrNull() ?: return
         if (sessionGateway.syncUserSession(response, source = "ensureWbiKeys") != null) {
-            AppLog.d(logTag, "ensureWbiKeys success")
         } else if (response.code == -101) {
             val data = response.data
             if (data != null) {
                 sessionGateway.syncUserSession(response, source = "ensureWbiKeys")
-                AppLog.d(logTag, "ensureWbiKeys: extracted keys from unauthenticated nav response")
             }
         } else {
             AppLog.e(logTag, "ensureWbiKeys failed: code=${response.code}, message=${response.errorMessage}")

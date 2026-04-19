@@ -5,17 +5,13 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.dash.manifest.DashManifest
 import androidx.media3.exoplayer.dash.manifest.DashManifestParser
-import com.tutu.myblbl.core.common.log.AppLog
 import java.io.ByteArrayInputStream
 
 @OptIn(UnstableApi::class)
 object VideoPlayerDashManifestBuilder {
 
-    private const val TAG = "DashManifestBuilder"
-
     fun buildManifest(route: DashRoute): DashManifest {
         val start = System.currentTimeMillis()
-        AppLog.d(TAG, "dashMpd:build:start")
 
         val durationS = route.durationMs / 1000.0
         val minBufferS = route.minBufferTimeMs / 1000.0
@@ -72,7 +68,6 @@ object VideoPlayerDashManifestBuilder {
             .parse(Uri.parse("dash://local"), ByteArrayInputStream(xml.toByteArray()))
 
         val elapsed = System.currentTimeMillis() - start
-        AppLog.d(TAG, "dashMpd:build:done ${elapsed}ms")
 
         return manifest
     }

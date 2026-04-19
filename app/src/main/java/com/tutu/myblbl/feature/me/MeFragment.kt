@@ -20,7 +20,6 @@ import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.ui.dialog.UserInfoDialog
 import com.tutu.myblbl.feature.settings.SignInFragment
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
@@ -32,7 +31,6 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
 
 class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
     companion object {
-        private const val TAG = "MainEntryFocus"
         private const val USER_INFO_CACHE_TTL_MS = 10 * 60 * 1000L
 
         fun newInstance(): MeFragment = MeFragment()
@@ -242,18 +240,10 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
         if (!viewModel.isLoggedIn.value) {
             val handled = binding.rightStateContainer.requestFocus()
-            AppLog.d(
-                TAG,
-                "MeFragment.focusEntryFromMainTab loggedOut: handled=$handled preferSpatialEntry=$preferSpatialEntry"
-            )
             return handled
         }
         val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
             focusCurrentTab(anchorView)
-        AppLog.d(
-            TAG,
-            "MeFragment.focusEntryFromMainTab: currentItem=${viewPager.currentItem} handled=$handled preferSpatialEntry=$preferSpatialEntry anchor=${anchorView?.javaClass?.simpleName ?: "null"} focus=${view?.findFocus()?.javaClass?.simpleName ?: "null"}"
-        )
         return handled
     }
 

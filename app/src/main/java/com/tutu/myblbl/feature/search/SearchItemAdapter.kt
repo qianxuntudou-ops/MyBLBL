@@ -18,7 +18,6 @@ import com.tutu.myblbl.databinding.CellUserBinding
 import com.tutu.myblbl.databinding.CellVideoBinding
 import com.tutu.myblbl.model.search.SearchItemModel
 import com.tutu.myblbl.model.search.SearchType
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.common.format.NumberUtils
 import com.tutu.myblbl.core.common.time.TimeUtils

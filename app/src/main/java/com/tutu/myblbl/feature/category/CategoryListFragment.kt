@@ -11,7 +11,6 @@ import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.ui.adapter.VideoAdapter
 import com.tutu.myblbl.core.ui.base.BaseListFragment
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import kotlinx.coroutines.flow.collectLatest
@@ -75,10 +74,6 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
             } else {
                 result
             }
-            AppLog.d(
-                TAG,
-                "onFocusSearchFailed: focusedPos=${recyclerView?.getChildAdapterPosition(focused) ?: RecyclerView.NO_POSITION}, direction=${directionName(direction)}, resultPos=${result?.let { recyclerView?.getChildAdapterPosition(it) } ?: RecyclerView.NO_POSITION}, fallbackPos=${fallback?.let { recyclerView?.getChildAdapterPosition(it) } ?: RecyclerView.NO_POSITION}, childCount=${recyclerView?.childCount ?: -1}"
-            )
             return fallback
         }
     }
@@ -101,7 +96,6 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
         super.initView()
         adapter?.showLoadMore = false
         recyclerView?.setOnFocusChangeListener { _, hasFocus ->
-            AppLog.d(TAG, "recycler focus: hasFocus=$hasFocus childCount=${recyclerView?.childCount ?: -1}")
         }
         recyclerView?.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN &&
@@ -110,10 +104,6 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
                     keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
                     keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
             ) {
-                AppLog.d(
-                    TAG,
-                    "recycler key: key=${directionName(keyCode)} focusedChild=${view?.findFocus()?.javaClass?.simpleName ?: "null"}"
-                )
             }
             false
         }
@@ -196,25 +186,18 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
         }
         if (viewError?.visibility == View.VISIBLE && buttonRetry?.isShown == true) {
             val handled = buttonRetry?.requestFocus() == true
-            AppLog.d(TAG, "focusPrimaryContent retry: handled=$handled")
             return handled
         }
         val handled = super.focusPrimaryContent()
-        AppLog.d(
-            TAG,
-            "focusPrimaryContent list: handled=$handled focusedView=${view?.findFocus()?.javaClass?.simpleName ?: "null"}"
-        )
         return handled
     }
 
     private fun focusTopTab(): Boolean {
         val handled = (parentFragment as? CategoryFragment)?.focusCurrentTab() == true
-        AppLog.d(TAG, "focusTopTab: handled=$handled")
         return handled
     }
 
     private fun keepCurrentFocus(): Boolean {
-        AppLog.d(TAG, "keepCurrentFocus: consume bottom-edge DOWN")
         return true
     }
 

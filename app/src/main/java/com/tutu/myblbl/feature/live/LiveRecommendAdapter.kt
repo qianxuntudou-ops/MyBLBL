@@ -11,7 +11,6 @@ import com.tutu.myblbl.databinding.CellLaneScrollableBinding
 import com.tutu.myblbl.model.live.LiveRecommendSection
 import com.tutu.myblbl.model.live.LiveRoomItem
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
-import com.tutu.myblbl.core.common.log.AppLog
 
 class LiveRecommendAdapter(
     private val onRoomClick: (LiveRoomItem) -> Unit,
@@ -32,7 +31,6 @@ class LiveRecommendAdapter(
     }
 
     fun setData(list: List<LiveRecommendSection>) {
-        AppLog.d("LiveRecommendAdapter", "setData: list.size=${list.size}, old size=${currentList.size}")
         submitList(list)
     }
 

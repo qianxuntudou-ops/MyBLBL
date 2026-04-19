@@ -14,7 +14,6 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
-import com.tutu.myblbl.core.common.log.AppLog
 import java.io.IOException
 
 @OptIn(UnstableApi::class)
@@ -24,7 +23,6 @@ class VideoPlayerDashMediaSourceFactory(
 ) {
 
     companion object {
-        private const val TAG = "MediaSourceFactory"
     }
 
     private val loadErrorPolicy = object : LoadErrorHandlingPolicy {
@@ -42,7 +40,6 @@ class VideoPlayerDashMediaSourceFactory(
 
     fun createMediaSource(route: DashRoute): MediaSource {
         val startTime = System.currentTimeMillis()
-        AppLog.d(TAG, "mediaSource:build:start codec=${route.codec}")
 
         val videoSource = createProgressiveSource(
             urls = route.videoUrls,
@@ -65,7 +62,6 @@ class VideoPlayerDashMediaSourceFactory(
         }
 
         val elapsed = System.currentTimeMillis() - startTime
-        AppLog.d(TAG, "mediaSource:build:done ${elapsed}ms")
 
         return mediaSource
     }
@@ -140,15 +136,12 @@ class VideoPlayerDashMediaSourceFactory(
             val host = uri?.host.orEmpty()
             val path = uri?.path.orEmpty().takeLast(40)
             val openStartMs = System.currentTimeMillis()
-            AppLog.d(TAG, "http:open host=$host path=...$path position=$pos length=$len")
             return try {
                 val remaining = upstream.open(dataSpec)
                 val actualUri = upstream.uri
                 val cdnConnectMs = System.currentTimeMillis() - openStartMs
-                AppLog.d(TAG, "http:opened host=${actualUri?.host.orEmpty()} remaining=$remaining connectMs=$cdnConnectMs")
                 remaining
             } catch (e: IOException) {
-                AppLog.d(TAG, "http:open:failed host=$host error=${e.message}")
                 throw e
             }
         }

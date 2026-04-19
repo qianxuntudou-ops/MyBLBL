@@ -275,7 +275,6 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                         ?.takeIf { !it.readyLogged }
                         ?.also {
                             it.readyLogged = true
-                            AppLog.d(TAG, "startup trace #${it.sequence}: ready in ${SystemClock.elapsedRealtime() - it.startedAtMs}ms")
                         }
                     viewModel.setLoading(false)
                     if (player?.playWhenReady == true) {
@@ -339,8 +338,6 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private fun handleIntent(intent: Intent) {
         val launchContext = intent.serializableExtraCompat<PlayerLaunchContext>(EXTRA_LAUNCH_CONTEXT)
             ?: PlayerLaunchContext.create()
-        AppLog.d(TAG, "cardClick:start aid=${launchContext.aid}, bvid=${launchContext.bvid}, cid=${launchContext.cid}, epId=${launchContext.epId}, seasonId=${launchContext.seasonId}, clickElapsedRealtime=${SystemClock.elapsedRealtime()}")
-        AppLog.d(TAG, "handleIntent: aid=${launchContext.aid}, bvid=${launchContext.bvid}, cid=${launchContext.cid}, epId=${launchContext.epId}, seasonId=${launchContext.seasonId}")
         if (
             launchContext.aid <= 0L &&
             launchContext.bvid.isBlank() &&
@@ -488,9 +485,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     ?.takeIf { !it.firstFrameLogged }
                     ?.also {
                         it.firstFrameLogged = true
-                        AppLog.d(TAG, "startup trace #${it.sequence}: first frame in ${SystemClock.elapsedRealtime() - it.startedAtMs}ms")
                     }
-                AppLog.d(TAG, "click->firstFrame: totalElapsedRealtime=${SystemClock.elapsedRealtime()}")
             }
         })
         playerView.setControllerVisibilityListener(object : MyPlayerView.ControllerVisibilityListener {
@@ -635,7 +630,6 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     sequence = ++startupTraceSequence,
                     startedAtMs = SystemClock.elapsedRealtime()
                 )
-                AppLog.d(TAG, "startup trace #$startupTraceSequence: apply playback request replaceInPlace=${playbackRequest.replaceInPlace}")
                 playerView.syncDanmakuPosition(playbackRequest.seekPositionMs, forceSeek = true)
                 suppressPlaybackEnvironmentSync = true
                 try {

@@ -39,7 +39,6 @@ import com.tutu.myblbl.ui.dialog.UserInfoDialog
 import com.tutu.myblbl.feature.player.PlayerLaunchContext
 import com.tutu.myblbl.feature.player.VideoPlayerFragment
 import com.tutu.myblbl.core.ui.navigation.TabBarView
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -81,7 +80,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     override fun onCreate(savedInstanceState: Bundle?) {
         if (savedInstanceState == null && shouldFinishDuplicateLauncherLaunch()) {
             super.onCreate(savedInstanceState)
-            AppLog.d(TAG, "ignore duplicate launcher launch and keep existing task")
             finish()
             return
         }
@@ -236,10 +234,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         }
         val anchorView = currentFocus
         val handled = focusCurrentMainContent(anchorView, preferSpatialEntry = true)
-        AppLog.d(
-            TAG,
-            "leftNav navigate RIGHT: index=$index handled=$handled anchor=${anchorView?.javaClass?.simpleName ?: "null"}"
-        )
         return true
     }
 

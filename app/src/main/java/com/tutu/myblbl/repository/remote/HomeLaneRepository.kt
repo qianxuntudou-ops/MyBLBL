@@ -45,13 +45,7 @@ class HomeLaneRepository(
         isRefresh: Boolean = true
     ): Result<HomeLanePage> {
         return runCatching {
-            AppLog.d(TAG, "getHomeLanes start: type=$type, cursor=$cursor, isRefresh=$isRefresh")
             fetchReferenceAlignedHomeLanes(type = type, cursor = cursor, isRefresh = isRefresh)
-        }.onSuccess { page ->
-            AppLog.d(
-                TAG,
-                "getHomeLanes success: type=$type, isRefresh=$isRefresh, sections=${page.sections.size}, nextCursor=${page.nextCursor}, hasMore=${page.hasMore}"
-            )
         }.onFailure { throwable ->
             AppLog.e(
                 TAG,
@@ -106,11 +100,6 @@ class HomeLaneRepository(
             }
         }
 
-        AppLog.d(
-            TAG,
-            "fetchReferenceAlignedHomeLanes done: type=$type, followItems=${followSection?.items?.size ?: 0}, sections=${sections.size}"
-        )
-
         return legacyPage.copy(sections = sections)
     }
 
@@ -135,7 +124,6 @@ class HomeLaneRepository(
         cursor: Long,
         isRefresh: Boolean
     ): HomeLanePage {
-        AppLog.d(TAG, "fetchLegacyHomeLanes start: type=$type, cursor=$cursor, isRefresh=$isRefresh")
         val apiRefresh = if (isRefresh) 0 else 1
         val response = when (type) {
             TYPE_CINEMA -> apiService.getCinema(
@@ -155,10 +143,6 @@ class HomeLaneRepository(
 
         val modules = response.data.modules
         val hasMore = modules.size >= 20
-        AppLog.d(
-            TAG,
-            "fetchLegacyHomeLanes response ok: type=$type, modules=${modules.size}, nextCursor=${response.data.nextCursor}, hasNext=${response.data.hasNext}, hasMore=$hasMore"
-        )
         return HomeLanePage(
             sections = modules.mapNotNull { it.toSection() },
             nextCursor = response.data.nextCursor,
@@ -201,13 +185,11 @@ class HomeLaneRepository(
 
     private fun LaneInfoModel.toSection(): HomeLaneSection? {
         if (items.isEmpty()) {
-            AppLog.d(TAG, "toSection skip empty module: title=$title, style=$style, moduleId=$moduleId, headers=${headers.size}")
             return null
         }
 
         val moreUrl = headers.lastOrNull()?.url.orEmpty()
 
-        AppLog.d(TAG, "toSection ok: title=$title, style=$style, moduleId=$moduleId, items=${items.size}, headers=${headers.size}")
         return HomeLaneSection(
             title = title,
             items = items,
@@ -293,7 +275,6 @@ class HomeLaneRepository(
     }
 
     private suspend fun parseAnimeHomePage(): List<HomeLaneSection> {
-        AppLog.d(TAG, "parseAnimeHomePage start")
         val state = fetchInitialState("https://www.bilibili.com/anime/")
         val modules = state.getAsJsonObject("modules")
         val sections = mutableListOf<HomeLaneSection>()
@@ -362,16 +343,10 @@ class HomeLaneRepository(
                 }
             }
         }
-        val result = timelineSection?.let { sections.insertTimelineSection(it) } ?: sections
-        AppLog.d(
-            TAG,
-            "parseAnimeHomePage done: sections=${result.size}, timelineInserted=${timelineSection != null}"
-        )
-        return result
+        return timelineSection?.let { sections.insertTimelineSection(it) } ?: sections
     }
 
     private suspend fun parseCinemaHomePage(): List<HomeLaneSection> {
-        AppLog.d(TAG, "parseCinemaHomePage start")
         val state = fetchInitialState("https://www.bilibili.com/cinema/")
         val sections = mutableListOf<HomeLaneSection>()
 
@@ -395,13 +370,11 @@ class HomeLaneRepository(
                 moreSeasonType = SeriesType.MOVIE
             )
         }
-        AppLog.d(TAG, "parseCinemaHomePage done: sections=${sections.size}")
         return sections
     }
 
     private suspend fun fetchInitialState(url: String): JsonObject {
         return withContext(Dispatchers.IO) {
-            AppLog.d(TAG, "fetchInitialState start: url=$url")
             val request = Request.Builder()
                 .url(url)
                 .header("Referer", WEB_REFERER)
@@ -416,7 +389,6 @@ class HomeLaneRepository(
                     throw IllegalStateException("Failed to load page: $url")
                 }
                 val html = call.body?.string().orEmpty()
-                AppLog.d(TAG, "fetchInitialState success: url=$url, htmlLength=${html.length}")
                 JsonParser.parseString(extractInitialStateJson(html, url)).asJsonObject
             }
         }

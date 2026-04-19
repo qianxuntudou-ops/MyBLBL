@@ -23,7 +23,6 @@ import com.tutu.myblbl.model.series.SeriesModel
 import com.tutu.myblbl.model.series.SeriesUserState
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.ui.adapter.SeriesDetailContentAdapter
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import com.tutu.myblbl.core.ui.navigation.navigateBackFromUi
 import kotlinx.coroutines.flow.collectLatest

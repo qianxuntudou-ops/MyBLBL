@@ -11,7 +11,6 @@ import android.widget.FrameLayout
 import androidx.appcompat.widget.AppCompatImageView
 import com.bumptech.glide.Glide
 import com.tutu.myblbl.R
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.image.AvatarBadgeView
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
@@ -23,7 +22,6 @@ class TabBarView @JvmOverloads constructor(
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
     companion object {
-        private const val TAG = "MainEntryFocus"
     }
 
     private val buttonSearch: AppCompatImageView
@@ -98,10 +96,6 @@ class TabBarView @JvmOverloads constructor(
                 }
                 when (keyCode) {
                     KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                        AppLog.d(
-                            TAG,
-                            "leftNav key RIGHT: index=$index button=${resources.getResourceEntryName(button.id)} selected=$currentSelectedIndex hasFocus=${button.hasFocus()}"
-                        )
                         onTabClickListener?.onTabNavigateRight(index) == true
                     }
                     KeyEvent.KEYCODE_DPAD_LEFT -> true

@@ -1,6 +1,5 @@
 package com.tutu.myblbl.feature.player
 
-import com.tutu.myblbl.core.common.log.AppLog
 
 class PlaybackUiCoordinator {
 
@@ -83,7 +82,6 @@ class PlaybackUiCoordinator {
     }
 
     fun transition(event: UiEvent) {
-        AppLog.d(TAG, "transition: $event")
         when (event) {
             is UiEvent.ToggleChrome -> handleToggleChrome()
             is UiEvent.ChromeTimeout -> handleChromeTimeout()
@@ -367,11 +365,6 @@ class PlaybackUiCoordinator {
     }
 
     private fun notifyStateChanged() {
-        AppLog.d(
-            TAG,
-            "state: chrome=$chromeState, bottom=$bottomOccupant, seek=$seekState, " +
-                "panel=$panelState, focus=$focusOwner, hud=$hudState"
-        )
         listeners.forEach { it.onStateChanged(this) }
     }
 
@@ -416,7 +409,6 @@ class PlaybackUiCoordinator {
     }
 
     companion object {
-        private const val TAG = "PlaybackUiCoordinator"
         private const val EXIT_INTERVAL_MS = 2000L
     }
 

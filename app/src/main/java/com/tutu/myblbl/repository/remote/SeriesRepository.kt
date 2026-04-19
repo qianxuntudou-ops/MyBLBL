@@ -1,6 +1,5 @@
 package com.tutu.myblbl.repository.remote
 
-import android.util.Log
 import com.tutu.myblbl.model.series.EpisodesDetailModel
 import com.tutu.myblbl.model.series.FollowSeriesResult
 import com.tutu.myblbl.model.series.MyFollowingResponseWrapper
@@ -23,7 +22,6 @@ class SeriesRepository(
                 sessionGateway.syncAuthState(it, source = "series.getSeriesDetail")
             }
             val detail = response.result
-            Log.d("SeriesRepo", "seriesDetail raw: new_ep=${detail?.newEp}, total=${detail?.total}, type=${detail?.type}, publish=${detail?.publish}")
             if (response.isSuccess && detail != null) {
                 val resolvedSeasonId = detail.seasonId.takeIf { it > 0 } ?: seasonId
                 val sectionResult = if (resolvedSeasonId > 0) {

@@ -6,7 +6,6 @@ import com.tutu.myblbl.model.common.GiveCoinResultModel
 import com.tutu.myblbl.model.common.TripleActionResultModel
 import com.tutu.myblbl.model.recommend.RecommendListDataModel
 import com.tutu.myblbl.model.video.GetVideoByChannelWrapper
-import com.tutu.myblbl.model.video.LaterWatchWrapper
 import com.tutu.myblbl.model.video.RegionVideoListWrapper
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.model.video.detail.VideoDetailModel
@@ -44,16 +43,11 @@ class VideoRepository(
             source = "video.getWatchLaterList"
         )
         val list = if (response.isSuccess) response.data?.list.orEmpty() else emptyList()
-        // DEBUG: log PGC fields for toview items
-        list.forEach { v ->
-            if (v.playbackEpId > 0 || v.playbackSeasonId > 0 || v.bangumi != null || v.redirectUrl.contains("/bangumi/")) {
-                AppLog.d("PGC_DEBUG", "ToView PGC item: title=${v.title}, bvid=${v.bvid}, cid=${v.cid}, epid=${v.epid}, sid=${v.sid}, redirectUrl=${v.redirectUrl}, isPgc=${v.isPgc}, playbackEpId=${v.playbackEpId}, playbackSeasonId=${v.playbackSeasonId}, bangumi=${v.bangumi}")
-            }
-        }
         watchLaterCache = list
         watchLaterCacheTimeMs = now
         return list
     }
+
     companion object {
         private const val TAG = "VideoRepository"
         private const val FEEDBACK_APP_ID = "100"
@@ -168,28 +162,19 @@ class VideoRepository(
 
     suspend fun tripleAction(avid: Long?, bvid: String?, csrf: String): Result<BaseResponse<TripleActionResultModel>> =
         runCatching {
-            val hasSessdata = cookieManager.getCookieValue("SESSDATA")?.isNotBlank() ?: false
-            val hasBuvid3 = cookieManager.getCookieValue("buvid3")?.isNotBlank() ?: false
-            val hasBuvid4 = cookieManager.getCookieValue("buvid4")?.isNotBlank() ?: false
-            AppLog.d(TAG, "tripleAction called: aid=$avid, bvid=$bvid, csrf=${if (csrf.isBlank()) "EMPTY" else "HAS_VALUE"}")
-            AppLog.d(TAG, "Cookie check: SESSDATA=$hasSessdata, buvid3=$hasBuvid3, buvid4=$hasBuvid4")
-            
             securityGateway.prewarmWebSession()
             val firstResponse = sessionGateway.syncAuthState(
                 apiService.tripleAction(avid, bvid, csrf),
                 source = "video.tripleAction.first"
             )
-            AppLog.d(TAG, "tripleAction first response: code=${firstResponse.code}, message=${firstResponse.message}, msg=${firstResponse.msg}")
             if (firstResponse.code == -352 || firstResponse.code == -401) {
                 AppLog.e(TAG, "tripleAction first attempt hit risk control/401: aid=$avid, bvid=$bvid, code=${firstResponse.code}")
                 delay(1500L)
                 securityGateway.prewarmWebSession(forceUaRefresh = true)
-                val secondResponse = sessionGateway.syncAuthState(
+                sessionGateway.syncAuthState(
                     apiService.tripleAction(avid, bvid, csrf),
                     source = "video.tripleAction.second"
                 )
-                AppLog.d(TAG, "tripleAction second response: code=${secondResponse.code}, message=${secondResponse.message}, msg=${secondResponse.msg}")
-                secondResponse
             } else {
                 firstResponse
             }
@@ -249,20 +234,12 @@ class VideoRepository(
             securityGateway.prewarmWebSession()
             val firstParams = buildFeedbackWbiParams()
             val firstForm = buildDislikeForm(video = video, reasonId = reasonId, csrf = csrf)
-            AppLog.d(
-                TAG,
-                "dislikeFeed request(first): url=/x/web-interface/feedback/dislike, reasonId=$reasonId, loggedIn=${sessionGateway.isLoggedIn()}, hasCsrf=${csrf.isNotBlank()}, goto=${video.goto}, id=${resolveFeedbackTargetId(video)}, mid=${video.owner?.mid ?: 0L}, trackId=${video.trackId}, wts=${firstParams["wts"]}, hasWRid=${!firstParams["w_rid"].isNullOrBlank()}, form=$firstForm"
-            )
             val firstResponse = sessionGateway.syncAuthState(
                 apiService.dislikeFeed(
                     params = firstParams,
                     form = firstForm
                 ),
                 source = "video.dislikeFeed.first"
-            )
-            AppLog.d(
-                TAG,
-                "dislikeFeed response(first): code=${firstResponse.code}, message=${firstResponse.message}, msg=${firstResponse.msg}, success=${firstResponse.isSuccess}"
             )
             if (firstResponse.code in FEEDBACK_RETRY_CODES) {
                 AppLog.e(
@@ -273,22 +250,13 @@ class VideoRepository(
                 securityGateway.prewarmWebSession(forceUaRefresh = true)
                 val secondParams = buildFeedbackWbiParams()
                 val secondForm = buildDislikeForm(video = video, reasonId = reasonId, csrf = csrf)
-                AppLog.d(
-                    TAG,
-                    "dislikeFeed request(second): url=/x/web-interface/feedback/dislike, reasonId=$reasonId, loggedIn=${sessionGateway.isLoggedIn()}, hasCsrf=${csrf.isNotBlank()}, goto=${video.goto}, id=${resolveFeedbackTargetId(video)}, mid=${video.owner?.mid ?: 0L}, trackId=${video.trackId}, wts=${secondParams["wts"]}, hasWRid=${!secondParams["w_rid"].isNullOrBlank()}, form=$secondForm"
-                )
                 sessionGateway.syncAuthState(
                     apiService.dislikeFeed(
                         params = secondParams,
                         form = secondForm
                     ),
                     source = "video.dislikeFeed.second"
-                ).also { secondResponse ->
-                    AppLog.d(
-                        TAG,
-                        "dislikeFeed response(second): code=${secondResponse.code}, message=${secondResponse.message}, msg=${secondResponse.msg}, success=${secondResponse.isSuccess}"
-                    )
-                }
+                )
             } else {
                 firstResponse
             }

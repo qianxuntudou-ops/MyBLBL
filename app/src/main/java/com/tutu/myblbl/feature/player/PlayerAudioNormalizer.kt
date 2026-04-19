@@ -131,7 +131,6 @@ internal object PlayerAudioNormalizer {
             currentAudioSessionId = audioSessionId
             releaseEffects()
             if (audioSessionId <= 0) {
-                AppLog.d(TAG, "skip invalid audio session: $audioSessionId")
                 return
             }
             if (Build.VERSION.SDK_INT >= 28 && attachDynamicsProcessing(audioSessionId)) {
@@ -160,7 +159,6 @@ internal object PlayerAudioNormalizer {
                 configureDynamicsProcessing(effect)
                 c.dpSetEnabled?.invoke(effect, true)
                 dynamicsProcessing = effect
-                AppLog.d(TAG, "attached DynamicsProcessing to session=$audioSessionId")
             }.onFailure { error ->
                 AppLog.w(TAG, "failed to attach DynamicsProcessing for session=$audioSessionId", error)
             }.isSuccess
@@ -211,7 +209,6 @@ internal object PlayerAudioNormalizer {
                 c.leSetTargetGain?.invoke(effect, FALLBACK_TARGET_GAIN_MB)
                 c.leSetEnabled?.invoke(effect, true)
                 loudnessEnhancer = effect
-                AppLog.d(TAG, "attached LoudnessEnhancer to session=$audioSessionId")
             }.onFailure { error ->
                 AppLog.w(TAG, "failed to attach LoudnessEnhancer for session=$audioSessionId", error)
             }.isSuccess

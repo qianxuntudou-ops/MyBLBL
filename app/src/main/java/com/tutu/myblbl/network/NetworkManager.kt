@@ -147,7 +147,6 @@ object NetworkManager {
             clearRefreshToken()
         }
         securityCoordinator.resetRuntimeState()
-        AppLog.d(TAG, "clearUserSession: clearCookies=$clearCookies reason=$reason")
     }
 
     private fun getRefreshToken(): String? {

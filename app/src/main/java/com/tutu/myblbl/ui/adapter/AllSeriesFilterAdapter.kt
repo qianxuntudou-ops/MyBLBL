@@ -11,7 +11,6 @@ import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellSeriesFilterBinding
 import com.tutu.myblbl.model.series.AllSeriesFilterModel
-import com.tutu.myblbl.core.common.log.AppLog
 
 class AllSeriesFilterAdapter(
     private val onItemClick: (Int) -> Unit,
@@ -22,7 +21,6 @@ class AllSeriesFilterAdapter(
 ) : ListAdapter<AllSeriesFilterModel, AllSeriesFilterAdapter.FilterViewHolder>(DIFF_CALLBACK) {
 
     companion object {
-        private const val TAG = "AllSeriesFocus"
 
         private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<AllSeriesFilterModel>() {
             override fun areItemsTheSame(oldItem: AllSeriesFilterModel, newItem: AllSeriesFilterModel): Boolean {
@@ -53,7 +51,6 @@ class AllSeriesFilterAdapter(
 
     fun requestSavedItemFocus(recyclerView: RecyclerView): Boolean {
         val position = focusedPosition
-        AppLog.d(TAG, "adapter requestSavedItemFocus: position=$position itemCount=$itemCount")
         if (position == RecyclerView.NO_POSITION) {
             return false
         }
@@ -61,18 +58,15 @@ class AllSeriesFilterAdapter(
     }
 
     fun requestItemFocus(recyclerView: RecyclerView, position: Int): Boolean {
-        AppLog.d(TAG, "adapter requestItemFocus: position=$position itemCount=$itemCount")
         if (position !in 0 until itemCount) {
             return false
         }
         val holder = recyclerView.findViewHolderForAdapterPosition(position)
         if (holder?.itemView?.requestFocus() == true) {
             pendingFocusPosition = RecyclerView.NO_POSITION
-            AppLog.d(TAG, "adapter requestItemFocus immediate success: position=$position")
             return true
         }
         pendingFocusPosition = position
-        AppLog.d(TAG, "adapter requestItemFocus deferred: position=$position")
         recyclerView.scrollToPosition(position)
         return true
     }
@@ -104,16 +98,13 @@ class AllSeriesFilterAdapter(
     override fun onBindViewHolder(holder: FilterViewHolder, position: Int) {
         holder.bind(getItem(position), position, expanded)
         if (pendingFocusPosition == position) {
-            AppLog.d(TAG, "adapter onBind pending focus: position=$position")
             holder.itemView.post {
                 if (pendingFocusPosition != position) {
                     return@post
                 }
                 if (holder.itemView.requestFocus()) {
                     pendingFocusPosition = RecyclerView.NO_POSITION
-                    AppLog.d(TAG, "adapter pending focus success: position=$position")
                 } else {
-                    AppLog.d(TAG, "adapter pending focus failed: position=$position")
                 }
             }
         }
@@ -177,7 +168,6 @@ class AllSeriesFilterAdapter(
             }
             binding.clickView.setOnFocusChangeListener { view, hasFocus ->
                 if (hasFocus) {
-                    AppLog.d(TAG, "filter item focused: position=$bindingAdapterPosition")
                     onFocused(view)
                 }
             }

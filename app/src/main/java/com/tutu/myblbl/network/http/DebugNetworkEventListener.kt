@@ -32,8 +32,6 @@ class DebugNetworkEventListener : EventListener() {
     )
 
     companion object {
-        private const val TAG = "NetTrace"
-
         private val HOST_CATEGORIES = mapOf(
             "api.bilibili.com" to "api",
             "app.bilibili.com" to "api",
@@ -120,7 +118,6 @@ class DebugNetworkEventListener : EventListener() {
     override fun callEnd(call: Call) {
         val trace = traces.remove(call) ?: return
         trace.callEndMs = System.currentTimeMillis()
-        emitSummary(call, trace)
     }
 
     override fun callFailed(call: Call, ioe: java.io.IOException) {
@@ -128,46 +125,6 @@ class DebugNetworkEventListener : EventListener() {
         trace.callEndMs = System.currentTimeMillis()
         trace.callFailed = true
         trace.errorMessage = ioe.message
-        emitSummary(call, trace)
-    }
-
-    private fun emitSummary(call: Call, trace: TraceState) {
-        val host = hostOf(call)
-        val path = pathOf(call).take(80)
-        val category = categorizeHost(host)
-        val totalMs = trace.callEndMs - trace.callStartMs
-
-        val dnsMs = elapsed(trace.dnsStartMs, trace.dnsEndMs)
-        val connectMs = elapsed(trace.connectStartMs, trace.connectEndMs)
-        val tlsMs = elapsed(trace.secureConnectStartMs, trace.secureConnectEndMs)
-        val ttfbMs = if (trace.responseHeadersStartMs > 0L && trace.requestHeadersStartMs > 0L) {
-            trace.responseHeadersStartMs - trace.requestHeadersStartMs
-        } else 0L
-        val bodyMs = if (trace.responseBodyEndMs > 0L && trace.responseHeadersEndMs > 0L) {
-            trace.responseBodyEndMs - trace.responseHeadersEndMs
-        } else 0L
-
-        if (trace.callFailed) {
-            android.util.Log.w(TAG, buildString {
-                append("[$category] FAIL $host$path")
-                append(" | total=${totalMs}ms")
-                append(" | error=${trace.errorMessage.orEmpty()}")
-            })
-        } else {
-            android.util.Log.d(TAG, buildString {
-                append("[$category] $host$path")
-                append(" | total=${totalMs}ms")
-                if (dnsMs > 0) append(" dns=${dnsMs}ms")
-                if (connectMs > 0) append(" connect=${connectMs}ms")
-                if (tlsMs > 0) append(" tls=${tlsMs}ms")
-                if (ttfbMs > 0) append(" ttfb=${ttfbMs}ms")
-                if (bodyMs > 0) append(" body=${bodyMs}ms")
-            })
-        }
-    }
-
-    private fun elapsed(startMs: Long, endMs: Long): Long {
-        return if (startMs > 0L && endMs >= startMs) endMs - startMs else 0L
     }
 
     class Factory : EventListener.Factory {

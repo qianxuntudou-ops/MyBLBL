@@ -206,10 +206,6 @@ class VideoPlayerFragment : Fragment() {
                         ?.takeIf { !it.readyLogged }
                         ?.also {
                             it.readyLogged = true
-                            AppLog.d(
-                                TAG,
-                                "startup trace #${it.sequence}: ready in ${SystemClock.elapsedRealtime() - it.startedAtMs}ms"
-                            )
                         }
                     viewModel.setLoading(false)
                     if (player?.playWhenReady == true && !isSeeking) {
@@ -431,10 +427,6 @@ class VideoPlayerFragment : Fragment() {
                     ?.takeIf { !it.firstFrameLogged }
                     ?.also {
                         it.firstFrameLogged = true
-                        AppLog.d(
-                            TAG,
-                            "startup trace #${it.sequence}: first frame in ${SystemClock.elapsedRealtime() - it.startedAtMs}ms"
-                        )
                     }
             }
         })
@@ -537,7 +529,6 @@ class VideoPlayerFragment : Fragment() {
             }
 
             override fun onClose() {
-                AppLog.d(TAG, "controller request close")
                 exitPlayerHost()
             }
 
@@ -599,13 +590,8 @@ class VideoPlayerFragment : Fragment() {
             object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
                     if (cancelResume()) {
-                        AppLog.d(TAG, "onBackPressed: cancelled resume progress")
                         return
                     }
-                    AppLog.d(
-                        TAG,
-                        "onBackPressed: panelVisible=${uiCoordinator.hasVisiblePanel()}, setting=${playerView.isSettingViewShowing()}"
-                    )
                     uiCoordinator.handleBackPress(
                         nowMs = System.currentTimeMillis(),
                         isSettingShowing = playerView.isSettingViewShowing(),
@@ -652,10 +638,6 @@ class VideoPlayerFragment : Fragment() {
                 startupTrace = StartupTrace(
                     sequence = ++startupTraceSequence,
                     startedAtMs = SystemClock.elapsedRealtime()
-                )
-                AppLog.d(
-                    TAG,
-                    "startup trace #$startupTraceSequence: apply playback request replaceInPlace=${playbackRequest.replaceInPlace}, seek=${playbackRequest.seekPositionMs}, playWhenReady=${playbackRequest.playWhenReady}"
                 )
                 playerView.syncDanmakuPosition(playbackRequest.seekPositionMs, forceSeek = true)
                 suppressPlaybackEnvironmentSync = true

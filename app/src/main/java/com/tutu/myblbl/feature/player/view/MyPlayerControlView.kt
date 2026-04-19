@@ -1,7 +1,6 @@
 package com.tutu.myblbl.feature.player.view
 
 import android.content.Context
-import com.tutu.myblbl.core.common.log.AppLog
 import android.graphics.drawable.ColorDrawable
 import android.os.Handler
 import android.os.Looper
@@ -214,7 +213,6 @@ class MyPlayerControlView @JvmOverloads constructor(
         bottomBar = findViewById(R.id.exo_bottom_bar)
         titleContainer = findViewById(R.id.view_title)
         titleContainer.setOnFocusChangeListener { _, hasFocus ->
-            AppLog.d("FocusDebug", "titleContainerFocus: hasFocus=$hasFocus")
         }
 
         // Focus routing is kept in a dedicated coordinator so player actions stay separate.

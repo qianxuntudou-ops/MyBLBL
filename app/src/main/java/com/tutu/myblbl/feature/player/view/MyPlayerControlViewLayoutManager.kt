@@ -5,7 +5,6 @@ import android.animation.AnimatorListenerAdapter
 import android.view.View
 import android.view.ViewGroup
 import com.tutu.myblbl.R
-import com.tutu.myblbl.core.common.log.AppLog
 
 class MyPlayerControlViewLayoutManager(
     private val playerControlView: MyPlayerControlView,
@@ -106,7 +105,6 @@ class MyPlayerControlViewLayoutManager(
 
     fun show() {
         val fromSeekProgress = uxState == UX_STATE_ONLY_PROGRESS_VISIBLE
-        AppLog.d("KeyTrace", "LayoutManager.show: currentUxState=$uxState, isVisible=${playerControlView.isVisible()}, fromSeekProgress=$fromSeekProgress")
         if (!playerControlView.isVisible()) {
             playerControlView.visibility = View.VISIBLE
             playerControlView.updateAll()
@@ -118,7 +116,6 @@ class MyPlayerControlViewLayoutManager(
             if (fromSeekProgress) {
                 playerControlView.requestTimeBarFocus()
             } else {
-                AppLog.d("KeyTrace", "LayoutManager.show.post: requesting playPauseFocus, uxState=$uxState")
                 playerControlView.requestPlayPauseFocus()
             }
         }

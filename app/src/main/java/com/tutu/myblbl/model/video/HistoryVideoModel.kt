@@ -111,7 +111,6 @@ data class HistoryVideoModel(
             elecArcBadge = elecArcBadge,
             privilegeType = privilegeType
         )
-        android.util.Log.d("PGC_DEBUG", "HistoryVideoModel.toVideoModel: title=$title, bvid=$mappedBvid, cid=$cid, epid=${historyInfo?.epid ?: 0L}, uri=$uri, business=${historyInfo?.business}, playbackEpId=${model.playbackEpId}, playbackSeasonId=${model.playbackSeasonId}, isPgc=${model.isPgc}")
         return model
     }
 }

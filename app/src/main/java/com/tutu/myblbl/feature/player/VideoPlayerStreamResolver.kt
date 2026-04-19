@@ -9,7 +9,6 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
-import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.media.VideoCodecSupport
 import com.tutu.myblbl.model.player.DashAudio
 import com.tutu.myblbl.model.player.DashVideo
@@ -28,7 +27,6 @@ internal class VideoPlayerStreamResolver(
 ) {
 
     companion object {
-        private const val TAG = "VideoPlayerStreamResolver"
     }
 
     // Centralizes stream fallback rules so the ViewModel only coordinates state and side effects.
@@ -302,7 +300,6 @@ internal class VideoPlayerStreamResolver(
         selectedAudioId: Int?,
         selectedCodec: VideoCodecEnum?
     ): MediaSourceSelection? {
-        AppLog.d(TAG, "buildMediaSource: fallback progressive path")
         val dash = playInfo.dash
         if (dash != null && !dash.video.isNullOrEmpty()) {
             val filteredByQuality = dash.video.orEmpty()
@@ -412,7 +409,6 @@ internal class VideoPlayerStreamResolver(
         durationMs: Long,
         minBufferTimeMs: Long
     ): MediaSourceSelection {
-        AppLog.d(TAG, "buildMediaSourceForRoute: fallback progressive path")
         val mediaSource = createMediaSource(
             videoUrls = CdnLatencyProfile.sortUrlsByLatency(prioritizeUrl(route.videoUrls, videoUrl)),
             audioUrls = CdnLatencyProfile.sortUrlsByLatency(prioritizeUrl(route.audioUrls, audioUrl)),
@@ -637,17 +633,12 @@ internal class VideoPlayerStreamResolver(
             .map(urlNormalizer)
             .filter { it.isNotBlank() }
             .distinct()
-        AppLog.d(
-            TAG,
-            "createMediaSource: using merged progressive sources, videoCandidates=${normalizedVideoUrls.size}, audioCandidates=${normalizedAudioUrls.size}"
-        )
         val source = createProgressivePairSource(
             videoUrls = normalizedVideoUrls,
             audioUrls = normalizedAudioUrls,
             videoMimeType = videoMimeType,
             audioMimeType = audioMimeType
         )
-        AppLog.d(TAG, "progressiveMediaSource:build:done cost=${System.currentTimeMillis() - buildStartMs}ms")
         return source
     }
 

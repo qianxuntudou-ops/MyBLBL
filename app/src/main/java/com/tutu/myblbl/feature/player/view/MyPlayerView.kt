@@ -614,6 +614,15 @@ class MyPlayerView @JvmOverloads constructor(
         if (player == null) return super.dispatchKeyEvent(event)
         if (controller == null) return false
 
+        // If focus is outside this MyPlayerView (e.g. on the related-videos panel),
+        // let the event propagate normally so D-pad navigation works within the panel.
+        if (isDpadKey(event.keyCode)) {
+            val focused = findFocus()
+            if (focused != null && !isViewDescendant(focused)) {
+                return super.dispatchKeyEvent(event)
+            }
+        }
+
         if (event.keyCode == KeyEvent.KEYCODE_MENU &&
             event.action == KeyEvent.ACTION_DOWN &&
             settingView?.isShowing() != true
@@ -723,9 +732,27 @@ class MyPlayerView @JvmOverloads constructor(
                     return handleSeekSessionKeyEvent(event)
                 }
             } else if (isSeekKey && event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0) {
-                return handleSeekSessionKeyEvent(event)
+                // Only route repeats to seek session if it's already active
+                // (started by the initial ACTION_DOWN in hidden UI / scrubbing mode).
+                // Otherwise, let repeat events fall through to normal focus navigation.
+                if (seekSession?.isActive() == true) {
+                    return handleSeekSessionKeyEvent(event)
+                }
             } else if (isSeekKey && event.action == KeyEvent.ACTION_UP) {
-                return handleSeekSessionKeyEvent(event)
+                if (seekSession?.isActive() == true || pendingHoldStartRunnable != null) {
+                    return handleSeekSessionKeyEvent(event)
+                }
+            }
+            // When controller is visible and a button (not timebar) has focus,
+            // pressing DOWN opens the related videos panel if the related button is visible.
+            if (controllerVisible
+                && event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN
+                && event.action == KeyEvent.ACTION_DOWN
+                && controller?.isTimebarFocused() != true
+                && controller?.isRelatedButtonVisible() == true
+            ) {
+                controller?.onRelatedButtonClick()
+                return true
             }
             if (!controllerVisible) {
                 if (event.action == KeyEvent.ACTION_DOWN) {
@@ -769,6 +796,15 @@ class MyPlayerView @JvmOverloads constructor(
             keyCode == KEYCODE_SYSTEM_NAVIGATION_DOWN_COMPAT ||
             keyCode == KEYCODE_SYSTEM_NAVIGATION_LEFT_COMPAT ||
             keyCode == KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT
+    }
+
+    private fun isViewDescendant(view: View): Boolean {
+        var v: View? = view
+        while (v != null) {
+            if (v === this) return true
+            v = v.parent as? View
+        }
+        return false
     }
 
     private fun handleSeekSessionKeyEvent(event: KeyEvent): Boolean {

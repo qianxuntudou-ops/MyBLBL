@@ -1,5 +1,6 @@
 package com.tutu.myblbl.feature.player
 
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.animation.Animation
@@ -166,6 +167,7 @@ class VideoPlayerOverlayController(
     private var relatedPanelFocusListener: ViewTreeObserver.OnGlobalFocusChangeListener? = null
 
     fun showRelatedPanel() {
+        playerView.rememberCurrentFocusTarget()
         overlayCoordinator.onRelatedPanelShown()
         uiCoordinator.onRelatedPanelShown()
         keepControllerVisibleForOverlay()
@@ -173,6 +175,7 @@ class VideoPlayerOverlayController(
         recyclerViewRelated.layoutManager =
             GridLayoutManager(activity, 1, RecyclerView.HORIZONTAL, false)
         recyclerViewRelated.adapter = relatedAdapter
+        setupRelatedHorizontalNavigation()
         if (viewRelated.isVisible) {
             recyclerViewRelated.requestFocus()
             return
@@ -206,7 +209,7 @@ class VideoPlayerOverlayController(
             dimBackground.visibility = View.GONE
             dimBackground.setOnClickListener(null)
             if (restoreFocus && isViewActive()) {
-                restoreControllerAfterOverlay()
+                restoreControllerAfterRelatedPanel()
             }
             return
         }
@@ -220,7 +223,7 @@ class VideoPlayerOverlayController(
                 override fun onAnimationEnd(animation: Animation?) {
                     viewRelated.visibility = View.GONE
                     if (restoreFocus && isViewActive()) {
-                        restoreControllerAfterOverlay()
+                        restoreControllerAfterRelatedPanel()
                     }
                 }
 
@@ -386,6 +389,14 @@ class VideoPlayerOverlayController(
         playerView.resetControllerHideCallbacks()
     }
 
+    private fun restoreControllerAfterRelatedPanel() {
+        playerView.showController()
+        // showController() posts requestPlayPauseFocus() for the next frame.
+        // Post the remembered focus restore after that so it wins.
+        playerView.post { playerView.restoreRememberedFocus() }
+        playerView.resetControllerHideCallbacks()
+    }
+
     private fun setupRelatedPanelFocusTrap() {
         removeRelatedPanelFocusTrap()
         val listener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
@@ -409,5 +420,35 @@ class VideoPlayerOverlayController(
             }
         }
         relatedPanelFocusListener = null
+    }
+
+    private fun setupRelatedHorizontalNavigation() {
+        recyclerViewRelated.setOnKeyListener { _, keyCode, event ->
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            if (keyCode != KeyEvent.KEYCODE_DPAD_LEFT && keyCode != KeyEvent.KEYCODE_DPAD_RIGHT) {
+                return@setOnKeyListener false
+            }
+            val focused = recyclerViewRelated.focusedChild ?: return@setOnKeyListener false
+            val pos = recyclerViewRelated.getChildAdapterPosition(focused)
+            if (pos == RecyclerView.NO_POSITION) return@setOnKeyListener false
+
+            val adapter = recyclerViewRelated.adapter ?: return@setOnKeyListener false
+            val nextPos = if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) pos + 1 else pos - 1
+            if (nextPos < 0 || nextPos >= adapter.itemCount) return@setOnKeyListener false
+
+            recyclerViewRelated.post {
+                val vh = recyclerViewRelated.findViewHolderForAdapterPosition(nextPos)
+                if (vh != null) {
+                    vh.itemView.requestFocus()
+                } else {
+                    recyclerViewRelated.smoothScrollToPosition(nextPos)
+                    recyclerViewRelated.post {
+                        val vh2 = recyclerViewRelated.findViewHolderForAdapterPosition(nextPos)
+                        vh2?.itemView?.requestFocus()
+                    }
+                }
+            }
+            true
+        }
     }
 }

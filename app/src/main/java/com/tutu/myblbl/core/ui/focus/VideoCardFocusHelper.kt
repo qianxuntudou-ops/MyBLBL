@@ -16,54 +16,69 @@ object VideoCardFocusHelper {
         onTopEdgeUp: (() -> Boolean)? = null,
         onLeftEdge: (() -> Boolean)? = null,
         onRightEdge: (() -> Boolean)? = null,
-        onBottomEdgeDown: (() -> Boolean)? = null
+        onBottomEdgeDown: (() -> Boolean)? = null,
+        chainedListener: View.OnKeyListener? = null
     ) {
         view.setOnKeyListener { target, keyCode, event ->
-            if (event.action != KeyEvent.ACTION_DOWN) {
-                return@setOnKeyListener false
-            }
-            val position = target.findParentRecyclerView()?.getChildAdapterPosition(target) ?: RecyclerView.NO_POSITION
-            when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_LEFT -> {
-                    val atLeftEdge = isAtLeftEdge(target)
-                    if (!atLeftEdge) {
-                        return@setOnKeyListener false
-                    }
-                    val handled = onLeftEdge?.invoke()
-                        ?: (target.context.findMainActivity()?.focusLeftFunctionArea() == true)
-                    handled
-                }
-
-                KeyEvent.KEYCODE_DPAD_RIGHT -> {
-                    val atRightEdge = isAtRightEdge(target)
-                    if (!atRightEdge) {
-                        return@setOnKeyListener false
-                    }
-                    val handled = onRightEdge?.invoke() ?: true
-                    handled
-                }
-
-                KeyEvent.KEYCODE_DPAD_UP -> {
-                    val atTopEdge = isAtTopEdge(target)
-                    if (onTopEdgeUp == null || !atTopEdge) {
-                        return@setOnKeyListener false
-                    }
-                    val handled = onTopEdgeUp()
-                    handled
-                }
-
-                KeyEvent.KEYCODE_DPAD_DOWN -> {
-                    val atBottomEdge = isAtBottomEdge(target)
-                    if (onBottomEdgeDown == null || !atBottomEdge) {
-                        return@setOnKeyListener false
-                    }
-                    val handled = onBottomEdgeDown()
-                    handled
-                }
-
-                else -> false
+            val handledBySidebar = handleSidebarNavigation(
+                target, keyCode, event,
+                onTopEdgeUp, onLeftEdge, onRightEdge, onBottomEdgeDown
+            )
+            if (handledBySidebar) {
+                true
+            } else {
+                chainedListener?.onKey(target, keyCode, event) ?: false
             }
         }
+    }
+
+    private fun handleSidebarNavigation(
+        target: View,
+        keyCode: Int,
+        event: KeyEvent,
+        onTopEdgeUp: (() -> Boolean)?,
+        onLeftEdge: (() -> Boolean)?,
+        onRightEdge: (() -> Boolean)?,
+        onBottomEdgeDown: (() -> Boolean)?
+    ): Boolean {
+        if (event.action != KeyEvent.ACTION_DOWN) {
+            return false
+        }
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                val atLeftEdge = isAtLeftEdge(target)
+                if (!atLeftEdge) {
+                    return false
+                }
+                return onLeftEdge?.invoke()
+                    ?: (target.context.findMainActivity()?.focusLeftFunctionArea() == true)
+            }
+
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                val atRightEdge = isAtRightEdge(target)
+                if (!atRightEdge) {
+                    return false
+                }
+                return onRightEdge?.invoke() ?: true
+            }
+
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                val atTopEdge = isAtTopEdge(target)
+                if (onTopEdgeUp == null || !atTopEdge) {
+                    return false
+                }
+                return onTopEdgeUp()
+            }
+
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                val atBottomEdge = isAtBottomEdge(target)
+                if (onBottomEdgeDown == null || !atBottomEdge) {
+                    return false
+                }
+                return onBottomEdgeDown()
+            }
+        }
+        return false
     }
 
     private fun keyName(keyCode: Int): String {

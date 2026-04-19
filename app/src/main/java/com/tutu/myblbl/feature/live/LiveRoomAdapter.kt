@@ -121,7 +121,6 @@ class LiveRoomAdapter(
                     onItemClick(getItem(position))
                 }
             }
-            binding.root.setOnKeyListener(keyListener)
             binding.root.setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> startLongPressTimer()
@@ -131,7 +130,8 @@ class LiveRoomAdapter(
             }
             VideoCardFocusHelper.bindSidebarExit(
                 view = binding.root,
-                onTopEdgeUp = onTopEdgeUp
+                onTopEdgeUp = onTopEdgeUp,
+                chainedListener = keyListener
             )
         }
 

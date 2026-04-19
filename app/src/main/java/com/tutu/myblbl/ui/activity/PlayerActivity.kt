@@ -1111,12 +1111,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private fun hideNextPreview() { autoPlayController.hideNextPreview() }
 
     private fun hideContentPanel() {
-        overlayCoordinator.onRelatedPanelHidden()
-        if (uiCoordinator.panelState == PlaybackUiCoordinator.PanelState.Related) {
-            uiCoordinator.transition(UiEvent.PanelClosed)
-        }
-        binding.dimBackground.visibility = View.GONE
-        viewRelated.visibility = View.GONE
+        overlayUiController.hideContentPanel()
     }
 
     private fun showChooseEpisodeDialog() { overlayUiController.showChooseEpisodeDialog() }

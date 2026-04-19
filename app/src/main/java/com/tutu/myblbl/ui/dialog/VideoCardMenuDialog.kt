@@ -519,13 +519,10 @@ class VideoCardMenuDialog(
         val dislikeVideoEnabled = !inProgress
         binding.buttonWatchLater.isEnabled = watchLaterEnabled
         binding.buttonWatchLater.isClickable = watchLaterEnabled
-        binding.buttonWatchLater.isFocusable = watchLaterEnabled
         binding.buttonFavorite.isEnabled = favoriteEnabled
         binding.buttonFavorite.isClickable = favoriteEnabled
-        binding.buttonFavorite.isFocusable = favoriteEnabled
         binding.buttonDislikeVideo.isEnabled = dislikeVideoEnabled
         binding.buttonDislikeVideo.isClickable = dislikeVideoEnabled
-        binding.buttonDislikeVideo.isFocusable = dislikeVideoEnabled
         binding.buttonWatchLater.alpha = if (watchLaterEnabled) 1f else 0.6f
         binding.buttonFavorite.alpha = if (favoriteEnabled) 1f else 0.6f
         binding.buttonDislikeVideo.alpha = if (dislikeVideoEnabled) 1f else 0.6f

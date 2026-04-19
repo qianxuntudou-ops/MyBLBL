@@ -182,7 +182,6 @@ class FavoriteHistoryAdapter(
                 }
                 currentItem?.let(onItemClick)
             }
-            binding.root.setOnKeyListener(keyListener)
             binding.root.setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> startLongPress()
@@ -202,7 +201,10 @@ class FavoriteHistoryAdapter(
                     clearFocusedPosition(binding.root)
                 }
             }
-            VideoCardFocusHelper.bindSidebarExit(binding.root)
+            VideoCardFocusHelper.bindSidebarExit(
+                view = binding.root,
+                chainedListener = keyListener
+            )
             binding.textView.maxLines = 1
             binding.textView.minLines = 1
             binding.imageAvatar.visibility = View.GONE

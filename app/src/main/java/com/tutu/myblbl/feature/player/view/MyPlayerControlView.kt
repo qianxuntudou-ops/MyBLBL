@@ -565,6 +565,14 @@ class MyPlayerControlView @JvmOverloads constructor(
         setButtonVisibility(buttonRelated, show)
     }
 
+    fun isRelatedButtonVisible(): Boolean {
+        return buttonRelated.visibility == View.VISIBLE
+    }
+
+    fun onRelatedButtonClick() {
+        onVideoSettingChangeListener?.onRelated()
+    }
+
     fun showHideRepeatButton(show: Boolean) {
         setButtonVisibility(buttonRepeat, show)
     }

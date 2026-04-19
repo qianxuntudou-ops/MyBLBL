@@ -309,7 +309,6 @@ class SearchItemAdapter(
                 onItemClick(SearchResultEntry(searchType, getItem(position)))
             }
         }
-        view.setOnKeyListener(keyListener)
         view.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -331,7 +330,8 @@ class SearchItemAdapter(
             view,
             onTopEdgeUp = {
                 onTopEdgeUp?.invoke(view) == true
-            }
+            },
+            chainedListener = keyListener
         )
     }
 

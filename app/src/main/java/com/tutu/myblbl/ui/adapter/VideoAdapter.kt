@@ -236,7 +236,6 @@ class VideoAdapter(
                 }
                 currentVideo?.let { onItemClick(binding.root, it) }
             }
-            binding.root.setOnKeyListener(keyListener)
             binding.root.setOnTouchListener { _, event ->
                 when(event.action) {
                     MotionEvent.ACTION_DOWN -> startLongPress()
@@ -247,7 +246,8 @@ class VideoAdapter(
             VideoCardFocusHelper.bindSidebarExit(
                 view = binding.root,
                 onTopEdgeUp = onTopEdgeUp,
-                onBottomEdgeDown = onBottomEdgeDown
+                onBottomEdgeDown = onBottomEdgeDown,
+                chainedListener = keyListener
             )
             if (onFocusChange != null) {
                 binding.root.setOnFocusChangeListener { view, hasFocus ->

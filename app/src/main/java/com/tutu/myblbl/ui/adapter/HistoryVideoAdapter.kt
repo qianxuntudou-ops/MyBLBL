@@ -232,7 +232,6 @@ class HistoryVideoAdapter(
                 }
                 currentItem?.let(onItemClick)
             }
-            binding.root.setOnKeyListener(keyListener)
             binding.root.setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> startLongPress()
@@ -252,7 +251,11 @@ class HistoryVideoAdapter(
                     clearFocusedState(binding.root)
                 }
             }
-            VideoCardFocusHelper.bindSidebarExit(binding.root, onTopEdgeUp)
+            VideoCardFocusHelper.bindSidebarExit(
+                view = binding.root,
+                onTopEdgeUp = onTopEdgeUp,
+                chainedListener = keyListener
+            )
             binding.imageAvatar.visibility = View.GONE
             binding.textPortraitBadge.visibility = View.GONE
             binding.iconPlayCount.visibility = View.GONE

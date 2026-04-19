@@ -112,7 +112,10 @@ class SeekSession(
         if (mode == Mode.HOLD) {
             cancelTickRunnable()
             isForward = forward
-            startMs = 0L
+            // Reset acceleration curve without clearing targetPositionMs.
+            // Setting startMs to a non-zero value prevents doTick() from
+            // re-reading player.currentPosition and losing the preview position.
+            startMs = SystemClock.uptimeMillis()
             doTick()
             scheduleNextTick()
         }

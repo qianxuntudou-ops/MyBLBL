@@ -646,7 +646,48 @@ class MyPlayerView @JvmOverloads constructor(
             if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                 return handleSeekSessionKeyEvent(event)
             }
+            // Non-seek key during active session (e.g. BACK): cancel session and clean up UI
             seekSession?.cancel()
+            cancelPendingHoldStart()
+            cancelPendingExitSeekProgressOnly()
+            controller?.cancelSeekPreview()
+            tapOverlayView?.cancelSwipeSeek()
+            controller?.exitSeekProgressOnly()
+        }
+
+        // Cancel any seek on BACK key
+        if (isBackKey && event.action == KeyEvent.ACTION_DOWN) {
+            val wasTimebarSeek = timebarSeekActive
+            val wasSeeking = wasTimebarSeek || tapCommitRunnable != null
+            if (timebarSeekActive) {
+                cancelTimebarSeekLoop()
+                cancelTimebarSeekIdle()
+                timebarSeekActive = false
+            }
+            if (tapCommitRunnable != null) {
+                cancelTapCommit()
+                tapAccumulateDeltaMs = 0L
+                tapAccumulateBaseMs = 0L
+            }
+            if (wasSeeking) {
+                cancelPendingHoldStart()
+                cancelPendingExitSeekProgressOnly()
+                controller?.cancelSeekPreview()
+                tapOverlayView?.cancelSwipeSeek()
+                controller?.exitSeekProgressOnly()
+                // Restore appropriate UI state
+                if (wasTimebarSeek) {
+                    controller?.show()
+                    controller?.startProgressUpdates()
+                }
+                return true
+            }
+        }
+
+        // Timebar-focused seek has priority: always route LEFT/RIGHT to timebar when it's focused
+        if (timebarSeekActive && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            val forward = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+            return handleTimebarSeekKeyEvent(event, forward)
         }
 
         // When tap accumulation is active (commit pending), controller is in progress-only mode.
@@ -654,21 +695,6 @@ class MyPlayerView @JvmOverloads constructor(
         if (tapCommitRunnable != null &&
             (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
             return handleSeekSessionKeyEvent(event)
-        }
-
-        // Cancel timebar seek on BACK key
-        if (timebarSeekActive && isBackKey && event.action == KeyEvent.ACTION_DOWN) {
-            cancelTimebarSeekLoop()
-            cancelTimebarSeekIdle()
-            timebarSeekActive = false
-            controller?.show()
-            controller?.startProgressUpdates()
-        }
-
-        // Timebar-focused seek: 30s steps, 200ms interval
-        if (timebarSeekActive && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
-            val forward = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
-            return handleTimebarSeekKeyEvent(event, forward)
         }
 
         if (gestureListener.isDoubleTapping) {
@@ -799,16 +825,14 @@ class MyPlayerView @JvmOverloads constructor(
                             controller?.cancelSeekPreview()
                             controller?.exitSeekProgressOnly()
                             tapOverlayView?.finishSwipeSeek()
-                        }
-                        postDelayed({
-                            if (seekSession?.isActive() != true) {
-                                val pos = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
-                                syncDanmakuPosition(pos, forceSeek = true)
-                                if (player?.isPlaying == true) {
-                                    resumeDanmaku()
-                                }
+                            syncDanmakuPosition(
+                                player?.currentPosition?.coerceAtLeast(0L) ?: 0L,
+                                forceSeek = true
+                            )
+                            if (player?.isPlaying == true) {
+                                resumeDanmaku()
                             }
-                        }, 120L)
+                        }
                     }
                     pendingExitSeekProgressOnly = finishRunnable
                     postDelayed(finishRunnable, 150L)
@@ -1524,6 +1548,11 @@ class MyPlayerView @JvmOverloads constructor(
         return false
     }
 
+    /**
+     * DO NOT CALL: dead code. Only use if explicitly requested.
+     * Originally did a single immediate seek ±N seconds with showControllerSeek overlay.
+     * Replaced by handleTapAccumulate which uses showSwipeSeek (centered arrow, no circle clip).
+     */
     private fun doSingleKeySeek(forward: Boolean) {
         val currentPlayer = player ?: return
         if (currentPlayer.playbackState == Player.STATE_ENDED ||

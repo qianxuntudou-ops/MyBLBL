@@ -302,6 +302,11 @@ class YouTubeOverlay @JvmOverloads constructor(
         }
     }
 
+    /**
+     * DO NOT CALL: dead code. Only use if explicitly requested.
+     * Shows left/right-biased circle clip animation with seek text.
+     * Replaced by showSwipeSeek (centered arrow, no circle clip) for all current seek paths.
+     */
     fun showControllerSeek(
         targetPositionMs: Long,
         durationMs: Long,

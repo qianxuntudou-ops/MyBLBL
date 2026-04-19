@@ -61,6 +61,7 @@ class MyPlayerView @JvmOverloads constructor(
         private const val STARTUP_BUFFERING_INDICATOR_DELAY_MS = 700L
         private const val REBUFFER_BUFFERING_INDICATOR_DELAY_MS = 150L
         private const val SHUTTER_FADE_DURATION_MS = 180L
+        private const val SHUTTER_TIMEOUT_MS = 8_000L
     }
 
     private var contentFrame: AspectRatioFrameLayout? = null
@@ -109,6 +110,11 @@ class MyPlayerView @JvmOverloads constructor(
         }
         buffering.visibility = if (shouldShowBufferingIndicator(currentPlayer)) VISIBLE else GONE
     }
+    private val shutterTimeoutRunnable = Runnable {
+        if (!hasRenderedFirstFrame && player != null) {
+            forceOpenShutter()
+        }
+    }
     private val gestureListener = PlayerDoubleTapGestureListener(this)
     private val gestureDetector = GestureDetector(context, gestureListener)
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
@@ -132,22 +138,25 @@ class MyPlayerView @JvmOverloads constructor(
     private var uiCoordinator: com.tutu.myblbl.feature.player.PlaybackUiCoordinator? = null
 
     var seekSession: com.tutu.myblbl.feature.player.SeekSession? = null
-        set(value) {
-            field = value
-            value?.speedChangedListener = { forward, speed ->
-                tapOverlayView?.showSpeedSeek(forward, speed)
-            }
-        }
     private val heldSeekKeyCodes = mutableSetOf<Int>()
     private var pendingExitSeekProgressOnly: Runnable? = null
+    private var pendingHoldStartRunnable: Runnable? = null
+    private val holdStartDelayMs = 200L
 
-    // --- Timebar-focused seek state (30s steps, 200ms intervals) ---
+    // --- Tap accumulation (shared by both seek paths) ---
+    private var tapAccumulateBaseMs = 0L
+    private var tapAccumulateDeltaMs = 0L
+    private var tapCommitRunnable: Runnable? = null
+    private val tapCommitDelayMs = 500L
+
+    // --- Timebar-focused seek state (fixed 10s step, interval decreases with hold time) ---
     private var timebarSeekActive = false
     private var timebarSeekForward = true
     private var timebarSeekRunnable: Runnable? = null
     private var timebarSeekIdleRunnable: Runnable? = null
-    private val timebarSeekStepMs = 30_000L
-    private val timebarSeekIntervalMs = 200L
+    private var timebarSeekStartMs = 0L
+    private var pendingTimebarHoldStartRunnable: Runnable? = null
+    private var timebarSeekTargetMs = 0L
     private val timebarSeekIdleTimeoutMs = 200L
 
     interface ControllerVisibilityListener {
@@ -201,6 +210,7 @@ class MyPlayerView @JvmOverloads constructor(
 
         override fun onRenderedFirstFrame() {
             hasRenderedFirstFrame = true
+            handler.removeCallbacks(shutterTimeoutRunnable)
             updateBuffering()
             shutterView?.animate()?.cancel()
             shutterView?.animate()
@@ -425,6 +435,24 @@ class MyPlayerView @JvmOverloads constructor(
         shutterView?.animate()?.cancel()
         shutterView?.alpha = 1f
         shutterView?.visibility = VISIBLE
+        handler.removeCallbacks(shutterTimeoutRunnable)
+        handler.postDelayed(shutterTimeoutRunnable, SHUTTER_TIMEOUT_MS)
+    }
+
+    fun forceOpenShutter() {
+        handler.removeCallbacks(shutterTimeoutRunnable)
+        if (!hasRenderedFirstFrame) {
+            shutterView?.animate()?.cancel()
+            shutterView?.animate()
+                ?.alpha(0f)
+                ?.setDuration(SHUTTER_FADE_DURATION_MS)
+                ?.withEndAction {
+                    if (!hasRenderedFirstFrame) {
+                        shutterView?.visibility = INVISIBLE
+                    }
+                }
+                ?.start()
+        }
     }
 
     fun prepareForPlaybackTransition() {
@@ -621,6 +649,13 @@ class MyPlayerView @JvmOverloads constructor(
             seekSession?.cancel()
         }
 
+        // When tap accumulation is active (commit pending), controller is in progress-only mode.
+        // Route seek keys to handleSeekSessionKeyEvent to avoid falling through to maybeShowController.
+        if (tapCommitRunnable != null &&
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            return handleSeekSessionKeyEvent(event)
+        }
+
         // Cancel timebar seek on BACK key
         if (timebarSeekActive && isBackKey && event.action == KeyEvent.ACTION_DOWN) {
             cancelTimebarSeekLoop()
@@ -715,7 +750,6 @@ class MyPlayerView @JvmOverloads constructor(
         val forward = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
 
         if (event.action == KeyEvent.ACTION_DOWN) {
-            // 取消延迟退出（如果用户快速按了另一个方向键）
             cancelPendingExitSeekProgressOnly()
             if (event.repeatCount == 0) {
                 heldSeekKeyCodes.add(event.keyCode)
@@ -723,50 +757,71 @@ class MyPlayerView @JvmOverloads constructor(
             if (!session.isActive()) {
                 controller?.enterSeekProgressOnly()
                 session.startHoldSeek(forward)
+                // Delay tick loop start so short press can be detected
+                cancelPendingHoldStart()
+                val startRunnable = Runnable {
+                    if (seekSession?.isActive() == true) {
+                        seekSession?.beginHoldTickLoop()
+                    }
+                    pendingHoldStartRunnable = null
+                }
+                pendingHoldStartRunnable = startRunnable
+                postDelayed(startRunnable, holdStartDelayMs)
             } else if (session.isForwardDirection() != forward) {
+                cancelPendingHoldStart()
                 session.changeDirection(forward)
+                // Restart hold delay for new direction
+                val startRunnable = Runnable {
+                    if (seekSession?.isActive() == true) {
+                        seekSession?.beginHoldTickLoop()
+                    }
+                    pendingHoldStartRunnable = null
+                }
+                pendingHoldStartRunnable = startRunnable
+                postDelayed(startRunnable, holdStartDelayMs)
             }
-            updateHoldSeekOverlay(session, forward)
             return true
         } else if (event.action == KeyEvent.ACTION_UP) {
             heldSeekKeyCodes.remove(event.keyCode)
             if (heldSeekKeyCodes.isEmpty() && session.isActive()) {
-                val wasSpeedMode = session.isInSpeedMode()
-                val wasForward = session.isForwardDirection()
-                val finishRunnable = Runnable {
-                    if (seekSession?.isActive() == true) {
-                        seekSession?.finishSeek()
-                        controller?.exitSeekProgressOnly()
-                        if (!wasSpeedMode && wasForward) {
-                            val currentPlayer = player ?: return@Runnable
-                            val positionMs = currentPlayer.currentPosition.coerceAtLeast(0L)
-                            val durationMs = currentPlayer.duration
-                            val seekDeltaMs = (tapOverlayView?.seekSeconds ?: 10) * 1000L
-                            tapOverlayView?.showControllerSeek(
-                                targetPositionMs = positionMs,
-                                durationMs = durationMs,
-                                deltaMs = seekDeltaMs,
-                                showBottomProgress = false
-                            )
+                val holdStarted = pendingHoldStartRunnable != null
+                cancelPendingHoldStart()
+                if (holdStarted) {
+                    // Short press: accumulate instead of immediate seek
+                    handleTapAccumulate(forward)
+                    session.resetSilently()
+                } else {
+                    // Long press: clear tap accumulation, finish hold seek
+                    resetTapAccumulate()
+                    val finishRunnable = Runnable {
+                        if (seekSession?.isActive() == true) {
+                            seekSession?.finishSeek()
+                            controller?.cancelSeekPreview()
+                            controller?.exitSeekProgressOnly()
+                            tapOverlayView?.finishSwipeSeek()
                         }
-                        tapOverlayView?.finishControllerSeek()
-                    }
-                    postDelayed({
-                        if (seekSession?.isActive() != true) {
-                            val pos = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
-                            syncDanmakuPosition(pos, forceSeek = true)
-                            if (player?.isPlaying == true) {
-                                resumeDanmaku()
+                        postDelayed({
+                            if (seekSession?.isActive() != true) {
+                                val pos = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
+                                syncDanmakuPosition(pos, forceSeek = true)
+                                if (player?.isPlaying == true) {
+                                    resumeDanmaku()
+                                }
                             }
-                        }
-                    }, 120L)
+                        }, 120L)
+                    }
+                    pendingExitSeekProgressOnly = finishRunnable
+                    postDelayed(finishRunnable, 150L)
                 }
-                pendingExitSeekProgressOnly = finishRunnable
-                postDelayed(finishRunnable, 150L)
             }
             return true
         }
         return session.isActive()
+    }
+
+    private fun cancelPendingHoldStart() {
+        pendingHoldStartRunnable?.let { removeCallbacks(it) }
+        pendingHoldStartRunnable = null
     }
 
     private fun cancelPendingExitSeekProgressOnly() {
@@ -774,7 +829,70 @@ class MyPlayerView @JvmOverloads constructor(
         pendingExitSeekProgressOnly = null
     }
 
-    // ==================== Timebar-focused seek (30s, 200ms) ====================
+    // ==================== Tap accumulation (shared by both seek paths) ====================
+
+    private fun handleTapAccumulate(forward: Boolean) {
+        val currentPlayer = player ?: return
+        val duration = currentPlayer.duration
+        if (duration <= 0L) return
+
+        cancelTapCommit()
+
+        if (tapAccumulateDeltaMs == 0L) {
+            tapAccumulateBaseMs = currentPlayer.currentPosition
+        }
+
+        tapAccumulateDeltaMs += 10_000L * if (forward) 1 else -1
+        val targetMs = (tapAccumulateBaseMs + tapAccumulateDeltaMs).coerceIn(0L, duration)
+
+        controller?.beginSeekPreview(targetMs)
+        val seekSeconds = kotlin.math.abs(tapAccumulateDeltaMs / 1000L).toInt().coerceAtLeast(1)
+        tapOverlayView?.showSwipeSeek(
+            targetPositionMs = targetMs,
+            durationMs = duration,
+            deltaMs = tapAccumulateDeltaMs,
+            showBottomProgress = false,
+            showThumbnails = false,
+            seekSeconds = seekSeconds
+        )
+
+        val commitRunnable = Runnable {
+            val p = player ?: return@Runnable
+            val wasTimebarSeek = timebarSeekActive
+            val finalTarget = (tapAccumulateBaseMs + tapAccumulateDeltaMs).coerceIn(0L, p.duration.coerceAtLeast(0L))
+            p.seekTo(finalTarget)
+            syncDanmakuPosition(finalTarget, forceSeek = true)
+            controller?.cancelSeekPreview()
+            tapOverlayView?.finishSwipeSeek()
+            if (wasTimebarSeek) {
+                timebarSeekActive = false
+                timebarSeekStartMs = 0L
+                controller?.show()
+                controller?.startProgressUpdates()
+                controller?.requestTimeBarFocus()
+            } else {
+                controller?.exitSeekProgressOnly()
+            }
+            tapAccumulateDeltaMs = 0L
+            tapAccumulateBaseMs = 0L
+            tapCommitRunnable = null
+        }
+        tapCommitRunnable = commitRunnable
+        postDelayed(commitRunnable, tapCommitDelayMs)
+    }
+
+    private fun cancelTapCommit() {
+        tapCommitRunnable?.let { removeCallbacks(it) }
+        tapCommitRunnable = null
+    }
+
+    private fun resetTapAccumulate() {
+        cancelTapCommit()
+        tapAccumulateDeltaMs = 0L
+        tapAccumulateBaseMs = 0L
+    }
+
+    // ==================== Timebar-focused seek (accelerated, preview-only) ====================
 
     private fun handleTimebarSeekKeyEvent(event: KeyEvent, forward: Boolean): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
@@ -782,36 +900,74 @@ class MyPlayerView @JvmOverloads constructor(
             if (!timebarSeekActive) {
                 timebarSeekActive = true
                 timebarSeekForward = forward
+                timebarSeekStartMs = 0L
                 controller?.enterSeekProgressOnly()
-                doTimebarSeekTick()
-                startTimebarSeekLoop()
-            } else if (timebarSeekForward != forward) {
-                cancelTimebarSeekLoop()
-                timebarSeekForward = forward
-                doTimebarSeekTick()
-                startTimebarSeekLoop()
+            }
+            // Only schedule hold start on initial press (repeatCount == 0).
+            // Repeat events would keep pushing the delay forward, preventing the hold from ever starting.
+            if (event.repeatCount == 0) {
+                cancelPendingTimebarHoldStart()
+                val startRunnable = Runnable {
+                    if (timebarSeekActive) {
+                        if (timebarSeekForward != forward) {
+                            timebarSeekForward = forward
+                            timebarSeekStartMs = 0L
+                        }
+                        doTimebarSeekTick()
+                        startTimebarSeekLoop()
+                    }
+                    pendingTimebarHoldStartRunnable = null
+                }
+                pendingTimebarHoldStartRunnable = startRunnable
+                postDelayed(startRunnable, holdStartDelayMs)
             }
             return true
         } else if (event.action == KeyEvent.ACTION_UP) {
+            val holdStarted = pendingTimebarHoldStartRunnable != null
+            cancelPendingTimebarHoldStart()
             cancelTimebarSeekLoop()
-            startTimebarSeekIdle()
+            if (holdStarted) {
+                // Short press: accumulate, don't start idle (commit will clean up)
+                handleTapAccumulate(forward)
+            } else {
+                // Long press: clear tap accumulation, seek to target
+                resetTapAccumulate()
+                if (timebarSeekActive && player != null) {
+                    player?.seekTo(timebarSeekTargetMs)
+                    syncDanmakuPosition(timebarSeekTargetMs, forceSeek = true)
+                }
+                controller?.cancelSeekPreview()
+                startTimebarSeekIdle()
+            }
             return true
         }
         return timebarSeekActive
     }
 
+    private fun cancelPendingTimebarHoldStart() {
+        pendingTimebarHoldStartRunnable?.let { removeCallbacks(it) }
+        pendingTimebarHoldStartRunnable = null
+    }
+
     private fun doTimebarSeekTick() {
         val currentPlayer = player ?: return
-        if (currentPlayer.duration <= 0L) return
-        val delta = timebarSeekStepMs * if (timebarSeekForward) 1 else -1
-        val target = (currentPlayer.currentPosition + delta).coerceIn(0L, currentPlayer.duration)
-        currentPlayer.seekTo(target)
-        syncDanmakuPosition(target, forceSeek = true)
-        controller?.beginSeekPreview(target)
+        val duration = currentPlayer.duration
+        if (duration <= 0L) return
+
+        if (timebarSeekStartMs == 0L) {
+            timebarSeekTargetMs = currentPlayer.currentPosition
+            timebarSeekStartMs = android.os.SystemClock.uptimeMillis()
+        }
+
+        val step = 10_000L * if (timebarSeekForward) 1 else -1
+        timebarSeekTargetMs = (timebarSeekTargetMs + step).coerceIn(0L, duration)
+
+        controller?.beginSeekPreview(timebarSeekTargetMs)
     }
 
     private fun startTimebarSeekLoop() {
         cancelTimebarSeekLoop()
+        val interval = getTimebarSeekIntervalMs()
         val runnable = Runnable {
             if (timebarSeekActive) {
                 doTimebarSeekTick()
@@ -819,7 +975,17 @@ class MyPlayerView @JvmOverloads constructor(
             }
         }
         timebarSeekRunnable = runnable
-        postDelayed(runnable, timebarSeekIntervalMs)
+        postDelayed(runnable, interval)
+    }
+
+    private fun getTimebarSeekIntervalMs(): Long {
+        val elapsed = android.os.SystemClock.uptimeMillis() - timebarSeekStartMs
+        return when {
+            elapsed < 1000L -> 100L
+            elapsed < 2000L -> 50L
+            elapsed < 3000L -> 25L
+            else -> 10L
+        }
     }
 
     private fun cancelTimebarSeekLoop() {
@@ -832,6 +998,7 @@ class MyPlayerView @JvmOverloads constructor(
         val runnable = Runnable {
             if (timebarSeekActive) {
                 timebarSeekActive = false
+                timebarSeekStartMs = 0L
                 controller?.show()
                 controller?.startProgressUpdates()
             }
@@ -846,28 +1013,6 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     // ==================== End timebar seek ====================
-
-    private fun updateHoldSeekOverlay(session: com.tutu.myblbl.feature.player.SeekSession, forward: Boolean) {
-        val currentPlayer = player ?: return
-        val positionMs = currentPlayer.currentPosition.coerceAtLeast(0L)
-        val durationMs = currentPlayer.duration
-        if (session.isInSpeedMode()) {
-            controller?.beginSeekPreview(positionMs)
-        } else if (!forward) {
-            // 快退：每次 tick 累积秒数（beginSeekPreview 由 seekPreviewRenderer 调用）
-            val seekMs = (tapOverlayView?.seekSeconds ?: 10) * 1000L
-            tapOverlayView?.showControllerSeek(
-                targetPositionMs = positionMs,
-                durationMs = durationMs,
-                deltaMs = -seekMs,
-                showBottomProgress = false
-            )
-        } else {
-            // 快进未进入倍速模式：保持 overlay 可见 + 更新进度条位置
-            tapOverlayView?.extendOverlayVisibility()
-            controller?.beginSeekPreview(positionMs)
-        }
-    }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -939,6 +1084,20 @@ class MyPlayerView @JvmOverloads constructor(
         if (!enabled) {
             uiCoordinator?.clearSeekPreview()
         }
+    }
+
+    fun showHoldSeekOverlay(targetPositionMs: Long, durationMs: Long, deltaMs: Long) {
+        tapOverlayView?.showSwipeSeek(
+            targetPositionMs = targetPositionMs,
+            durationMs = durationMs,
+            deltaMs = deltaMs,
+            showBottomProgress = false,
+            showThumbnails = false
+        )
+    }
+
+    fun finishHoldSeekOverlay() {
+        tapOverlayView?.finishSwipeSeek()
     }
 
     fun setShowBuffering(mode: Int) {

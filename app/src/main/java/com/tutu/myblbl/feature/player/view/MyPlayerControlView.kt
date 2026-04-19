@@ -443,7 +443,7 @@ class MyPlayerControlView @JvmOverloads constructor(
             player = player,
             isVisible = isVisible(),
             attachedToWindow = attachedToWindow,
-            isScrubbing = isScrubbing,
+            isScrubbing = isScrubbing || externalSeekPreviewActive,
             renderPosition = ::renderPosition,
             renderDuration = ::renderDuration,
             renderBufferedPosition = ::renderBufferedPosition,

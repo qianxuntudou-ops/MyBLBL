@@ -516,7 +516,10 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     slimTimelineRenderer.showPreview(targetMs, durationMs)
                 }
             },
-            danmakuSync = { positionMs -> playerView.syncDanmakuPosition(positionMs, forceSeek = true) }
+            danmakuSync = { positionMs -> playerView.syncDanmakuPosition(positionMs, forceSeek = true) },
+            holdSeekOverlayRenderer = { targetMs, durationMs, deltaMs ->
+                playerView.showHoldSeekOverlay(targetMs, durationMs, deltaMs)
+            }
         )
         playerView.showSettingButton(false)
         playerView.showHideNextPrevious(false)

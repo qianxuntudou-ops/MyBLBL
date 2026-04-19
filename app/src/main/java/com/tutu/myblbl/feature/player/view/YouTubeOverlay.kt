@@ -256,12 +256,19 @@ class YouTubeOverlay @JvmOverloads constructor(
         playerView?.syncDanmakuPosition(boundedPositionMs, forceSeek = true)
     }
 
-    fun showSwipeSeek(targetPositionMs: Long, durationMs: Long, deltaMs: Long, showBottomProgress: Boolean) {
+    fun showSwipeSeek(
+        targetPositionMs: Long,
+        durationMs: Long,
+        deltaMs: Long,
+        showBottomProgress: Boolean,
+        showThumbnails: Boolean = true,
+        seekSeconds: Int = 0
+    ) {
         val forward = deltaMs >= 0L
         val directionChanged = secondsView.isForward != forward
         val wasShowing = overlayShowing
 
-        swipePreviewActive = true
+        swipePreviewActive = showThumbnails
         lastSwipeTargetPositionMs = targetPositionMs
         removeCallbacks(hideOverlayRunnable)
         ensureOverlayVisible(
@@ -279,19 +286,28 @@ class YouTubeOverlay @JvmOverloads constructor(
         }
 
         secondsView.visibility = View.VISIBLE
-        secondsView.setDurationText(
-            targetText = NumberUtils.formatDuration(targetPositionMs / 1000L),
-            totalText = NumberUtils.formatDuration(durationMs / 1000L)
-        )
+        if (seekSeconds > 0) {
+            secondsView.setSeekText(seekSeconds)
+        } else {
+            secondsView.setDurationText(
+                targetText = NumberUtils.formatDuration(targetPositionMs / 1000L),
+                totalText = NumberUtils.formatDuration(durationMs / 1000L)
+            )
+        }
         updateProgress(targetPositionMs, durationMs)
-        requestSwipePreview(targetPositionMs)
+        if (showThumbnails) {
+            requestSwipePreview(targetPositionMs)
+        } else {
+            cancelPreviewRequest(resetFrameKey = true)
+        }
     }
 
     fun showControllerSeek(
         targetPositionMs: Long,
         durationMs: Long,
         deltaMs: Long,
-        showBottomProgress: Boolean = true
+        showBottomProgress: Boolean = true,
+        isCumulative: Boolean = false
     ) {
         val forward = deltaMs >= 0L
         val directionChanged = secondsView.isForward != forward
@@ -326,7 +342,7 @@ class YouTubeOverlay @JvmOverloads constructor(
 
         secondsView.visibility = View.VISIBLE
         val deltaSeconds = abs(deltaMs / 1000L).toInt().coerceAtLeast(1)
-        val displaySeconds = if (!wasShowing || directionChanged) {
+        val displaySeconds = if (isCumulative || !wasShowing || directionChanged) {
             deltaSeconds
         } else {
             secondsView.getSeconds() + deltaSeconds

@@ -461,7 +461,10 @@ class VideoPlayerFragment : Fragment() {
                     slimTimelineRenderer.showPreview(targetMs, durationMs)
                 }
             },
-            danmakuSync = { positionMs -> playerView.syncDanmakuPosition(positionMs, forceSeek = true) }
+            danmakuSync = { positionMs -> playerView.syncDanmakuPosition(positionMs, forceSeek = true) },
+            holdSeekOverlayRenderer = { targetMs, durationMs, deltaMs ->
+                playerView.showHoldSeekOverlay(targetMs, durationMs, deltaMs)
+            }
         )
         playerView.showSettingButton(false)
         playerView.showHideNextPrevious(false)
@@ -853,6 +856,7 @@ class VideoPlayerFragment : Fragment() {
                         latestErrorMessage = error
                         if (!error.isNullOrBlank()) {
                             AppLog.e(TAG, "viewModel error: $error")
+                            playerView.forceOpenShutter()
                         }
                         playerView.setCustomErrorMessage(error)
                         renderDebugState()
@@ -1247,6 +1251,9 @@ class VideoPlayerFragment : Fragment() {
             return
         }
         if (currentPlayer.playbackState == Player.STATE_IDLE) {
+            if (currentPlayer.mediaItemCount <= 0) {
+                return
+            }
             currentPlayer.prepare()
         }
         currentPlayer.playWhenReady = true

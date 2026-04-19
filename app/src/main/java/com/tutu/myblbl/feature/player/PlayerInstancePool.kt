@@ -46,6 +46,7 @@ internal object PlayerInstancePool {
         isAttached = false
         player.playWhenReady = false
         player.stop()
+        player.clearMediaItems()
         player.clearVideoSurface()
         scheduleRelease()
     }

@@ -77,12 +77,14 @@ class FollowUserAdapter(
                     val oldPosition = focusedPosition
                     focusedPosition = position
                     onItemFocused?.invoke(position)
-                    if (oldPosition != RecyclerView.NO_POSITION && oldPosition != position) {
-                        notifyItemChanged(oldPosition)
+                    itemView.post {
+                        if (oldPosition != RecyclerView.NO_POSITION && oldPosition != position) {
+                            notifyItemChanged(oldPosition)
+                        }
+                        notifyItemChanged(position)
                     }
-                    notifyItemChanged(position)
                 } else if (focusedPosition == position) {
-                    notifyItemChanged(position)
+                    itemView.post { notifyItemChanged(position) }
                 }
             }
         }

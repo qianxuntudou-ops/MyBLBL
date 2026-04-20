@@ -1,38 +1,34 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.kts.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# R8 Compatibility Mode 配合 proguard-android-optimize.txt 使用
+# 保留行号方便排查崩溃
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
-
-# Gson
+# Gson / Retrofit 依赖泛型与匿名内部类签名做运行时反射
 -keepattributes Signature
+-keepattributes InnerClasses,EnclosingMethod
+-keepattributes Exceptions
 -keepattributes *Annotation*
 -keep class com.google.gson.** { *; }
 -keep class * implements com.google.gson.TypeAdapterFactory
 -keep class * implements com.google.gson.JsonSerializer
 -keep class * implements com.google.gson.JsonDeserializer
+-keep,allowobfuscation class * extends com.google.gson.reflect.TypeToken
 
-# Retrofit
+# Retrofit — 保留 API 接口的全部方法及泛型签名
 -keep class retrofit2.** { *; }
 -keepclasseswithmembers class * {
     @retrofit2.http.* <methods>;
 }
+-keepclassmembers,allowobfuscation interface * {
+    @retrofit2.http.* <methods>;
+}
+-keep class com.tutu.myblbl.network.api.** { *; }
+
+# Network response wrappers（泛型类型信息不能被 R8 优化掉）
+-keep class com.tutu.myblbl.network.response.** { *; }
+
+# Gson custom TypeAdapters
+-keep class com.tutu.myblbl.model.adapter.** { *; }
 
 # OkHttp
 -dontwarn okhttp3.**
@@ -43,19 +39,21 @@
 # Model classes
 -keep class com.tutu.myblbl.model.** { *; }
 
-# EventBus
--keepattributes *Annotation*
--keepclassmembers class * {
-    @org.greenrobot.eventbus.Subscribe <methods>;
-}
--keep enum org.greenrobot.eventbus.ThreadMode { *; }
+# Koin DI
+-keep class com.tutu.myblbl.di.** { *; }
+-keep class com.tutu.myblbl.repository.** { *; }
+-keep class com.tutu.myblbl.event.** { *; }
+-keep class com.tutu.myblbl.core.common.** { *; }
+-keep class com.tutu.myblbl.network.** { *; }
 
-# AkDanmaku
--dontwarn com.badlogic.gdx.backends.android.AndroidFragmentApplication
--dontwarn com.badlogic.gdx.utils.GdxBuild
--dontwarn com.badlogic.gdx.jnigen.BuildTarget*
--dontwarn com.badlogic.gdx.graphics.g2d.freetype.FreetypeBuild
--keep class com.badlogic.gdx.controllers.android.AndroidControllers
+# ViewModel (Koin 反射创建)
+-keep class * extends androidx.lifecycle.ViewModel { <init>(...); }
+-keep class com.tutu.myblbl.feature.**ViewModel { *; }
+
+# AkDanmaku（内嵌弹幕引擎，Ashley ECS 使用反射创建组件）
+-keep class com.kuaishou.akdanmaku.** { *; }
+-keep class com.badlogicgames.ashley.** { *; }
+-keep class com.badlogicgames.gdx.** { *; }
 
 # 通用 Android 优化
 -dontwarn javax.annotation.**
@@ -80,10 +78,10 @@
 
 # Keep custom views
 -keepclasseswithmembers class * {
-    public <init>(android.content.Context, android.util.AttributeSet);
+    public <init>(android.content.Context, android.content.AttributeSet);
 }
 -keepclasseswithmembers class * {
-    public <init>(android.content.Context, android.util.AttributeSet, int);
+    public <init>(android.content.Context, android.content.AttributeSet, int);
 }
 
 # Keep enum
@@ -95,15 +93,4 @@
 # Parcelable
 -keepclassmembers class * implements android.os.Parcelable {
     public static final ** CREATOR;
-}
-
-# Serializable
--keepclassmembers class * implements java.io.Serializable {
-    static final long serialVersionUID;
-    private static final java.io.ObjectStreamField[] serialPersistentFields;
-    !static !transient <fields>;
-    private void writeObject(java.io.ObjectOutputStream);
-    private void readObject(java.io.ObjectInputStream);
-    java.lang.Object writeReplace();
-    java.lang.Object readResolve();
 }

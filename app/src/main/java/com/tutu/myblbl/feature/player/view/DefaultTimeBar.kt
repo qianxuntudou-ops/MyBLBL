@@ -12,6 +12,7 @@ import android.util.AttributeSet
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.OptIn
@@ -49,6 +50,7 @@ class DefaultTimeBar @JvmOverloads constructor(
     private val scrubberEnabledSize: Int
     private val scrubberDisabledSize: Int
     private val scrubberDraggedSize: Int
+    private val scrubberFocusPeakSize: Int
 
     private val playedPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val scrubberPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -114,6 +116,7 @@ class DefaultTimeBar @JvmOverloads constructor(
                 scrubberEnabledSize = a.getDimensionPixelSize(R.styleable.DefaultTimeBar_scrubber_enabled_size, defaultScrubberEnabledSize)
                 scrubberDisabledSize = a.getDimensionPixelSize(R.styleable.DefaultTimeBar_scrubber_disabled_size, defaultScrubberDisabledSize)
                 scrubberDraggedSize = a.getDimensionPixelSize(R.styleable.DefaultTimeBar_scrubber_dragged_size, defaultScrubberDraggedSize)
+                scrubberFocusPeakSize = a.getDimensionPixelSize(R.styleable.DefaultTimeBar_scrubber_focus_peak_size, scrubberDraggedSize)
 
                 val playedColor = a.getInt(R.styleable.DefaultTimeBar_played_color, -0x1)
                 val scrubberColor = a.getInt(R.styleable.DefaultTimeBar_scrubber_color, -0x1)
@@ -139,6 +142,7 @@ class DefaultTimeBar @JvmOverloads constructor(
             scrubberEnabledSize = defaultScrubberEnabledSize
             scrubberDisabledSize = defaultScrubberDisabledSize
             scrubberDraggedSize = defaultScrubberDraggedSize
+            scrubberFocusPeakSize = defaultScrubberDraggedSize
 
             playedPaint.color = -0x1
             scrubberPaint.color = -0x1
@@ -151,7 +155,7 @@ class DefaultTimeBar @JvmOverloads constructor(
         scrubberPadding = if (scrubberDrawable != null) {
             (scrubberDrawable.intrinsicWidth + 1) / 2
         } else {
-            (max(scrubberDisabledSize, max(scrubberEnabledSize, scrubberDraggedSize)) + 1) / 2
+            (max(scrubberDisabledSize, max(scrubberEnabledSize, max(scrubberDraggedSize, scrubberFocusPeakSize))) + 1) / 2
         }
 
         isFocusable = true
@@ -357,7 +361,20 @@ class DefaultTimeBar @JvmOverloads constructor(
         if (scrubbing && !gainFocus) {
             stopScrubbing(false)
         }
-        invalidate()
+        if (gainFocus && !scrubbing && scrubberFocusPeakSize > scrubberDraggedSize) {
+            val peakScale = scrubberFocusPeakSize.toFloat() / scrubberDraggedSize
+            scrubberAnimator.cancel()
+            scrubberScale = peakScale
+            invalidate()
+            scrubberAnimator.interpolator = DecelerateInterpolator(1.5f)
+            scrubberAnimator.setFloatValues(peakScale, 1f)
+            scrubberAnimator.duration = 300
+            scrubberAnimator.start()
+        } else {
+            scrubberAnimator.cancel()
+            scrubberScale = 1f
+            invalidate()
+        }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -639,6 +656,7 @@ class DefaultTimeBar @JvmOverloads constructor(
 
     fun showScrubber() {
         scrubberAnimator.cancel()
+        scrubberAnimator.interpolator = null
         scrubberScale = 1f
         invalidate()
     }
@@ -649,6 +667,7 @@ class DefaultTimeBar @JvmOverloads constructor(
             showScrubber()
             return
         }
+        scrubberAnimator.interpolator = null
         scrubberAnimator.setFloatValues(scrubberScale, 1f)
         scrubberAnimator.duration = animationDurationMs
         scrubberAnimator.start()
@@ -656,6 +675,7 @@ class DefaultTimeBar @JvmOverloads constructor(
 
     fun hideScrubber() {
         scrubberAnimator.cancel()
+        scrubberAnimator.interpolator = null
         scrubberScale = 0f
         invalidate()
     }
@@ -666,6 +686,7 @@ class DefaultTimeBar @JvmOverloads constructor(
             hideScrubber()
             return
         }
+        scrubberAnimator.interpolator = null
         scrubberAnimator.setFloatValues(scrubberScale, 0f)
         scrubberAnimator.duration = animationDurationMs
         scrubberAnimator.start()

@@ -321,6 +321,7 @@
     <string name="user_following">关注</string>
     <string name="my_space">我的空间</string>
     <string name="need_sign_in">该功能需要登录后才可以使用</string>
+    <string name="login_expired">登录已过期，请重新登录</string>
     <string name="feature_wait_tip">功能需要等候才可以使用</string>
     <string name="negative_sequence">倒序</string>
     <string name="net_error">服务器开小差了，要重试吗？</string>

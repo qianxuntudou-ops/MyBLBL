@@ -209,9 +209,8 @@ class VideoCardMenuDialog(
                     dismiss()
                 } else {
                     val msg = response.errorMessage
-                    if (isCsrfError(response.code, msg)) {
-                        toast(context.getString(R.string.toast_need_login))
-                        dismiss()
+                    if (sessionGateway.handleResponseAuthError(response.code, msg)) {
+                        handleAuthExpired()
                     } else if (msg.contains("90001") || msg.contains("上限") || msg.contains("已满")) {
                         toast(context.getString(R.string.toast_watch_later_full))
                     } else {
@@ -313,9 +312,8 @@ class VideoCardMenuDialog(
                     }
                     dismiss()
                 } else {
-                    if (isCsrfError(response.code, response.errorMessage)) {
-                        toast(context.getString(R.string.toast_need_login))
-                        dismiss()
+                    if (sessionGateway.handleResponseAuthError(response.code, response.errorMessage)) {
+                        handleAuthExpired()
                     } else {
                         toast(response.errorMessage)
                     }
@@ -395,7 +393,11 @@ class VideoCardMenuDialog(
                             onFavoriteRemoved?.invoke()
                         }
                     } else {
-                        toast(response.errorMessage)
+                        if (sessionGateway.handleResponseAuthError(response.code, response.errorMessage)) {
+                            handleAuthExpired()
+                        } else {
+                            toast(response.errorMessage)
+                        }
                     }
                 }.onFailure { toast(it.message ?: "操作失败") }
             }
@@ -548,16 +550,18 @@ class VideoCardMenuDialog(
     private fun checkCsrfAndLogin(): Boolean {
         if (!checkLogin()) return false
         if (sessionGateway.getCsrfToken().isBlank()) {
-            toast(context.getString(R.string.toast_need_login))
+            sessionGateway.clearUserSession("no_csrf_token")
+            appEventHub.dispatch(AppEventHub.Event.UserSessionChanged)
+            toast(context.getString(R.string.login_expired))
             dismiss()
             return false
         }
         return true
     }
 
-    private fun isCsrfError(code: Int, message: String?): Boolean {
-        if (code == -101 || code == -111) return true
-        return message.orEmpty().contains("csrf")
+    private fun handleAuthExpired() {
+        toast(context.getString(R.string.login_expired))
+        dismiss()
     }
 
     private fun canDislikeUp(): Boolean {

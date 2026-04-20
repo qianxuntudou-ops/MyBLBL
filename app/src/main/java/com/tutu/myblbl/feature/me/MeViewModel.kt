@@ -73,6 +73,17 @@ class MeViewModel(
         }
     }
 
+    fun syncWithGateway() {
+        val currentLoggedIn = sessionGateway.isLoggedIn()
+        if (_isLoggedIn.value != currentLoggedIn) {
+            _isLoggedIn.value = currentLoggedIn
+            if (!currentLoggedIn) {
+                _userInfo.value = null
+                _userStat.value = null
+            }
+        }
+    }
+
     fun shouldRefresh(ttlMs: Long): Boolean {
         if (!sessionGateway.isLoggedIn()) {
             return false

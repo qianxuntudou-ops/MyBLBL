@@ -47,6 +47,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
     private var pageChangeCallback: ViewPager2.OnPageChangeCallback? = null
     private var tabSelectedListener: TabLayout.OnTabSelectedListener? = null
     private var pendingRefreshAfterLogin = false
+    private var wasLoggedInOnPause = false
 
     override fun getViewBinding(
         inflater: LayoutInflater,
@@ -95,9 +96,22 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
 
         viewPager.currentItem = getDefaultTabIndex()
         viewPager.post { notifyCurrentTab { it.onTabSelected() } }
-        
+
         binding.imageAvatar.setOnClickListener {
             onAvatarClick()
+        }
+    }
+
+    override fun onPause() {
+        wasLoggedInOnPause = sessionGateway.isLoggedIn()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (sessionGateway.isLoggedIn() && !wasLoggedInOnPause) {
+            pendingRefreshAfterLogin = true
+            viewModel.loadUserInfo()
         }
     }
 
@@ -127,6 +141,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.syncWithGateway()
                 viewModel.isLoggedIn.collectLatest { isLoggedIn ->
                     renderLoginState(isLoggedIn)
                     if (!isLoggedIn) {
@@ -183,7 +198,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 appEventHub.events.collectLatest { event ->
-                    if (event == AppEventHub.Event.UserSessionChanged && !isHidden) {
+                    if (event == AppEventHub.Event.UserSessionChanged) {
                         pendingRefreshAfterLogin = true
                         viewModel.loadUserInfo()
                         adapter.getFragments().forEach { fragment ->

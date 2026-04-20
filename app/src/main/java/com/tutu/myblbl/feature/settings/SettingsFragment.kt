@@ -1025,6 +1025,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
                 append("\n")
                 append("保存时间：").append(DateFormat.format("yyyy-MM-dd HH:mm", savedAt))
             }
+            append("\n\n")
+            append("提示：点赞/投币/三连等操作被拦截时，需到B站官方App或网页端完成验证。")
         }
 
         val px40 = resources.getDimensionPixelSize(R.dimen.px40)

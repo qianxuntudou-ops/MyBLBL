@@ -1,10 +1,12 @@
 package com.tutu.myblbl.feature.dynamic
 
+import android.util.LruCache
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tutu.myblbl.model.user.FollowingModel
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.repository.UserRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -70,6 +72,18 @@ class DynamicViewModel(
     private var followingHasMore = false
     private var followingLoading = false
     private val loadedFollowingMids = linkedSetOf<Long>()
+
+    private data class CachedUpVideos(
+        val videos: List<VideoModel>,
+        val page: Int,
+        val hasMore: Boolean
+    )
+
+    private val videoCache = LruCache<String, CachedUpVideos>(15)
+    private var loadJob: Job? = null
+    private var preloadJob: Job? = null
+    private var lastPageSize = 20
+    private var loadGeneration = 0
 
     fun loadFollowingList() {
         if (!userRepository.isLoggedIn()) {
@@ -221,25 +235,48 @@ class DynamicViewModel(
             return
         }
 
+        lastPageSize = pageSize
+        loadGeneration++
+        loadJob?.cancel()
+        preloadJob?.cancel()
         currentUpId = upId
         currentPage = 0
         currentAllDynamicOffset = null
-        currentVideoItems = emptyList()
         _loadedPage.value = 0
-        _videos.value = emptyList()
         _hasMoreVideos.value = true
         _screenState.value = ScreenState.Content
+
+        if (!forceRefresh) {
+            val cached = videoCache.get(upId)
+            if (cached != null) {
+                loadJob = null
+                currentVideoItems = cached.videos
+                currentPage = cached.page
+                _hasMoreVideos.value = cached.hasMore
+                _loadedPage.value = cached.page
+                _status.value = resolveStatus(upId, cached.videos)
+                _videos.value = cached.videos
+                _loading.value = false
+                return
+            }
+        }
+
+        currentVideoItems = emptyList()
+        _videos.value = emptyList()
         loadNextPage(pageSize)
     }
 
     fun loadNextPage(pageSize: Int) {
-        if (currentUpId.isBlank() || _loading.value || !_hasMoreVideos.value) {
+        if (currentUpId.isBlank() || !_hasMoreVideos.value) {
+            return
+        }
+        if (loadJob?.isActive == true) {
             return
         }
 
         val nextPage = currentPage + 1
-
-        viewModelScope.launch {
+        val gen = loadGeneration
+        loadJob = viewModelScope.launch {
             _loading.value = true
             _error.value = null
             if (currentPage == 0) {
@@ -247,86 +284,124 @@ class DynamicViewModel(
                 _screenState.value = ScreenState.Content
             }
 
-            if (currentUpId == ALL_DYNAMIC_ID) {
-                userRepository.getAllDynamic(
-                    page = nextPage,
-                    offset = if (nextPage > 1) currentAllDynamicOffset else null
-                ).onSuccess { response ->
-                    _loading.value = false
-                    if (response.isSuccess) {
-                        val items = response.data?.items.orEmpty()
-                        currentVideoItems = if (nextPage == 1) {
-                            items
+            try {
+                if (currentUpId == ALL_DYNAMIC_ID) {
+                    userRepository.getAllDynamic(
+                        page = nextPage,
+                        offset = if (nextPage > 1) currentAllDynamicOffset else null
+                    ).onSuccess { response ->
+                        if (response.isSuccess) {
+                            val items = response.data?.items.orEmpty()
+                            currentVideoItems = if (nextPage == 1) {
+                                items
+                            } else {
+                                currentVideoItems + items
+                            }
+                            lastLoadedAt = System.currentTimeMillis()
+                            _hasMoreVideos.value = response.data?.hasMore == true
+                            currentAllDynamicOffset = response.data?.offset
+                            currentPage = nextPage
+                            _loadedPage.value = nextPage
+                            _videos.value = items
+                            _status.value = resolveStatus(currentUpId, currentVideoItems)
+                            _screenState.value = ScreenState.Content
+                            if (nextPage == 1) {
+                                videoCache.put(currentUpId, CachedUpVideos(items, 1, response.data?.hasMore == true))
+                                schedulePreload()
+                            }
                         } else {
-                            currentVideoItems + items
+                            if (nextPage == 1) {
+                                currentVideoItems = emptyList()
+                                _videos.value = emptyList()
+                            }
+                            _hasMoreVideos.value = false
+                            _error.value = response.errorMessage
+                            _status.value = resolveStatus(currentUpId, currentVideoItems)
                         }
-                        lastLoadedAt = System.currentTimeMillis()
-                        _hasMoreVideos.value = response.data?.hasMore == true
-                        currentAllDynamicOffset = response.data?.offset
-                        currentPage = nextPage
-                        _loadedPage.value = nextPage
-                        _videos.value = items
-                        _status.value = resolveStatus(currentUpId, currentVideoItems)
-                        _screenState.value = ScreenState.Content
-                    } else {
+                    }.onFailure { exception ->
                         if (nextPage == 1) {
                             currentVideoItems = emptyList()
                             _videos.value = emptyList()
                         }
                         _hasMoreVideos.value = false
-                        _error.value = response.errorMessage
+                        _error.value = exception.message
                         _status.value = resolveStatus(currentUpId, currentVideoItems)
                     }
-                }.onFailure { exception ->
-                    _loading.value = false
-                    if (nextPage == 1) {
-                        currentVideoItems = emptyList()
-                        _videos.value = emptyList()
-                    }
-                    _hasMoreVideos.value = false
-                    _error.value = exception.message
-                    _status.value = resolveStatus(currentUpId, currentVideoItems)
+                    return@launch
                 }
-                return@launch
-            }
 
-            userRepository.getUserDynamic(currentUpId.toLongOrNull() ?: 0L, nextPage, pageSize)
-                .onSuccess { response ->
-                    _loading.value = false
-                    if (response.isSuccess) {
-                        val items = response.data?.archives.orEmpty()
-                        currentVideoItems = if (nextPage == 1) {
-                            items
+                userRepository.getUserDynamic(currentUpId.toLongOrNull() ?: 0L, nextPage, pageSize)
+                    .onSuccess { response ->
+                        if (response.isSuccess) {
+                            val items = response.data?.archives.orEmpty()
+                            currentVideoItems = if (nextPage == 1) {
+                                items
+                            } else {
+                                currentVideoItems + items
+                            }
+                            lastLoadedAt = System.currentTimeMillis()
+                            _hasMoreVideos.value = response.data?.hasMore == true
+                            currentPage = nextPage
+                            _loadedPage.value = nextPage
+                            _videos.value = items
+                            _status.value = resolveStatus(currentUpId, currentVideoItems)
+                            _screenState.value = ScreenState.Content
+                            if (nextPage == 1) {
+                                videoCache.put(currentUpId, CachedUpVideos(items, 1, response.data?.hasMore == true))
+                                schedulePreload()
+                            }
                         } else {
-                            currentVideoItems + items
+                            if (nextPage == 1) {
+                                currentVideoItems = emptyList()
+                                _videos.value = emptyList()
+                            }
+                            _hasMoreVideos.value = false
+                            _error.value = response.errorMessage
+                            _status.value = resolveStatus(currentUpId, currentVideoItems)
                         }
-                        lastLoadedAt = System.currentTimeMillis()
-                        _hasMoreVideos.value = response.data?.hasMore == true
-                        currentPage = nextPage
-                        _loadedPage.value = nextPage
-                        _videos.value = items
-                        _status.value = resolveStatus(currentUpId, currentVideoItems)
-                        _screenState.value = ScreenState.Content
-                    } else {
+                    }
+                    .onFailure { exception ->
                         if (nextPage == 1) {
                             currentVideoItems = emptyList()
                             _videos.value = emptyList()
                         }
                         _hasMoreVideos.value = false
-                        _error.value = response.errorMessage
+                        _error.value = exception.message
                         _status.value = resolveStatus(currentUpId, currentVideoItems)
                     }
-                }
-                .onFailure { exception ->
+            } finally {
+                if (gen == loadGeneration) {
                     _loading.value = false
-                    if (nextPage == 1) {
-                        currentVideoItems = emptyList()
-                        _videos.value = emptyList()
-                    }
-                    _hasMoreVideos.value = false
-                    _error.value = exception.message
-                    _status.value = resolveStatus(currentUpId, currentVideoItems)
                 }
+            }
+        }
+    }
+
+    private fun schedulePreload() {
+        preloadJob?.cancel()
+        preloadJob = viewModelScope.launch {
+            val list = _followingList.value
+            if (list.isEmpty()) return@launch
+            val currentIndex = list.indexOfFirst { it.mid.toString() == currentUpId }
+            if (currentIndex < 0) return@launch
+
+            val candidates = mutableListOf<FollowingModel>()
+            list.getOrNull(currentIndex + 1)?.let { candidates.add(it) }
+            list.getOrNull(currentIndex - 1)?.takeIf { it.mid != 0L }?.let { candidates.add(it) }
+
+            for (up in candidates) {
+                val upId = up.mid.toString()
+                if (upId == ALL_DYNAMIC_ID || videoCache.get(upId) != null) continue
+                userRepository.getUserDynamic(up.mid, 1, lastPageSize)
+                    .onSuccess { response ->
+                        if (response.isSuccess) {
+                            val items = response.data?.archives.orEmpty()
+                            if (items.isNotEmpty()) {
+                                videoCache.put(upId, CachedUpVideos(items, 1, response.data?.hasMore == true))
+                            }
+                        }
+                    }
+            }
         }
     }
 
@@ -365,6 +440,9 @@ class DynamicViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        loadJob?.cancel()
+        preloadJob?.cancel()
+        videoCache.evictAll()
         _followingList.value = emptyList()
         _videos.value = emptyList()
         currentVideoItems = emptyList()

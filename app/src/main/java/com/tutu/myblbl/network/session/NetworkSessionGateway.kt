@@ -1,10 +1,12 @@
 package com.tutu.myblbl.network.session
 
+import com.tutu.myblbl.event.AppEventHub
 import com.tutu.myblbl.model.BaseResponse
 import com.tutu.myblbl.model.user.UserDetailInfoModel
 import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.network.response.Base2Response
 import com.tutu.myblbl.network.response.BaseBaseResponse
+import org.koin.mp.KoinPlatform
 
 interface NetworkSessionGateway {
     fun getCsrfToken(): String
@@ -44,6 +46,10 @@ interface NetworkSessionGateway {
         response: Base2Response<T>,
         source: String
     ): Base2Response<T>
+
+    fun isCsrfError(code: Int, message: String?): Boolean
+
+    fun handleResponseAuthError(code: Int, message: String?): Boolean
 }
 
 class NetworkManagerSessionGateway : NetworkSessionGateway {
@@ -97,5 +103,22 @@ class NetworkManagerSessionGateway : NetworkSessionGateway {
         source: String
     ): Base2Response<T> {
         return NetworkManager.syncAuthState(response, source)
+    }
+
+    override fun isCsrfError(code: Int, message: String?): Boolean {
+        if (code == -101 || code == -111) return true
+        return message.orEmpty().contains("csrf", ignoreCase = true)
+    }
+
+    override fun handleResponseAuthError(code: Int, message: String?): Boolean {
+        if (!isCsrfError(code, message)) return false
+        val wasLoggedIn = NetworkManager.isLoggedIn()
+        NetworkManager.clearUserSession(reason = "csrf_error")
+        if (wasLoggedIn) {
+            runCatching { KoinPlatform.getKoin().get<AppEventHub>() }
+                .getOrNull()
+                ?.dispatch(AppEventHub.Event.UserSessionChanged)
+        }
+        return true
     }
 }

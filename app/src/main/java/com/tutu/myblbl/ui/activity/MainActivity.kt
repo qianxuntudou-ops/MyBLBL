@@ -70,6 +70,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     private var pendingFocusRestoreDelayMs = 0L
     private var startupTasksScheduled = false
     private var splashDismissed = false
+    private var lastKnownLoggedIn = sessionGateway.isLoggedIn()
     private var restoredFromSavedState = false
     private var restoredTabIndex = -1
 
@@ -109,8 +110,15 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
+                val currentLoggedIn = sessionGateway.isLoggedIn()
+                if (currentLoggedIn != lastKnownLoggedIn) {
+                    lastKnownLoggedIn = currentLoggedIn
+                    appEventHub.dispatch(AppEventHub.Event.UserSessionChanged)
+                }
+                refreshAvatar(allowNetworkFetch = false)
                 appEventHub.events.collect { event ->
                     if (event == AppEventHub.Event.UserSessionChanged) {
+                        lastKnownLoggedIn = sessionGateway.isLoggedIn()
                         refreshAvatar()
                     }
                 }

@@ -30,8 +30,10 @@ import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
@@ -172,7 +174,10 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         renderUiState()
     }
 
+    private var wasLoggedInOnPause = false
+
     override fun onPause() {
+        wasLoggedInOnPause = sessionGateway.isLoggedIn()
         pendingVideoFocusRestoreOnResume =
             rememberVideoFocusForResume() || pendingVideoFocusRestoreOnResume
         super.onPause()
@@ -182,6 +187,10 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         super.onResume()
         if (pendingVideoFocusRestoreOnResume) {
             scheduleVideoFocusRestore()
+        }
+        if (sessionGateway.isLoggedIn() != wasLoggedInOnPause) {
+            currentUpId = 0L
+            loadData()
         }
     }
 
@@ -197,7 +206,6 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
             return
         }
         viewModel.loadFollowingList()
-        viewModel.selectUp(currentUpId.toString(), pageSize)
     }
 
     private fun refreshCurrentVideoList() {
@@ -239,7 +247,9 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.videos.collectLatest { rawVideos ->
-                    val videos = ContentFilter.filterVideos(requireContext(), rawVideos)
+                    val videos = withContext(Dispatchers.Default) {
+                        ContentFilter.filterVideos(requireContext(), rawVideos)
+                    }
                     val page = viewModel.loadedPage.value
                     swipeRefreshLayout?.isRefreshing = false
                     if (page <= 1 || videoAdapter.itemCount == 0) {
@@ -323,7 +333,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 appEventHub.events.collectLatest { event ->
-                    if (event == AppEventHub.Event.UserSessionChanged && !isHidden) {
+                    if (event == AppEventHub.Event.UserSessionChanged) {
                         currentUpId = 0L
                         loadData()
                     }

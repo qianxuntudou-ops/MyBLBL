@@ -68,7 +68,7 @@ class PlayerActionDialog(
             if (!checkLogin()) return@setOnClickListener
             scope.launch {
                 runCatching {
-                    videoRepository.like(aid, safeBvid, if (isLiked) 0 else 1)
+                    videoRepository.like(null, safeBvid ?: bvid, if (isLiked) 2 else 1)
                 }.onSuccess { response ->
                     if (response.isSuccess) {
                         isLiked = !isLiked
@@ -79,8 +79,9 @@ class PlayerActionDialog(
                             Toast.LENGTH_SHORT
                         ).show()
                     } else {
-                        if (isCsrfError(response.code, response.message)) {
-                            handleCsrfError()
+                        AppLog.w("PlayerAction", "like failed: code=${response.code}, message=${response.message}")
+                        if (sessionGateway.handleResponseAuthError(response.code, response.message)) {
+                            handleAuthExpired()
                         } else if (isRiskControl(response.code, response.message)) {
                             AppLog.w("PlayerAction", "like risk control detected: code=${response.code}, message=${response.message}")
                             showRiskControlHint()
@@ -110,8 +111,8 @@ class PlayerActionDialog(
                         renderState()
                         toast("投币成功")
                     } else {
-                        if (isCsrfError(response.code, response.message)) {
-                            handleCsrfError()
+                        if (sessionGateway.handleResponseAuthError(response.code, response.message)) {
+                            handleAuthExpired()
                         } else if (isRiskControl(response.code, response.message)) {
                             AppLog.w("PlayerAction", "coin risk control detected: code=${response.code}, message=${response.message}")
                             showRiskControlHint()
@@ -162,11 +163,11 @@ class PlayerActionDialog(
                         renderState()
                         toast(
                             if (isFavorited) context.getString(R.string.collection_)
-                            else context.getString(R.string.collection)
+                            else "取消收藏"
                         )
                     } else {
-                        if (isCsrfError(response.code, response.errorMessage)) {
-                            handleCsrfError()
+                        if (sessionGateway.handleResponseAuthError(response.code, response.errorMessage)) {
+                            handleAuthExpired()
                         } else if (isRiskControl(response.code, response.errorMessage)) {
                             showRiskControlHint()
                         } else {
@@ -196,8 +197,8 @@ class PlayerActionDialog(
                         renderState()
                         toast(context.getString(R.string.triple_action))
                     } else {
-                        if (isCsrfError(response.code, response.message)) {
-                            handleCsrfError()
+                        if (sessionGateway.handleResponseAuthError(response.code, response.message)) {
+                            handleAuthExpired()
                         } else if (isRiskControl(response.code, response.message)) {
                             showRiskControlHint()
                         } else {
@@ -229,8 +230,8 @@ class PlayerActionDialog(
                             else context.getString(R.string.later_watch_removed)
                         )
                     } else {
-                        if (isCsrfError(response.code, response.errorMessage)) {
-                            handleCsrfError()
+                        if (sessionGateway.handleResponseAuthError(response.code, response.errorMessage)) {
+                            handleAuthExpired()
                         } else if (isRiskControl(response.code, response.errorMessage)) {
                             showRiskControlHint()
                         } else {
@@ -415,7 +416,11 @@ class PlayerActionDialog(
                             }
                         )
                     } else {
-                        toast(response.errorMessage)
+                        if (sessionGateway.handleResponseAuthError(response.code, response.errorMessage)) {
+                            toast(context.getString(R.string.login_expired))
+                        } else {
+                            toast(response.errorMessage)
+                        }
                     }
                 }.onFailure { toast(it.message ?: "操作失败") }
             }
@@ -496,13 +501,8 @@ class PlayerActionDialog(
         return msg.contains("风控") || msg.contains("拦截") || msg.contains("异常") || msg.contains("非法")
     }
 
-    private fun isCsrfError(code: Int, message: String?): Boolean {
-        if (code == -101 || code == -111) return true
-        return message.orEmpty().contains("csrf")
-    }
-
-    private fun handleCsrfError() {
-        toast(context.getString(R.string.need_sign_in))
+    private fun handleAuthExpired() {
+        toast(context.getString(R.string.login_expired))
         dismiss()
     }
 

@@ -78,6 +78,7 @@
             android:layout_marginTop="@dimen/px5"
             app:layout_constraintTop_toBottomOf="@+id/view_title"
             app:scrubber_dragged_size="@dimen/px46"
+            app:scrubber_focus_peak_size="@dimen/px60"
             app:scrubber_enabled_size="@dimen/px32"
             app:scrubber_drawable="@drawable/ic_progress_head"/>
         <FrameLayout

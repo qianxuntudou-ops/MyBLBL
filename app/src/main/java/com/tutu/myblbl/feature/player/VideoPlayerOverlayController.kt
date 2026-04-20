@@ -377,12 +377,16 @@ class VideoPlayerOverlayController(
     }
 
     private fun keepControllerVisibleForOverlay() {
-        playerView.showController()
+        if (!playerView.isControllerFullyVisible()) {
+            playerView.showController()
+        }
         playerView.removeControllerHideCallbacks()
     }
 
     private fun restoreControllerAfterOverlay() {
-        playerView.showController()
+        if (!playerView.isControllerFullyVisible()) {
+            playerView.showController()
+        }
         // 延迟请求焦点，等控制器完全显示后再恢复，避免控制器还在隐藏/动画状态导致焦点请求失败
         playerView.post {
             overlayCoordinator.restoreFocus(playerView)

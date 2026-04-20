@@ -96,12 +96,21 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
 
     private fun restoreCacheThenLoad() {
         cacheRestoreJob?.cancel()
+        loadData(1)
         cacheRestoreJob = viewLifecycleOwner.lifecycleScope.launch {
-            val hasCache = restoreCachedVideos()
-            if (!hasCache) {
-                showLoading(true)
+            val cachedVideos = runCatching {
+                HomeCacheStore.readVideos(CACHE_KEY)
+            }.getOrElse { throwable ->
+                AppLog.e(TAG, "restoreCachedVideos failure: ${throwable.message}", throwable)
+                emptyList()
             }
-            loadData(1)
+            if (cachedVideos.isNotEmpty() && waitingForFirstLoad) {
+                adapter?.setData(ContentFilter.filterVideos(requireContext(), cachedVideos))
+                adapter?.setShowLoadMore(true)
+                showContent()
+                showLoading(false)
+                mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.HomeContentReady)
+            }
         }
     }
 

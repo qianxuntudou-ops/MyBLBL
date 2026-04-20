@@ -332,7 +332,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         binding.root.post {
             MyBLBLApplication.instance.scheduleDeferredSessionPrewarm()
             lifecycleScope.launch {
-                delay(800L)
+                delay(300L)
                 refreshAvatar(allowNetworkFetch = true)
             }
         }

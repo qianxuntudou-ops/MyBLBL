@@ -198,6 +198,7 @@ androidComponents {
         tasks.register("assemble${capitalizedVariantName}Renamed") {
             group = "build"
             description = "Builds the ${variant.name} APK and copies it to the renamed output directory."
+            dependsOn("assemble${capitalizedVariantName}")
             dependsOn(renameTask)
         }
     }

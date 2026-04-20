@@ -1,5 +1,6 @@
 package com.tutu.myblbl.network.session
 
+import android.content.SharedPreferences
 import com.tutu.myblbl.model.BaseResponse
 import com.tutu.myblbl.model.user.UserDetailInfoModel
 import com.tutu.myblbl.network.WbiGenerator
@@ -12,18 +13,41 @@ class NetworkSessionStore(
 
     companion object {
         private const val WBI_KEYS_STALE_MS = 24 * 60 * 60 * 1000L
+        private const val PREFS_KEY_WBI_IMG = "wbi_img_key"
+        private const val PREFS_KEY_WBI_SUB = "wbi_sub_key"
     }
 
     private var wbiImageKey: String = ""
     private var wbiSubKey: String = ""
     private var wbiKeysUpdatedAt: Long = 0L
     private var userInfo: UserDetailInfoModel? = null
+    private var sharedPrefs: SharedPreferences? = null
+
+    fun initPersistence(prefs: SharedPreferences) {
+        sharedPrefs = prefs
+        restorePersistedWbiKeys()
+    }
+
+    private fun restorePersistedWbiKeys() {
+        val img = sharedPrefs?.getString(PREFS_KEY_WBI_IMG, "").orEmpty()
+        val sub = sharedPrefs?.getString(PREFS_KEY_WBI_SUB, "").orEmpty()
+        if (img.isNotBlank() && sub.isNotBlank()) {
+            wbiImageKey = img
+            wbiSubKey = sub
+            wbiKeysUpdatedAt = System.currentTimeMillis()
+        }
+    }
 
     fun setWbiInfo(imgKey: String, subKey: String) {
         wbiImageKey = imgKey
         wbiSubKey = subKey
         if (imgKey.isNotBlank() && subKey.isNotBlank()) {
             wbiKeysUpdatedAt = System.currentTimeMillis()
+        }
+        sharedPrefs?.edit()?.apply {
+            putString(PREFS_KEY_WBI_IMG, imgKey)
+            putString(PREFS_KEY_WBI_SUB, subKey)
+            apply()
         }
     }
 

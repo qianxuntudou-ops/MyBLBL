@@ -112,6 +112,9 @@ object NetworkManager {
         appContext = applicationContext
         internalCookieManager.init(applicationContext)
         userAgentStore.init(applicationContext)
+        sessionStore.initPersistence(
+            applicationContext.getSharedPreferences("network_session_store", Context.MODE_PRIVATE)
+        )
     }
 
     fun setWbiInfo(imgKey: String, subKey: String) {

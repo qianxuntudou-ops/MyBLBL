@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ConcurrentHashMap
 
 private val Context.appDataStore by preferencesDataStore(name = "app_settings")
@@ -28,7 +27,7 @@ class AppSettingsDataStore(private val context: Context) {
     private val cache = ConcurrentHashMap<String, Any?>()
 
     fun initCache() {
-        runBlocking {
+        scope.launch {
             val prefs = dataStore.data.first()
             prefs.asMap().forEach { (key, value) ->
                 cache[key.name] = value

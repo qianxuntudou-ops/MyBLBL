@@ -51,7 +51,7 @@ class MyBLBLApplication : Application() {
         NetworkManager.init(this)
     }
 
-    fun scheduleDeferredSessionPrewarm(delayMillis: Long = 1500L) {
+    fun scheduleDeferredSessionPrewarm(delayMillis: Long = 300L) {
         if (!startupPrewarmScheduled.compareAndSet(false, true)) {
             return
         }

@@ -1,5 +1,6 @@
 package com.tutu.myblbl.ui.fragment.main
 
+import androidx.lifecycle.SavedStateHandle
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
@@ -13,7 +14,7 @@ class MainNavigationViewModelTest {
 
     @Test
     fun dispatch_emits_events_in_order() = runBlocking {
-        val viewModel = MainNavigationViewModel()
+        val viewModel = MainNavigationViewModel(SavedStateHandle())
         val events = mutableListOf<MainNavigationViewModel.Event>()
 
         val collectionJob = launch(start = CoroutineStart.UNDISPATCHED) {

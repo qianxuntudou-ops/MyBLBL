@@ -52,7 +52,7 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
         super.onViewCreated(view, savedInstanceState)
         adapter = HomeFragmentStateAdapter(childFragmentManager, viewLifecycleOwner.lifecycle)
         binding.viewPager.adapter = adapter
-        binding.viewPager.offscreenPageLimit = adapter.itemCount - 1
+        binding.viewPager.offscreenPageLimit = 1
         tabMediator = TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
             tab.text = adapter.getPageTitle(position)
         }.also { it.attach() }

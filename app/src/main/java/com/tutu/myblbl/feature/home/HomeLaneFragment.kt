@@ -151,12 +151,20 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
 
     private fun restoreCacheThenLoad() {
         cacheRestoreJob?.cancel()
+        loadData(1)
         cacheRestoreJob = viewLifecycleOwner.lifecycleScope.launch {
-            val hasCache = restoreCachedSections()
-            if (!hasCache) {
-                showLoading(true)
+            val cachedSections = runCatching {
+                HomeCacheStore.readSections(cacheKey())
+            }.getOrElse { throwable ->
+                AppLog.e(TAG, "restoreCachedSections failure: type=$type, message=${throwable.message}", throwable)
+                emptyList()
             }
-            loadData(1)
+            if (cachedSections.isNotEmpty() && isLoading) {
+                adapter?.setData(cachedSections)
+                adapter?.setShowLoadMore(false)
+                showContent()
+                showLoading(false)
+            }
         }
     }
 

@@ -73,7 +73,7 @@ jobs:
         run: |
           KEYSTORE_PATH="$GITHUB_WORKSPACE/app/keystore.jks"
           printf '%s' "$KEYSTORE_FILE" | base64 -d > "$KEYSTORE_PATH"
-          ./gradlew assembleRelease assembleReleaseRenamed \
+          ./gradlew assembleReleaseRenamed \
             -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
             -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
             -Pandroid.injected.signing.key.alias=$KEY_ALIAS \

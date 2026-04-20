@@ -79,7 +79,9 @@ class PlayerActionDialog(
                             Toast.LENGTH_SHORT
                         ).show()
                     } else {
-                        if (isRiskControl(response.code, response.message)) {
+                        if (isCsrfError(response.code, response.message)) {
+                            handleCsrfError()
+                        } else if (isRiskControl(response.code, response.message)) {
                             AppLog.w("PlayerAction", "like risk control detected: code=${response.code}, message=${response.message}")
                             showRiskControlHint()
                         } else {
@@ -108,7 +110,9 @@ class PlayerActionDialog(
                         renderState()
                         toast("投币成功")
                     } else {
-                        if (isRiskControl(response.code, response.message)) {
+                        if (isCsrfError(response.code, response.message)) {
+                            handleCsrfError()
+                        } else if (isRiskControl(response.code, response.message)) {
                             AppLog.w("PlayerAction", "coin risk control detected: code=${response.code}, message=${response.message}")
                             showRiskControlHint()
                         } else {
@@ -161,7 +165,9 @@ class PlayerActionDialog(
                             else context.getString(R.string.collection)
                         )
                     } else {
-                        if (isRiskControl(response.code, response.errorMessage)) {
+                        if (isCsrfError(response.code, response.errorMessage)) {
+                            handleCsrfError()
+                        } else if (isRiskControl(response.code, response.errorMessage)) {
                             showRiskControlHint()
                         } else {
                             toast(response.errorMessage)
@@ -190,13 +196,15 @@ class PlayerActionDialog(
                         renderState()
                         toast(context.getString(R.string.triple_action))
                     } else {
-                        if (isRiskControl(response.code, response.message)) {
+                        if (isCsrfError(response.code, response.message)) {
+                            handleCsrfError()
+                        } else if (isRiskControl(response.code, response.message)) {
                             showRiskControlHint()
                         } else {
                             toast(response.errorMessage)
                         }
                     }
-                }.onFailure { 
+                }.onFailure {
                     AppLog.e("PlayerActionDialog", "tripleAction failed", it)
                     toast(it.message ?: "操作失败")
                 }
@@ -221,7 +229,9 @@ class PlayerActionDialog(
                             else context.getString(R.string.later_watch_removed)
                         )
                     } else {
-                        if (isRiskControl(response.code, response.errorMessage)) {
+                        if (isCsrfError(response.code, response.errorMessage)) {
+                            handleCsrfError()
+                        } else if (isRiskControl(response.code, response.errorMessage)) {
                             showRiskControlHint()
                         } else {
                             toast(response.errorMessage)
@@ -484,6 +494,16 @@ class PlayerActionDialog(
         if (code == -352 || code == -412 || code == -351) return true
         val msg = message.orEmpty()
         return msg.contains("风控") || msg.contains("拦截") || msg.contains("异常") || msg.contains("非法")
+    }
+
+    private fun isCsrfError(code: Int, message: String?): Boolean {
+        if (code == -101 || code == -111) return true
+        return message.orEmpty().contains("csrf")
+    }
+
+    private fun handleCsrfError() {
+        toast(context.getString(R.string.need_sign_in))
+        dismiss()
     }
 
     private fun showRiskControlHint() {

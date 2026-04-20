@@ -9,7 +9,7 @@ import androidx.media3.exoplayer.ExoPlayer
 
 internal object PlayerInstancePool {
     private const val IDLE_RELEASE_DELAY_MS = 45_000L
-    private const val MIN_BUFFER_MS = 2_000
+    private const val MIN_BUFFER_MS = 3_000
     private const val MAX_BUFFER_MS = 12_000
     private const val BUFFER_FOR_PLAYBACK_MS = 2_000
     private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 3_000

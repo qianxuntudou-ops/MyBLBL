@@ -113,9 +113,10 @@ class HomeLaneAdapter(
     }
 
     override fun onBindContentViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        val item = items[position]
         when (holder) {
-            is ScrollableViewHolder -> holder.bind(items[position])
-            is TimelineViewHolder -> holder.bind(items[position])
+            is ScrollableViewHolder -> holder.bind(item)
+            is TimelineViewHolder -> holder.bind(item)
         }
     }
 
@@ -357,6 +358,9 @@ class HomeLaneAdapter(
             binding.imageEmpty.visibility = View.GONE
             binding.recyclerView.visibility = View.VISIBLE
             adapter.setData(episodes)
+            binding.recyclerView.post {
+                adapter.notifyDataSetChanged()
+            }
         }
 
         private fun showEmpty() {

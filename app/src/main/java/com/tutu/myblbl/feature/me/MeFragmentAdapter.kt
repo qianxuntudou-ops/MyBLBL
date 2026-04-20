@@ -16,8 +16,8 @@ class MeFragmentAdapter(
     private val tabs = listOf(
         R.string.history,
         R.string.collection,
-        R.string.following_animation,
-        R.string.following_series,
+//        R.string.following_animation,
+//        R.string.following_series,
         R.string.later_watch
     )
 
@@ -31,9 +31,9 @@ class MeFragmentAdapter(
         return when (position) {
             0 -> MeListFragment.newInstance(MeListFragment.TYPE_HISTORY)
             1 -> FavoriteFragment.newEmbeddedInstance()
-            2 -> MeSeriesFragment.newInstance(MeSeriesFragment.TYPE_ANIMATION)
-            3 -> MeSeriesFragment.newInstance(MeSeriesFragment.TYPE_SERIES)
-            4 -> MeListFragment.newInstance(MeListFragment.TYPE_LATER)
+//            2 -> MeSeriesFragment.newInstance(MeSeriesFragment.TYPE_ANIMATION)
+//            3 -> MeSeriesFragment.newInstance(MeSeriesFragment.TYPE_SERIES)
+            2 -> MeListFragment.newInstance(MeListFragment.TYPE_LATER)
             else -> MeListFragment.newInstance(MeListFragment.TYPE_HISTORY)
         }
     }

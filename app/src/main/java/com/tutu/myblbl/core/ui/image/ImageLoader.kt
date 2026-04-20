@@ -227,6 +227,7 @@ object ImageLoader {
             url.startsWith("https://") -> url
             url.startsWith("http://") -> "https://${url.removePrefix("http://")}"
             url.startsWith("//") -> "https:$url"
+            url.startsWith("bfs/") -> "https://i0.hdslb.com/$url"
             else -> url
         }
     }
@@ -328,7 +329,8 @@ object ImageLoader {
 
     private fun isBilibiliImageUrl(url: String): Boolean {
         return url.contains("hdslb.com", ignoreCase = true) ||
-            url.contains("biliimg.com", ignoreCase = true)
+            url.contains("biliimg.com", ignoreCase = true) ||
+            url.startsWith("bfs/")
     }
 
     private fun appendImageSuffix(url: String, suffix: String): String {

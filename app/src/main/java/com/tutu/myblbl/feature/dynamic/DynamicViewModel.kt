@@ -363,6 +363,14 @@ class DynamicViewModel(
         return System.currentTimeMillis() - lastLoadedAt >= ttlMs
     }
 
+    override fun onCleared() {
+        super.onCleared()
+        _followingList.value = emptyList()
+        _videos.value = emptyList()
+        currentVideoItems = emptyList()
+        loadedFollowingMids.clear()
+    }
+
     private fun shouldLoadMoreFollowing(): Boolean {
         return when {
             followingTotal > 0 -> loadedFollowingMids.size < followingTotal

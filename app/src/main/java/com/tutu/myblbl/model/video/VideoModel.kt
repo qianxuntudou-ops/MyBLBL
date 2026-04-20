@@ -154,9 +154,12 @@ data class VideoModel(
     @SerializedName("elec_arc_badge")
     val elecArcBadge: String = ""
 ) : Serializable {
-    val isChargingExclusive: Boolean
-        get() = isUpowerExclusive || privilegeType > 0 || isChargingArc
+    private val _cachedIsChargingExclusive: Boolean by lazy {
+        isUpowerExclusive || privilegeType > 0 || isChargingArc
                 || elecArcType == 1 || elecArcBadge == "充电专属"
+    }
+    val isChargingExclusive: Boolean get() = _cachedIsChargingExclusive
+
     val isPortrait: Boolean
         get() = dimension?.isPortrait == true
     val coverUrl: String
@@ -178,24 +181,28 @@ data class VideoModel(
     val authorName: String
         get() = owner?.name ?: ""
 
-    val playbackSeasonId: Long
-        get() = when {
-            sid <= 0L -> parseBangumiSeasonIdFromRedirectUrl()
-            epid > 0L -> sid
-            isOgv -> sid
-            seasonType > 0 -> sid
-            redirectUrl.contains("/bangumi/play/") -> sid
-            else -> parseBangumiSeasonIdFromRedirectUrl()
-        }
+    private val _cachedPlaybackSeasonId: Long by lazy { computePlaybackSeasonId() }
+    val playbackSeasonId: Long get() = _cachedPlaybackSeasonId
 
-    val playbackEpId: Long
-        get() = when {
-            epid > 0L -> epid
-            else -> parseBangumiEpIdFromRedirectUrl()
-        }
+    private val _cachedPlaybackEpId: Long by lazy { computePlaybackEpId() }
+    val playbackEpId: Long get() = _cachedPlaybackEpId
 
-    val isPgc: Boolean
-        get() = playbackEpId > 0L || playbackSeasonId > 0L
+    private val _cachedIsPgc: Boolean by lazy { playbackEpId > 0L || playbackSeasonId > 0L }
+    val isPgc: Boolean get() = _cachedIsPgc
+
+    private fun computePlaybackSeasonId(): Long = when {
+        sid <= 0L -> parseBangumiSeasonIdFromRedirectUrl()
+        epid > 0L -> sid
+        isOgv -> sid
+        seasonType > 0 -> sid
+        redirectUrl.contains("/bangumi/play/") -> sid
+        else -> parseBangumiSeasonIdFromRedirectUrl()
+    }
+
+    private fun computePlaybackEpId(): Long = when {
+        epid > 0L -> epid
+        else -> parseBangumiEpIdFromRedirectUrl()
+    }
 
     private fun parseDuration(value: String): Long {
         val parts = value.split(":").mapNotNull { it.toLongOrNull() }

@@ -53,15 +53,22 @@ class AppSettingsDataStore(private val context: Context) {
     }
 
     suspend fun getString(key: String, defaultValue: String? = null): String? {
-        return dataStore.data.first()[stringPreferencesKey(key)] ?: defaultValue
+        cache[key]?.let { return it as? String ?: defaultValue }
+        return dataStore.data.first()[stringPreferencesKey(key)]?.also { cache[key] = it } ?: defaultValue
     }
 
     suspend fun getInt(key: String, defaultValue: Int = 0): Int {
-        return dataStore.data.first()[intPreferencesKey(key)] ?: defaultValue
+        val cached = cache[key]
+        if (cached != null) return cached as? Int ?: defaultValue
+        return (dataStore.data.first()[intPreferencesKey(key)] ?: defaultValue).also { cache[key] = it }
     }
 
     suspend fun getStringSet(key: String, defaultValue: Set<String> = emptySet()): Set<String> {
-        return dataStore.data.first()[stringSetPreferencesKey(key)] ?: defaultValue
+        cache[key]?.let {
+            @Suppress("UNCHECKED_CAST")
+            return it as? Set<String> ?: defaultValue
+        }
+        return (dataStore.data.first()[stringSetPreferencesKey(key)] ?: defaultValue).also { cache[key] = it }
     }
 
     fun getStringFlow(key: String, defaultValue: String? = null): Flow<String?> {

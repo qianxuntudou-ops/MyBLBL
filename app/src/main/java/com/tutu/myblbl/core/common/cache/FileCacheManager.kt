@@ -5,7 +5,6 @@ import com.tutu.myblbl.MyBLBLApplication
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import java.io.File
-import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
@@ -29,11 +28,18 @@ object FileCacheManager {
         }
     }
 
-    private val fileMap: MutableMap<File, Long> =
-        Collections.synchronizedMap(HashMap())
+    /**
+     * LRU 缓存映射表，accessOrder = true 使得每次 get/put 操作都会将条目移到链表尾部。
+     * 链表头部即为最久未访问的条目，evictOldest 只需移除头部，O(1) 复杂度。
+     */
+    private val fileMap: java.util.LinkedHashMap<File, Long> =
+        java.util.LinkedHashMap(16, 0.75f, true)
+
     private val totalSize = AtomicLong(0)
     private val totalCount = AtomicInteger(0)
     private val gson = Gson()
+
+    @Volatile
     private var initialized = false
 
     fun init() {
@@ -47,11 +53,13 @@ object FileCacheManager {
 
     private fun scanCacheDir() {
         val files = cacheDir.listFiles() ?: return
-        for (file in files) {
-            if (file.isFile) {
-                totalSize.addAndGet(file.length())
-                totalCount.incrementAndGet()
-                fileMap[file] = file.lastModified()
+        synchronized(fileMap) {
+            for (file in files) {
+                if (file.isFile) {
+                    totalSize.addAndGet(file.length())
+                    totalCount.incrementAndGet()
+                    fileMap[file] = file.lastModified()
+                }
             }
         }
     }
@@ -78,6 +86,8 @@ object FileCacheManager {
         try {
             val bytes = readFile(key) ?: return null
             val json = String(bytes, Charsets.UTF_8)
+            // 访问时更新 LRU 顺序
+            touchFile(key)
             return gson.fromJson<T>(json, type)
         } catch (e: Exception) {
             AppLog.e("FileCacheManager", "get failed: key=$key", e)
@@ -97,18 +107,10 @@ object FileCacheManager {
 
     private fun writeFile(key: String, data: ByteArray) {
         val file = keyToFile(key)
-        var fos: java.io.FileOutputStream? = null
         try {
-            fos = java.io.FileOutputStream(file)
-            fos.write(data)
-            fos.flush()
+            file.writeBytes(data)
         } catch (e: Exception) {
             AppLog.e("FileCacheManager", "writeFile failed: key=$key", e)
-        } finally {
-            try {
-                fos?.close()
-            } catch (_: java.io.IOException) {
-            }
         }
         registerFile(file)
     }
@@ -124,58 +126,86 @@ object FileCacheManager {
         }
     }
 
-    private fun registerFile(file: File) {
-        while (totalCount.incrementAndGet() > MAX_FILE_COUNT) {
-            totalCount.decrementAndGet()
-            val evicted = evictOldest()
-            if (evicted <= 0L) {
-                break
+    /**
+     * get 命中后调用，更新 LRU 访问顺序。
+     */
+    private fun touchFile(key: String) {
+        val file = keyToFile(key)
+        synchronized(fileMap) {
+            if (fileMap.containsKey(file)) {
+                val now = System.currentTimeMillis()
+                file.setLastModified(now)
+                // LinkedHashMap accessOrder=true，put 会将条目移到尾部（最近访问）
+                fileMap[file] = now
             }
-            totalSize.addAndGet(-evicted)
         }
-        val length = file.length()
-        val maxCacheSize = resolveMaxCacheSize()
-        while (maxCacheSize != Long.MAX_VALUE && totalSize.get() + length > maxCacheSize) {
-            val evicted = evictOldest()
-            if (evicted <= 0L) {
-                break
-            }
-            totalSize.addAndGet(-evicted)
-        }
-        totalSize.addAndGet(length)
-        val now = System.currentTimeMillis()
-        file.setLastModified(now)
-        fileMap[file] = now
     }
 
-    private fun evictOldest(): Long {
-        if (fileMap.isEmpty()) return 0L
-        var oldestFile: File? = null
-        var oldestTime: Long = Long.MAX_VALUE
+    private fun registerFile(file: File) {
+        val length = file.length()
         synchronized(fileMap) {
-            for ((file, time) in fileMap) {
-                if (time < oldestTime) {
-                    oldestFile = file
-                    oldestTime = time
-                }
+            // 如果是覆盖写入，先减去旧文件大小
+            val oldSize = if (fileMap.containsKey(file)) {
+                file.length()
+            } else {
+                0L
             }
+
+            totalCount.incrementAndGet()
+            val maxCacheSize = resolveMaxCacheSize()
+            // 淘汰直到总大小不超限，每次最多移除一个最旧条目
+            while (maxCacheSize != Long.MAX_VALUE && totalSize.get() + length - oldSize > maxCacheSize) {
+                val evicted = evictOldestInternal()
+                if (evicted <= 0L) {
+                    break
+                }
+                totalSize.addAndGet(-evicted)
+            }
+
+            while (totalCount.get() > MAX_FILE_COUNT) {
+                totalCount.decrementAndGet()
+                val evicted = evictOldestInternal()
+                if (evicted <= 0L) {
+                    break
+                }
+                totalSize.addAndGet(-evicted)
+            }
+
+            totalSize.addAndGet(length - oldSize)
+            val now = System.currentTimeMillis()
+            file.setLastModified(now)
+            fileMap[file] = now
         }
-        val targetFile = oldestFile ?: return 0L
-        val length = targetFile.length()
-        if (targetFile.delete()) {
-            fileMap.remove(targetFile)
+    }
+
+    /**
+     * 在已持有 fileMap 锁的上下文中调用。
+     * LinkedHashMap accessOrder=true，迭代顺序即访问顺序，第一个条目就是最久未访问的。
+     * O(1) 取头部即可，无需全遍历。
+     */
+    private fun evictOldestInternal(): Long {
+        if (fileMap.isEmpty()) return 0L
+        val iterator = fileMap.entries.iterator()
+        if (!iterator.hasNext()) return 0L
+        val (oldestFile, _) = iterator.next()
+        val length = oldestFile.length()
+        if (oldestFile.delete()) {
+            iterator.remove()
+            totalCount.decrementAndGet()
         }
         return length
     }
 
     fun clear() {
-        val files = cacheDir.listFiles() ?: return
-        for (file in files) {
-            file.delete()
+        synchronized(fileMap) {
+            val files = cacheDir.listFiles() ?: return
+            for (file in files) {
+                file.delete()
+            }
+            fileMap.clear()
+            totalSize.set(0)
+            totalCount.set(0)
         }
-        fileMap.clear()
-        totalSize.set(0)
-        totalCount.set(0)
     }
 
     fun trimToLimit() {
@@ -184,12 +214,14 @@ object FileCacheManager {
         if (maxCacheSize == Long.MAX_VALUE) {
             return
         }
-        while (totalSize.get() > maxCacheSize) {
-            val evicted = evictOldest()
-            if (evicted <= 0L) {
-                break
+        synchronized(fileMap) {
+            while (totalSize.get() > maxCacheSize) {
+                val evicted = evictOldestInternal()
+                if (evicted <= 0L) {
+                    break
+                }
+                totalSize.addAndGet(-evicted)
             }
-            totalSize.addAndGet(-evicted)
         }
     }
 

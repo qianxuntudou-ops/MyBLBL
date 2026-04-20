@@ -16,6 +16,8 @@ import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.network.response.ListDataModel
 import com.tutu.myblbl.core.common.log.AppLog
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class VideoRepository(
     private val apiService: ApiService,
@@ -23,20 +25,23 @@ class VideoRepository(
     private val securityGateway: NetworkSecurityGateway
 ) {
 
+    @Volatile
     private var watchLaterCache: List<VideoModel>? = null
+    @Volatile
     private var watchLaterCacheTimeMs: Long = 0L
     private val watchLaterCacheTtlMs = 5L * 60L * 1000L
+    private val watchLaterMutex = Mutex()
 
     private fun invalidateWatchLaterCache() {
         watchLaterCache = null
         watchLaterCacheTimeMs = 0L
     }
 
-    private suspend fun getWatchLaterList(): List<VideoModel> {
+    private suspend fun getWatchLaterList(): List<VideoModel> = watchLaterMutex.withLock {
         val now = System.currentTimeMillis()
         val cached = watchLaterCache
         if (cached != null && now - watchLaterCacheTimeMs < watchLaterCacheTtlMs) {
-            return cached
+            return@withLock cached
         }
         val response = sessionGateway.syncAuthState(
             apiService.getLaterWatch(),
@@ -45,7 +50,7 @@ class VideoRepository(
         val list = if (response.isSuccess) response.data?.list.orEmpty() else emptyList()
         watchLaterCache = list
         watchLaterCacheTimeMs = now
-        return list
+        return@withLock list
     }
 
     companion object {

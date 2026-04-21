@@ -379,6 +379,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        overridePendingTransition(R.anim.slide_in_to_right, R.anim.slide_out_to_left)
         handleIntent(intent)
     }
 
@@ -938,6 +939,11 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         // 提前释放视频解码器，避免后台持有硬件解码器资源
         playerView.detachVideoSurface()
         syncPlaybackEnvironment()
+    }
+
+    override fun finish() {
+        super.finish()
+        overridePendingTransition(R.anim.slide_in_to_left, R.anim.slide_out_to_right)
     }
 
     override fun onDestroy() {

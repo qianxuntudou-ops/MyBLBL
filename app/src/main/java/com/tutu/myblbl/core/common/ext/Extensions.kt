@@ -23,11 +23,11 @@ private val appSettings: AppSettingsDataStore
     get() = KoinPlatform.getKoin().get()
 
 fun Context.toast(message: String, duration: Int = Toast.LENGTH_SHORT) {
-    Toast.makeText(this, message, duration).show()
+    Toast.makeText(applicationContext, message, duration).show()
 }
 
 fun Context.toast(@StringRes resId: Int, duration: Int = Toast.LENGTH_SHORT) {
-    Toast.makeText(this, resId, duration).show()
+    Toast.makeText(applicationContext, resId, duration).show()
 }
 
 fun Context.isOpenDetailFirstEnabled(): Boolean {

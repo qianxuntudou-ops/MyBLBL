@@ -397,7 +397,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         }
 
         exitTime = System.currentTimeMillis()
-        Toast.makeText(this, R.string.app_exit, Toast.LENGTH_SHORT).show()
+        Toast.makeText(applicationContext, R.string.app_exit, Toast.LENGTH_SHORT).show()
     }
 
     fun closeTopOverlayFromUi() {

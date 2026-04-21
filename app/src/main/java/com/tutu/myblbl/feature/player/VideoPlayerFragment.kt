@@ -696,7 +696,6 @@ class VideoPlayerFragment : Fragment() {
                 )
                 playerPerfTrace = PlayerPerfTrace(prepareMs = System.currentTimeMillis())
                 AppLog.i("VideoPlayerViewModel", "PLAYER_PERF trace created prepareMs=${playerPerfTrace!!.prepareMs}")
-                playerView.syncDanmakuPosition(playbackRequest.seekPositionMs, forceSeek = true)
                 suppressPlaybackEnvironmentSync = true
                 try {
                     currentPlayer.playWhenReady = false
@@ -707,6 +706,7 @@ class VideoPlayerFragment : Fragment() {
                 } finally {
                     suppressPlaybackEnvironmentSync = false
                 }
+                playerView.syncDanmakuPosition(playbackRequest.seekPositionMs, forceSeek = true)
                 syncPlaybackEnvironment()
             }
         }

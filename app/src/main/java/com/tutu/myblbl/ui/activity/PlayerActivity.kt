@@ -663,7 +663,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     Player.REPEAT_MODE_ONE
                 }
                 playerView.setRepeatMode(currentPlayer.repeatMode)
-                Toast.makeText(this@PlayerActivity, if (currentPlayer.repeatMode == Player.REPEAT_MODE_ONE) "单集循环" else "顺序播放", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, if (currentPlayer.repeatMode == Player.REPEAT_MODE_ONE) "单集循环" else "顺序播放", Toast.LENGTH_SHORT).show()
             }
             override fun onDmEnableChange(enabled: Boolean) { playerView.setDanmakuEnabled(enabled) }
         })
@@ -682,7 +682,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     hidePanel = { hideContentPanel() },
                     exitPlayer = { finish() },
                     showExitPrompt = {
-                        Toast.makeText(this@PlayerActivity, "再按一次退出", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(applicationContext, "再按一次退出", Toast.LENGTH_SHORT).show()
                     }
                 )
             }
@@ -717,7 +717,6 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     startedAtMs = SystemClock.elapsedRealtime()
                 )
                 playerPerfTrace = PlayerPerfTrace(prepareMs = System.currentTimeMillis())
-                playerView.syncDanmakuPosition(playbackRequest.seekPositionMs, forceSeek = true)
                 suppressPlaybackEnvironmentSync = true
                 try {
                     currentPlayer.playWhenReady = false
@@ -728,6 +727,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 } finally {
                     suppressPlaybackEnvironmentSync = false
                 }
+                playerView.syncDanmakuPosition(playbackRequest.seekPositionMs, forceSeek = true)
                 syncPlaybackEnvironment()
             }
         }
@@ -748,7 +748,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             viewModel.riskControlTryLookBypass.collect { bypassed ->
                 if (bypassed != true) return@collect
                 if (riskControlUserHintShown.compareAndSet(false, true)) {
-                    Toast.makeText(this@PlayerActivity, RISK_CONTROL_USER_HINT, Toast.LENGTH_LONG).show()
+                    Toast.makeText(applicationContext, RISK_CONTROL_USER_HINT, Toast.LENGTH_LONG).show()
                 }
             }
         }

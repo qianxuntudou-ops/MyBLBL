@@ -1556,6 +1556,7 @@ class VideoPlayerViewModel(
             pendingPlayerExtrasCid = preparedPlayback.identity.cid
         }
         if (loadedDanmakuCid != preparedPlayback.identity.cid) {
+            pendingSeekPositionMs = preparedPlayback.seekToStart
             val danmakuAid = currentAid
                 ?: preparedPlayback.identity.aid
                 ?: 0L

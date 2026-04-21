@@ -84,6 +84,7 @@ class DynamicVideoAdapter(
         private val binding: CellVideoBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
+        private var currentItem: VideoModel? = null
         private val handler = Handler(Looper.getMainLooper())
         private var longPressRunnable: Runnable? = null
         private var longPressTriggered = false
@@ -172,23 +173,23 @@ class DynamicVideoAdapter(
         }
 
         fun bind(item: VideoModel) {
+            currentItem = item
             val bangumi = item.bangumi
             val ownerName = item.authorName
             val publishText = formatPublishTime(item)
 
+            val coverUrl: String
             if (bangumi != null) {
                 binding.textView.text = bangumi.longTitle
-                ImageLoader.loadVideoCover(
-                    imageView = binding.imageView,
-                    url = bangumi.cover
-                )
+                coverUrl = bangumi.cover
             } else {
                 binding.textView.text = item.title
-                ImageLoader.loadVideoCover(
-                    imageView = binding.imageView,
-                    url = item.coverUrl
-                )
+                coverUrl = item.coverUrl
             }
+            ImageLoader.loadVideoCover(
+                imageView = binding.imageView,
+                url = coverUrl
+            )
 
             if (ownerName.isNotBlank()) {
                 binding.textViewOwner.text = if (publishText.isNotBlank()) {
@@ -202,6 +203,14 @@ class DynamicVideoAdapter(
                 } else {
                     binding.imageAvatar.visibility = View.VISIBLE
                     binding.textPortraitBadge.visibility = View.GONE
+                    ImageLoader.detectPortraitFromCover(binding.imageView, coverUrl) { isPortrait ->
+                        if (bindingAdapterPosition != NO_POSITION
+                            && currentItem === item && isPortrait
+                        ) {
+                            binding.imageAvatar.visibility = View.GONE
+                            binding.textPortraitBadge.visibility = View.VISIBLE
+                        }
+                    }
                 }
             } else {
                 binding.textViewOwner.text = publishText

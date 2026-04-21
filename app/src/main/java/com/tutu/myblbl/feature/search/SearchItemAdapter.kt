@@ -123,11 +123,14 @@ class SearchItemAdapter(
         private val binding: CellVideoBinding
     ) : RecyclerView.ViewHolder(binding.root) {
 
+        private var currentItem: SearchItemModel? = null
+
         init {
             bindInteraction(binding.root)
         }
 
         fun bind(item: SearchItemModel) {
+            currentItem = item
             binding.textView.text = item.decodedTitle
             val ownerName = item.author.ifBlank { item.uname }
             val publishText = item.pubDate.takeIf { it > 0L }?.let(TimeUtils::formatRelativeTime).orEmpty()
@@ -162,12 +165,21 @@ class SearchItemAdapter(
                 binding.textDanmakuCount.visibility = View.GONE
             }
 
+            val coverUrl = item.pic.ifBlank { item.cover }
             if (item.dimension?.isPortrait == true) {
                 binding.imageAvatar.visibility = View.GONE
                 binding.textPortraitBadge.visibility = View.VISIBLE
             } else {
                 binding.imageAvatar.visibility = if (ownerName.isNotBlank()) View.VISIBLE else View.GONE
                 binding.textPortraitBadge.visibility = View.GONE
+                ImageLoader.detectPortraitFromCover(binding.imageView, coverUrl) { isPortrait ->
+                    if (bindingAdapterPosition != RecyclerView.NO_POSITION
+                        && currentItem === item && isPortrait
+                    ) {
+                        binding.imageAvatar.visibility = View.GONE
+                        binding.textPortraitBadge.visibility = View.VISIBLE
+                    }
+                }
             }
             binding.textDuration.text = item.duration
             binding.progressBar.visibility = View.GONE
@@ -175,7 +187,7 @@ class SearchItemAdapter(
 
             ImageLoader.loadVideoCover(
                 imageView = binding.imageView,
-                url = item.pic.ifBlank { item.cover }
+                url = coverUrl
             )
         }
     }

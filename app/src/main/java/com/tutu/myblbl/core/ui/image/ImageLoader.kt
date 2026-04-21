@@ -209,6 +209,30 @@ object ImageLoader {
             .into(imageView)
     }
     
+    fun detectPortraitFromCover(
+        imageView: ImageView,
+        url: String?,
+        callback: (Boolean) -> Unit
+    ) {
+        if (!isContextAlive(imageView) || url.isNullOrBlank()) return
+        val rawUrl = normalizeUrl(url)
+        if (!isBilibiliImageUrl(rawUrl)) return
+        val probeUrl = appendImageSuffix(rawUrl, "@120w_120h.webp")
+        Glide.with(imageView)
+            .load(buildImageModel(probeUrl))
+            .diskCacheStrategy(DiskCacheStrategy.ALL)
+            .into(object : com.bumptech.glide.request.target.CustomTarget<Drawable>() {
+                override fun onResourceReady(resource: Drawable, transition: com.bumptech.glide.request.transition.Transition<in Drawable>?) {
+                    if (!isContextAlive(imageView)) return
+                    val w = resource.intrinsicWidth
+                    val h = resource.intrinsicHeight
+                    callback(w > 0 && h > 0 && h > w)
+                }
+                override fun onLoadCleared(placeholder: Drawable?) {}
+                override fun onLoadFailed(errorDrawable: Drawable?) {}
+            })
+    }
+
     fun clearMemory(context: Context) {
         Glide.get(context).clearMemory()
     }

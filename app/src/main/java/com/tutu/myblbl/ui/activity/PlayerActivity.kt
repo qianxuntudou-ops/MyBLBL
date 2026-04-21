@@ -26,6 +26,10 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.LoadEventInfo
+import androidx.media3.exoplayer.source.MediaLoadData
+import androidx.media3.common.C
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.content.ContentFilter
@@ -268,6 +272,50 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
 
     private fun cancelResume(): Boolean = resumeHintController.cancelResume()
 
+    private val playerPerfListener = object : AnalyticsListener {
+        override fun onLoadStarted(
+            eventTime: AnalyticsListener.EventTime,
+            loadEventInfo: LoadEventInfo,
+            mediaLoadData: MediaLoadData
+        ) {
+            val trace = playerPerfTrace
+            if (trace == null || trace.firstLoadStartedMs != 0L) return
+            trace.firstLoadStartedMs = System.currentTimeMillis()
+            AppLog.i("VideoPlayerViewModel", "PLAYER_PERF [A] load started +${trace.firstLoadStartedMs - trace.prepareMs}ms dataType=${mediaLoadData.dataType}")
+        }
+
+        override fun onLoadCompleted(
+            eventTime: AnalyticsListener.EventTime,
+            loadEventInfo: LoadEventInfo,
+            mediaLoadData: MediaLoadData
+        ) {
+            val trace = playerPerfTrace
+            if (trace == null || trace.firstLoadCompletedMs != 0L) return
+            trace.firstLoadCompletedMs = System.currentTimeMillis()
+            AppLog.i("VideoPlayerViewModel", "PLAYER_PERF [B] load completed +${trace.firstLoadCompletedMs - trace.prepareMs}ms bytes=${loadEventInfo.bytesLoaded}")
+        }
+
+        override fun onVideoDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            elapsedInitializationMs: Long
+        ) {
+            val trace = playerPerfTrace ?: return
+            trace.videoDecoderInitMs = System.currentTimeMillis()
+            AppLog.i("VideoPlayerViewModel", "PLAYER_PERF [C] video decoder ($decoderName) hw=${elapsedInitializationMs}ms +${trace.videoDecoderInitMs - trace.prepareMs}ms")
+        }
+
+        override fun onAudioDecoderInitialized(
+            eventTime: AnalyticsListener.EventTime,
+            decoderName: String,
+            elapsedInitializationMs: Long
+        ) {
+            val trace = playerPerfTrace ?: return
+            trace.audioDecoderInitMs = System.currentTimeMillis()
+            AppLog.i("VideoPlayerViewModel", "PLAYER_PERF [C] audio decoder ($decoderName) hw=${elapsedInitializationMs}ms +${trace.audioDecoderInitMs - trace.prepareMs}ms")
+        }
+    }
+
     private val playerListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
             when (playbackState) {
@@ -497,10 +545,22 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 it.playbackParameters = PlaybackParameters(playerSettings.defaultPlaybackSpeed)
             }
             it.addListener(playerListener)
+            it.addAnalyticsListener(playerPerfListener)
         }
         playerView.setPlayer(player)
         playerView.setRenderEventListener(object : MyPlayerView.RenderEventListener {
             override fun onRenderedFirstFrame() {
+                val trace = playerPerfTrace
+                if (trace != null) {
+                    trace.firstFrameMs = System.currentTimeMillis()
+                    val total = trace.firstFrameMs - trace.prepareMs
+                    val cdn = if (trace.firstLoadStartedMs > 0) trace.firstLoadStartedMs - trace.prepareMs else -1
+                    val buffer = if (trace.firstLoadStartedMs > 0 && trace.firstLoadCompletedMs > 0) trace.firstLoadCompletedMs - trace.firstLoadStartedMs else -1
+                    val decoder = if (trace.firstLoadCompletedMs > 0 && trace.videoDecoderInitMs > 0) trace.videoDecoderInitMs - trace.firstLoadCompletedMs else -1
+                    val render = if (trace.videoDecoderInitMs > 0) trace.firstFrameMs - trace.videoDecoderInitMs else -1
+                    AppLog.i("VideoPlayerViewModel", "PLAYER_PERF breakdown: total=${total}ms cdn=${cdn}ms buffer=${buffer}ms decoder=${decoder}ms render=${render}ms")
+                    playerPerfTrace = null
+                }
                 viewModel.onPlaybackFirstFrame()
                 startupTrace
                     ?.takeIf { !it.firstFrameLogged }
@@ -654,6 +714,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     sequence = ++startupTraceSequence,
                     startedAtMs = SystemClock.elapsedRealtime()
                 )
+                playerPerfTrace = PlayerPerfTrace(prepareMs = System.currentTimeMillis())
                 playerView.syncDanmakuPosition(playbackRequest.seekPositionMs, forceSeek = true)
                 suppressPlaybackEnvironmentSync = true
                 try {
@@ -902,6 +963,17 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         val startedAtMs: Long,
         var firstFrameLogged: Boolean = false,
         var readyLogged: Boolean = false
+    )
+
+    private var playerPerfTrace: PlayerPerfTrace? = null
+
+    private data class PlayerPerfTrace(
+        val prepareMs: Long,
+        var firstLoadStartedMs: Long = 0L,
+        var firstLoadCompletedMs: Long = 0L,
+        var videoDecoderInitMs: Long = 0L,
+        var audioDecoderInitMs: Long = 0L,
+        var firstFrameMs: Long = 0L
     )
 
     private fun updatePlaybackPreload() {

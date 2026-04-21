@@ -74,6 +74,10 @@ class VideoPlayerViewModel(
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
+    init {
+        AppLog.i(TAG, "VM_INIT VideoPlayerViewModel created instance=${System.identityHashCode(this)}")
+    }
+
     enum class EpisodeCatalogSource {
         PAGES,
         UGC_SEASON,
@@ -97,6 +101,30 @@ class VideoPlayerViewModel(
         const val SAVED_QUALITY_ID = "saved_player_quality_id"
         const val SAVED_AUDIO_QUALITY_ID = "saved_player_audio_quality_id"
         const val SAVED_SUBTITLE_INDEX = "saved_player_subtitle_index"
+
+        // 弹幕元数据缓存：跨 ViewModel 实例复用，避免每次重建都重新请求
+        private val danmakuViewCache = object : LinkedHashMap<Long, Pair<DmWebViewReplyProto?, Long>>(8, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Pair<DmWebViewReplyProto?, Long>>): Boolean {
+                return size > 8
+            }
+        }
+        private var danmakuViewCacheTtlMs: Long = 300_000L
+
+        // 跨 VM 实例记录最近播放过的 cid，用于同视频重播热路径检测
+        private val recentlyPlayedCids = linkedSetOf<Long>()
+        private const val MAX_RECENTLY_PLAYED = 8
+
+        @Synchronized
+        fun isRecentlyPlayed(cid: Long): Boolean = cid in recentlyPlayedCids
+
+        @Synchronized
+        fun markRecentlyPlayed(cid: Long) {
+            recentlyPlayedCids.remove(cid)
+            recentlyPlayedCids.add(cid)
+            if (recentlyPlayedCids.size > MAX_RECENTLY_PLAYED) {
+                recentlyPlayedCids.remove(recentlyPlayedCids.first())
+            }
+        }
     }
 
     data class PlayableEpisode(
@@ -379,14 +407,6 @@ class VideoPlayerViewModel(
     private var preloadedDanmakuViewCid: Long = 0L
     private var preloadedDanmakuView: DmWebViewReplyProto? = null
 
-    // 弹幕元数据缓存：同一视频复用，避免重复请求
-    private val danmakuViewCache = object : LinkedHashMap<Long, Pair<DmWebViewReplyProto?, Long>>(8, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Pair<DmWebViewReplyProto?, Long>>): Boolean {
-            return size > 8
-        }
-    }
-    private var danmakuViewCacheTtlMs: Long = 300_000L
-
     private var currentStreamFallbackPlan: VideoPlayerStreamResolver.StreamFallbackPlan? = null
     private var fallbackRouteIndex: Int = 0
     private var fallbackCdnIndex: Int = 0
@@ -482,6 +502,10 @@ class VideoPlayerViewModel(
         launchStartEpisodeIndex = startEpisodeIndex
         val loadGeneration = ++videoLoadGeneration
         val chainStartMs = System.currentTimeMillis()
+        val isSameVideoReplay = cid > 0L && isRecentlyPlayed(cid)
+        if (isSameVideoReplay) {
+            AppLog.i(TAG, "PLAY_CHAIN [0] same-video replay detected cid=$cid")
+        }
         viewModelScope.launch {
             runCatching { playInfoGateway.warmupWbiKeys() }
         }
@@ -1084,6 +1108,72 @@ class VideoPlayerViewModel(
     private suspend fun loadUgcVideoInfo(preferLastPlayTime: Boolean, loadGeneration: Long) = coroutineScope {
         val chainMs = System.currentTimeMillis()
         val initialIdentity = currentPlayRequestIdentity()
+
+        // ── Same-video replay hot path ──────────────────────────────
+        // When the user replays the exact same cid (e.g. exits player and
+        // re-enters, or presses replay), we can skip getVideoDetail entirely
+        // if we still have a valid cached PlayInfo.  This avoids one HTTP
+        // round-trip and allows the early-PlayInfo async to finish faster
+        // because it will hit the PlayInfo cache.
+        val isSameVideoReplay = initialIdentity != null &&
+            initialIdentity.cid > 0L &&
+            isRecentlyPlayed(initialIdentity.cid) &&
+            !initialIdentity.bvid.isNullOrBlank()
+
+        if (isSameVideoReplay) {
+            val cachedPlayInfo = initialIdentity!!.bvid!!.let { bvid ->
+                VideoPlayerPlayInfoCache.get(bvid = bvid, cid = initialIdentity.cid)
+            }?.takeIf(::hasPlayableMedia)
+
+            if (cachedPlayInfo != null) {
+                AppLog.i(TAG, "PLAY_CHAIN [FAST] same-video replay cid=${initialIdentity.cid}, using cached PlayInfo, skipping getVideoDetail")
+
+                // Reuse the existing PlayInfo cache — the early-PlayInfo async
+                // inside requestPreparedPlayback will pick it up automatically.
+                val preparedPlayback = requestPreparedPlayback(
+                    identity = initialIdentity,
+                    preferLastPlayTime = preferLastPlayTime,
+                    replaceInPlace = false
+                )
+                if (!isActiveVideoLoad(loadGeneration)) return@coroutineScope
+                if (preparedPlayback != null) {
+                    AppLog.i(TAG, "PLAY_CHAIN [FAST] applyPreparedPlayback +${System.currentTimeMillis() - chainMs}ms")
+                    applyPreparedPlayback(preparedPlayback)
+                } else {
+                    // Cache was present but build failed (e.g. codec issue) — fall through to cold path
+                    AppLog.i(TAG, "PLAY_CHAIN [FAST] cached PlayInfo build failed, falling back to cold path")
+                }
+                // Regardless of success/failure, we still need video detail for
+                // episodes list, related videos, subtitles, etc.  Fetch it
+                // in the background but do NOT block playback on it.
+                viewModelScope.launch {
+                    val detailResponse = apiService.getVideoDetail(currentAid, currentBvid)
+                    if (detailResponse.isSuccess && detailResponse.data != null) {
+                        val detail = detailResponse.data
+                        _videoInfo.value = detail
+                        currentAid = detail.view?.aid ?: currentAid
+                        currentBvid = detail.view?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
+                        val episodeItems = episodeCatalogBuilder.buildUgcEpisodes(detail)
+                        _episodes.value = episodeItems
+                        _selectedEpisodeIndex.value = episodeItems.indexOfFirst {
+                            it.cid == currentCid || (it.bvid.isNotBlank() && it.bvid == currentBvid)
+                        }.takeIf { it >= 0 } ?: 0
+                        val related = detail.related.orEmpty()
+                        _subtitles.value = detail.view?.subtitle?.list
+                            ?.map { it.toSubtitleInfoModel() }
+                            .orEmpty()
+                        if (related.isNotEmpty()) {
+                            _relatedVideos.value = related
+                        }
+                    }
+                }
+                return@coroutineScope
+            } else {
+                AppLog.i(TAG, "PLAY_CHAIN [FAST] same-video replay cid=${initialIdentity.cid} but no cached PlayInfo, cold path")
+            }
+        }
+        // ── End same-video replay hot path ──────────────────────────
+
         val preparedPlaybackDeferred = initialIdentity
             ?.takeIf { it.cid > 0L && !it.bvid.isNullOrBlank() }
             ?.let { identity ->
@@ -1227,22 +1317,21 @@ class VideoPlayerViewModel(
             ?: selectedQualityId
             ?: 80
 
-        val cachedPlayInfo = if (preferLastPlayTime) {
-            null
-        } else {
-            identity.bvid
-                ?.takeIf { !replaceInPlace && it.isNotBlank() && identity.epId == null }
-                ?.let { bvid -> VideoPlayerPlayInfoCache.get(bvid = bvid, cid = identity.cid) }
-                ?.takeIf(::hasPlayableMedia)
+        val cachedPlayInfo = identity.bvid
+            ?.takeIf { !replaceInPlace && it.isNotBlank() && identity.epId == null }
+            ?.let { bvid -> VideoPlayerPlayInfoCache.get(bvid = bvid, cid = identity.cid) }
+            ?.takeIf(::hasPlayableMedia)
+        val usedCachedPlayInfo = cachedPlayInfo != null
+        if (usedCachedPlayInfo) {
+            AppLog.i(TAG, "PLAY_CHAIN [5] PlayInfo cache hit (preferLastPlayTime=$preferLastPlayTime)")
         }
 
         if (cachedPlayInfo != null) {
         } else {
         }
 
-        val (initialPlayInfo, effectiveRequestedQualityId) = if (cachedPlayInfo != null) {
-            AppLog.i(TAG, "PLAY_CHAIN [5] PlayInfo cache hit")
-            cachedPlayInfo to preferredQualityId
+        val (initialPlayInfo, effectiveRequestedQualityId) = if (usedCachedPlayInfo) {
+            cachedPlayInfo!! to preferredQualityId
         } else {
             AppLog.i(TAG, "PLAY_CHAIN [5] requestPlayInfo start +${System.currentTimeMillis() - requestStartMs}ms")
             val playInfoFetch = requestPlayInfoWithQualityFallback(
@@ -1368,6 +1457,7 @@ class VideoPlayerViewModel(
         }
 
         val useServerResume = preferLastPlayTime &&
+            !usedCachedPlayInfo &&
             initialPlayInfo.lastPlayCid == identity.cid &&
             initialPlayInfo.lastPlayTime > 5000L
 
@@ -1472,8 +1562,12 @@ class VideoPlayerViewModel(
 
     fun onPlaybackFirstFrame() {
         hasReachedFirstFrame = true
-        AppLog.i(TAG, "PLAY_CHAIN [FINAL] first frame rendered cid=${currentCid}")
-        val cid = currentCid.takeIf { it > 0L } ?: return
+        val cid = currentCid.takeIf { it > 0L }
+        AppLog.i(TAG, "PLAY_CHAIN [FINAL] first frame rendered cid=$cid isReplay=${cid != null && isRecentlyPlayed(cid)}")
+        if (cid != null) {
+            markRecentlyPlayed(cid)
+        }
+        if (cid == null) return
         if (pendingPlayerExtrasCid == cid && loadedPlayerExtrasCid != cid) {
             pendingPlayerExtrasCid = 0L
             loadedPlayerExtrasCid = cid
@@ -2779,10 +2873,11 @@ class VideoPlayerViewModel(
         }
 
         if (uniqueHosts.isEmpty()) {
+            AppLog.i(TAG, "CDN_PRECONNECT no hosts to connect")
             return
         }
 
-
+        AppLog.i(TAG, "CDN_PRECONNECT start hosts=${uniqueHosts.size} $uniqueHosts")
         coroutineScope {
             uniqueHosts.forEach { host ->
                 launch(Dispatchers.IO) {
@@ -2796,13 +2891,16 @@ class VideoPlayerViewModel(
                         val response = call.execute()
                         response.close()
                         val elapsed = System.currentTimeMillis() - preconnectStart
+                        AppLog.i(TAG, "CDN_PRECONNECT $host done ${elapsed}ms")
                     }.onFailure { e ->
+                        AppLog.i(TAG, "CDN_PRECONNECT $host failed: ${e.message}")
                     }
                 }
             }
         }
 
         val totalElapsed = System.currentTimeMillis() - startTime
+        AppLog.i(TAG, "CDN_PRECONNECT all done ${totalElapsed}ms")
     }
 
     private suspend fun triggerCdnPreconnectForRoute(route: DashRoute?) {
@@ -2810,6 +2908,7 @@ class VideoPlayerViewModel(
         try {
             val allUrls = route.videoUrls + route.audioUrls
             if (allUrls.isEmpty()) return
+            AppLog.i(TAG, "CDN_PRECONNECT triggerForRoute urls=${allUrls.size}")
             preconnectCdnHosts(route.videoUrls, route.audioUrls)
         } catch (e: Exception) {
         }
@@ -2822,6 +2921,7 @@ class VideoPlayerViewModel(
             val audioUrls = dash.audio?.mapNotNull { it.realBaseUrl.ifEmpty { null } }.orEmpty()
             val allUrls = videoUrls + audioUrls
             if (allUrls.isEmpty()) return
+            AppLog.i(TAG, "CDN_PRECONNECT triggerForPlayInfo urls=${allUrls.size}")
             preconnectCdnHosts(videoUrls, audioUrls)
         } catch (e: Exception) {
         }

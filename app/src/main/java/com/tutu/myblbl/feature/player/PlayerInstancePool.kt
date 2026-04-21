@@ -6,8 +6,10 @@ import android.os.Looper
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import com.tutu.myblbl.core.common.log.AppLog
 
 object PlayerInstancePool {
+    private const val TAG = "PlayerInstancePool"
     private const val IDLE_RELEASE_DELAY_MS = 45_000L
     private const val MIN_BUFFER_MS = 3_000
     private const val MAX_BUFFER_MS = 12_000
@@ -23,11 +25,16 @@ object PlayerInstancePool {
 
     @Synchronized
     fun prewarm(context: Context) {
-        if (cachedPlayer != null) return
+        if (cachedPlayer != null) {
+            AppLog.i(TAG, "prewarm: already cached, skip")
+            return
+        }
+        AppLog.i(TAG, "prewarm: building new player")
         mainHandler.post {
             synchronized(this) {
                 if (cachedPlayer != null) return@synchronized
                 cachedPlayer = buildPlayer(context.applicationContext)
+                AppLog.i(TAG, "prewarm: player built and cached")
             }
         }
     }
@@ -40,33 +47,27 @@ object PlayerInstancePool {
             cachedPlayer = it
         }
         isAttached = true
-        if (reused) {
-            val state = player.playbackState
-            val hasMedia = player.mediaItemCount
-        } else {
-        }
+        AppLog.i(TAG, "acquire: reused=$reused attached=$isAttached")
         return player
     }
 
     @Synchronized
     fun softDetach(player: ExoPlayer?) {
         if (player == null || player !== cachedPlayer) return
-        val stateBefore = player.playbackState
-        val mediaCount = player.mediaItemCount
-        
+        AppLog.i(TAG, "softDetach: stopping player, will release after ${IDLE_RELEASE_DELAY_MS}ms idle")
         player.pause()
         isAttached = false
         player.playWhenReady = false
         player.stop()
         player.clearMediaItems()
         player.clearVideoSurface()
-        scheduleRelease()
+        schedule_release()
     }
 
     @Synchronized
     fun hardReset(player: ExoPlayer?) {
         if (player == null || player !== cachedPlayer) return
-        val startMs = System.currentTimeMillis()
+        AppLog.i(TAG, "hardReset")
         player.playWhenReady = false
         player.clearMediaItems()
         player.stop()
@@ -85,6 +86,7 @@ object PlayerInstancePool {
 
     @Synchronized
     fun releaseNow(reason: String) {
+        AppLog.i(TAG, "releaseNow: reason=$reason")
         cancelPendingRelease()
         isAttached = false
         cachedPlayer?.let(PlayerAudioNormalizer::release)
@@ -93,11 +95,12 @@ object PlayerInstancePool {
     }
 
     @Synchronized
-    private fun scheduleRelease() {
+    private fun schedule_release() {
         cancelPendingRelease()
         val releaseRunnable = Runnable {
             synchronized(this) {
                 if (isAttached) return@synchronized
+                AppLog.i(TAG, "scheduledRelease: idle timeout, releasing player")
                 cachedPlayer?.let(PlayerAudioNormalizer::release)
                 cachedPlayer?.release()
                 cachedPlayer = null

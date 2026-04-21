@@ -12,6 +12,8 @@ import com.tutu.myblbl.network.response.PlayerInfoDataWrapper
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.network.cookie.CookieManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -123,25 +125,46 @@ class VideoPlayerPlayInfoGateway(
         fourk: Int,
         allowWbi: Boolean
     ): PlayInfoResult? {
-        val wbiResult = if (allowWbi) {
-            requestWbiPlayInfo(aid, bvid, cid, qualityId, fnval, fourk)
-        } else null
-
-        if (wbiResult != null && hasPlayableMedia(wbiResult.data)) {
-            return wbiResult
+        if (!allowWbi) {
+            return requestNormalPlayInfo(aid, bvid, cid, qualityId, fnval, fourk)
         }
 
-        val normalResult = requestNormalPlayInfo(aid, bvid, cid, qualityId, fnval, fourk)
+        // 并行发起 WBI 和 Normal 请求，取最优结果
+        return coroutineScope {
+            val wbiDeferred = async {
+                requestWbiPlayInfo(aid, bvid, cid, qualityId, fnval, fourk)
+            }
+            val normalDeferred = async {
+                requestNormalPlayInfo(aid, bvid, cid, qualityId, fnval, fourk)
+            }
 
-        if (normalResult != null && hasPlayableMedia(normalResult.data)) {
-            return normalResult
+            var wbiResult: PlayInfoResult? = null
+            var normalResult: PlayInfoResult? = null
+
+            try {
+                wbiResult = wbiDeferred.await()
+            } catch (_: Exception) {
+                // WBI 失败不影响 Normal
+            }
+            try {
+                normalResult = normalDeferred.await()
+            } catch (_: Exception) {
+                // Normal 失败不影响 WBI
+            }
+
+            // 优先级：有可播放数据的 > code==0 且有 data 的 > 非null 的
+            val playable = listOf(wbiResult, normalResult).firstOrNull {
+                it != null && hasPlayableMedia(it.data)
+            }
+            if (playable != null) return@coroutineScope playable
+
+            val codeOkWithData = listOf(wbiResult, normalResult).firstOrNull {
+                it != null && it.code == 0 && it.data != null
+            }
+            if (codeOkWithData != null) return@coroutineScope codeOkWithData
+
+            return@coroutineScope normalResult ?: wbiResult
         }
-
-        if (wbiResult != null && wbiResult.code == 0 && wbiResult.data != null) {
-            return wbiResult
-        }
-
-        return normalResult ?: wbiResult
     }
 
     private suspend fun requestWbiPlayInfo(

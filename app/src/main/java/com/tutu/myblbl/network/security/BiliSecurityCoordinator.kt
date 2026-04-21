@@ -23,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -82,10 +83,12 @@ class BiliSecurityCoordinator(
             val now = System.currentTimeMillis()
             if (now - lastEnsureHealthyForPlayMs < 60_000L) return@withLock
 
-            ensureWebFingerprintCookies()
-            ensureBiliTicket()
-            ensureBuvidActiveOncePerDay()
-            refreshCookieIfNeededOncePerDay()
+            coroutineScope {
+                launch { ensureWebFingerprintCookies() }
+                launch { ensureBiliTicket() }
+                launch { ensureBuvidActiveOncePerDay() }
+                launch { refreshCookieIfNeededOncePerDay() }
+            }
 
             lastEnsureHealthyForPlayMs = System.currentTimeMillis()
         }

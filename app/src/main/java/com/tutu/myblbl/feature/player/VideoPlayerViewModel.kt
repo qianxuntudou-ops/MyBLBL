@@ -374,6 +374,11 @@ class VideoPlayerViewModel(
     private var currentDanmakuSegmentIndex: Int = -1
     private var danmakuTotalSegments: Int = 0
 
+    // 弹幕 view 预加载：在拿到 cid+aid 后立即启动，与 PlayInfo 并行
+    private var danmakuViewPreloadJob: Job? = null
+    private var preloadedDanmakuViewCid: Long = 0L
+    private var preloadedDanmakuView: DmWebViewReplyProto? = null
+
     private var currentStreamFallbackPlan: VideoPlayerStreamResolver.StreamFallbackPlan? = null
     private var fallbackRouteIndex: Int = 0
     private var fallbackCdnIndex: Int = 0
@@ -1014,6 +1019,9 @@ class VideoPlayerViewModel(
         currentAid = selectedEpisode?.aid?.takeIf { it > 0L } ?: currentAid
         currentBvid = selectedEpisode?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
 
+        // 提前启动弹幕 view 请求，和 PlayInfo 并行
+        preloadDanmakuViewIfNeeded(loadGeneration)
+
         _videoInfo.value = episodeCatalogBuilder.buildPgcVideoDetail(
             detail = mergedDetail,
             selectedEpisode = selectedEpisode,
@@ -1107,6 +1115,9 @@ class VideoPlayerViewModel(
         currentAid = selectedEpisode?.aid?.takeIf { it > 0L } ?: currentAid
         currentBvid = selectedEpisode?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
         _currentCidLive.value = currentCid
+
+        // 提前启动弹幕 view 请求，和 PlayInfo 并行
+        preloadDanmakuViewIfNeeded(loadGeneration)
 
         if (currentCid <= 0L) {
             _error.value = "未找到可播放分P"
@@ -2087,13 +2098,21 @@ class VideoPlayerViewModel(
         }
         val loadGeneration = ++danmakuLoadGeneration
         danmakuLoadJob = viewModelScope.launch {
-            val danmakuStartMs = System.currentTimeMillis()
-            val danmakuView = playInfoGateway.requestDanmakuViewBytes(
-                cid = cid,
-                aid = aid
-            )?.let { bytes ->
-                runCatching { DmProtoParser.parseView(bytes) }.getOrNull()
+            // 1. 获取弹幕 view 元数据（优先使用预加载的结果）
+            val danmakuView = if (preloadedDanmakuViewCid == cid) {
+                preloadedDanmakuView.also {
+                    preloadedDanmakuViewCid = 0L
+                    preloadedDanmakuView = null
+                }
+            } else {
+                playInfoGateway.requestDanmakuViewBytes(
+                    cid = cid,
+                    aid = aid
+                )?.let { bytes ->
+                    runCatching { DmProtoParser.parseView(bytes) }.getOrNull()
+                }
             }
+
             val segmentCount = danmakuView?.totalSegments
                 ?.takeIf { it > 0 }
                 ?: maxOf(1, ((durationMs.coerceAtLeast(1L) - 1L) / 360000L + 1L).toInt())
@@ -2109,89 +2128,64 @@ class VideoPlayerViewModel(
             danmakuSegmentItems.clear()
             danmakuLoadedSegments.clear()
             danmakuTotalSegments = segmentCount
-            currentDanmakuSegmentIndex = 1
 
+            // 2. 计算初始段（根据 seekPosition）
+            val initialSegment = resolveDanmakuSegmentIndex(pendingSeekPositionMs)
+                .takeIf { it > 0 } ?: 1
+            currentDanmakuSegmentIndex = initialSegment
+
+            // 3. 并行加载当前段 + 特殊弹幕 + 预加载下一段
             val initialPayload = coroutineScope {
-                val firstBatchDeferred = async(Dispatchers.IO) {
+                val currentSegDeferred = async(Dispatchers.IO) {
                     loadDanmakuSegmentPayload(
                         cid = cid,
                         aid = aid,
-                        segmentIndices = listOf(1)
+                        segmentIndices = listOf(initialSegment)
                     )
                 }
                 val specialPayloadDeferred = async(Dispatchers.IO) {
                     loadSpecialDanmakuPayload(danmakuView?.specialDanmakuUrls.orEmpty())
                 }
-                val firstPayload = firstBatchDeferred.await()
+                val nextSegDeferred = if (initialSegment < segmentCount) {
+                    async(Dispatchers.IO) {
+                        initialSegment + 1 to loadDanmakuSegmentPayload(
+                            cid = cid, aid = aid, segmentIndices = listOf(initialSegment + 1)
+                        )
+                    }
+                } else null
+
+                val currentPayload = currentSegDeferred.await()
                 val specialPayload = specialPayloadDeferred.await()
+
+                // 缓存预加载的下一段
+                nextSegDeferred?.await()?.let { (segIdx, payload) ->
+                    if (isActiveDanmakuRequest(loadGeneration)) {
+                        danmakuSegmentItems[segIdx] = payload.regularItems.toList()
+                        danmakuLoadedSegments.add(segIdx)
+                    }
+                }
+
                 SpecialDanmakuPayload(
-                    regularItems = (firstPayload.regularItems + specialPayload.regularItems)
+                    regularItems = (currentPayload.regularItems + specialPayload.regularItems)
                         .sortedBy { it.progress },
-                    specialItems = (firstPayload.specialItems + specialPayload.specialItems)
+                    specialItems = (currentPayload.specialItems + specialPayload.specialItems)
                         .sortedBy { it.progress }
                 )
             }
             if (!isActiveDanmakuRequest(loadGeneration)) {
                 return@launch
             }
-            // 缓存第1个片段
-            danmakuSegmentItems[1] = initialPayload.regularItems.toList()
-            danmakuLoadedSegments.add(1)
+            // 缓存当前段
+            danmakuSegmentItems[initialSegment] = initialPayload.regularItems.toList()
+            danmakuLoadedSegments.add(initialSegment)
             publishDanmaku(initialPayload.regularItems, replace = true)
             _specialDanmaku.value = initialPayload.specialItems
             logDanmakuDiagnostics(
-                label = "first-batch",
+                label = "segment-$initialSegment",
                 items = initialPayload.regularItems,
                 danmakuView = danmakuView
             )
-            if (segmentCount <= 1) {
-                trimDistantDanmakuSegments()
-                return@launch
-            }
-
-            val fullDanmaku = mutableListOf<DmModel>().apply { addAll(initialPayload.regularItems) }
-            val fullSpecialDanmaku = mutableListOf<SpecialDanmakuModel>().apply { addAll(initialPayload.specialItems) }
-            val remainingIndices = (2..segmentCount).toList()
-            coroutineScope {
-                val deferredResults = remainingIndices.map { segmentIndex ->
-                    async(Dispatchers.IO) {
-                        segmentIndex to loadDanmakuSegmentPayload(
-                            cid = cid,
-                            aid = aid,
-                            segmentIndices = listOf(segmentIndex)
-                        )
-                    }
-                }
-                deferredResults.forEach { deferred ->
-                    if (!isActiveDanmakuRequest(loadGeneration)) return@coroutineScope
-                    val (segmentIndex, payload) = deferred.await()
-                    val chunkDanmaku = payload.regularItems
-                    val chunkSpecialDanmaku = payload.specialItems
-                    // 缓存每个片段
-                    danmakuSegmentItems[segmentIndex] = chunkDanmaku.toList()
-                    danmakuLoadedSegments.add(segmentIndex)
-                    if (chunkDanmaku.isEmpty() && chunkSpecialDanmaku.isEmpty()) return@forEach
-                    if (chunkDanmaku.isNotEmpty()) {
-                        fullDanmaku.addAll(chunkDanmaku)
-                        publishDanmaku(chunkDanmaku, replace = false)
-                    }
-                    if (chunkSpecialDanmaku.isNotEmpty()) {
-                        fullSpecialDanmaku.addAll(chunkSpecialDanmaku)
-                        _specialDanmaku.value = fullSpecialDanmaku.toList()
-                    }
-                }
-            }
-            if (!isActiveDanmakuRequest(loadGeneration)) {
-                return@launch
-            }
-            _danmaku.value = fullDanmaku.toList()
-            _specialDanmaku.value = fullSpecialDanmaku.toList()
             trimDistantDanmakuSegments()
-            logDanmakuDiagnostics(
-                label = "full",
-                items = fullDanmaku,
-                danmakuView = danmakuView
-            )
         }
     }
 
@@ -2428,12 +2422,38 @@ class VideoPlayerViewModel(
 
     private fun clearDanmaku() {
         danmakuLoadJob?.cancel()
+        danmakuViewPreloadJob?.cancel()
+        danmakuViewPreloadJob = null
+        preloadedDanmakuViewCid = 0L
+        preloadedDanmakuView = null
         _danmaku.value = emptyList()
         _specialDanmaku.value = emptyList()
         danmakuSegmentItems.clear()
         danmakuLoadedSegments.clear()
         currentDanmakuSegmentIndex = -1
         danmakuTotalSegments = 0
+    }
+
+    /**
+     * 在拿到 cid+aid 后立即启动弹幕 view 预加载，与 PlayInfo 请求并行
+     */
+    private fun preloadDanmakuViewIfNeeded(loadGeneration: Long) {
+        val cid = currentCid
+        val aid = currentAid ?: 0L
+        if (cid <= 0L || aid <= 0L || loadedDanmakuCid == cid) return
+        if (preloadedDanmakuViewCid == cid) return
+        danmakuViewPreloadJob?.cancel()
+        val prewarmCid = cid
+        val prewarmAid = aid
+        danmakuViewPreloadJob = viewModelScope.launch(Dispatchers.IO) {
+            if (!isActiveVideoLoad(loadGeneration)) return@launch
+            val view = playInfoGateway.requestDanmakuViewBytes(cid = prewarmCid, aid = prewarmAid)
+                ?.let { runCatching { DmProtoParser.parseView(it) }.getOrNull() }
+            if (view != null && isActiveVideoLoad(loadGeneration)) {
+                preloadedDanmakuViewCid = prewarmCid
+                preloadedDanmakuView = view
+            }
+        }
     }
 
     private fun isActiveDanmakuRequest(loadGeneration: Long): Boolean {
@@ -2463,13 +2483,48 @@ class VideoPlayerViewModel(
     }
 
     /**
-     * 当播放位置变化导致片段切换时，更新当前片段索引并清理远距离片段
+     * 当播放位置变化导致片段切换时，更新当前片段索引、清理远距离片段、动态加载新段
      */
     private fun onDanmakuSegmentChanged(positionMs: Long) {
         val newIndex = resolveDanmakuSegmentIndex(positionMs)
         if (newIndex <= 0 || newIndex == currentDanmakuSegmentIndex) return
         currentDanmakuSegmentIndex = newIndex
         trimDistantDanmakuSegments()
+        // 动态加载新段
+        loadDanmakuSegmentIfNeeded(newIndex)
+        // 预加载下一段
+        if (newIndex < danmakuTotalSegments) {
+            loadDanmakuSegmentIfNeeded(newIndex + 1)
+        }
+    }
+
+    /**
+     * 按需加载指定弹幕片段（如果尚未加载）
+     */
+    private fun loadDanmakuSegmentIfNeeded(segmentIndex: Int) {
+        if (danmakuLoadedSegments.contains(segmentIndex)) return
+        val cid = currentCid
+        val aid = currentAid ?: 0L
+        if (cid <= 0L || aid <= 0L) return
+        // 先标记避免重复加载
+        danmakuLoadedSegments.add(segmentIndex)
+        viewModelScope.launch(Dispatchers.IO) {
+            val payload = loadDanmakuSegmentPayload(
+                cid = cid, aid = aid, segmentIndices = listOf(segmentIndex)
+            )
+            if (payload.regularItems.isNotEmpty()) {
+                danmakuSegmentItems[segmentIndex] = payload.regularItems.toList()
+                withContext(Dispatchers.Main) {
+                    publishDanmaku(payload.regularItems, replace = false)
+                }
+            }
+            if (payload.specialItems.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    val currentSpecial = _specialDanmaku.value.orEmpty()
+                    _specialDanmaku.value = (currentSpecial + payload.specialItems).sortedBy { it.progress }
+                }
+            }
+        }
     }
 
     private fun capturePlaybackSnapshot(positionMs: Long, playWhenReady: Boolean) {

@@ -18,6 +18,7 @@ import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.core.ui.tab.enableTouchNavigation
 import com.tutu.myblbl.core.ui.tab.focusNearestTabTo
+import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.common.ext.getHomeDefaultStartPageIndex
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -53,7 +54,7 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
         super.onViewCreated(view, savedInstanceState)
         adapter = HomeFragmentStateAdapter(childFragmentManager, viewLifecycleOwner.lifecycle)
         binding.viewPager.adapter = adapter
-        binding.viewPager.offscreenPageLimit = 2
+        binding.viewPager.offscreenPageLimit = ViewPager2.OFFSCREEN_PAGE_LIMIT_DEFAULT
         tabMediator = TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
             tab.text = adapter.getPageTitle(position)
         }.also { it.attach() }
@@ -77,6 +78,8 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
                 if (tab.position == lastTabSelectedPosition && elapsed < 300) {
                     return
                 }
+                lastTabSelectedPosition = tab.position
+                lastTabSelectedTime = System.currentTimeMillis()
                 postTopTabEvent(tab.position)
             }
         }.also { binding.tabLayout.addOnTabSelectedListener(it) }
@@ -144,6 +147,16 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
     }
 
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
+        if (preferSpatialEntry && anchorView != null) {
+            val currentBinding = _binding ?: return false
+            val handled = SpatialFocusNavigator.requestBestDescendant(
+                anchorView = anchorView,
+                root = currentBinding.root,
+                direction = View.FOCUS_RIGHT,
+                fallback = null
+            )
+            if (handled) return true
+        }
         val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
             focusCurrentTab(anchorView)
         return handled

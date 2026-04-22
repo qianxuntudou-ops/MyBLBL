@@ -73,7 +73,7 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
     override fun loadData(page: Int) {
         isLoading = true
         loadingPage = page
-        viewModel.loadRecommendList(page, 24)
+        viewModel.loadRecommendList(page, if (page == 1) 12 else 24)
     }
 
     override fun refresh() {

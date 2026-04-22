@@ -339,9 +339,13 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         }
         startupTasksScheduled = true
         binding.root.post {
-            MyBLBLApplication.instance.scheduleDeferredSessionPrewarm()
-            PlayerInstancePool.prewarm(this@MainActivity)
+            MyBLBLApplication.instance.scheduleDeferredSessionPrewarm(delayMillis = 2000L)
             lifecycleScope.launch {
+                delay(3000L)
+                PlayerInstancePool.prewarm(this@MainActivity)
+            }
+            lifecycleScope.launch {
+                delay(2000L)
                 runCatching { sessionGateway.ensureWbiKeys() }
             }
             lifecycleScope.launch {
@@ -495,6 +499,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         val isVideoPlayerOverlay = isVideoPlayerOverlay(fragment = fragment, tag = tag)
 
         if (!isVideoPlayerOverlay) {
+            showTabBar(false)
             supportFragmentManager.fragments
                 .asReversed()
                 .firstOrNull { it.isVisible }
@@ -525,7 +530,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
                 addToBackStack(tag)
             }
         }
-        showTabBar(false)
+        if (isVideoPlayerOverlay) {
+            showTabBar(false)
+        }
     }
 
     fun showUserInfoDialog() {

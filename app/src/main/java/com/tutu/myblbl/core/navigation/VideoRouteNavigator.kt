@@ -9,8 +9,11 @@ import com.tutu.myblbl.ui.activity.MainActivity
 import com.tutu.myblbl.ui.activity.PlayerActivity
 import com.tutu.myblbl.feature.detail.VideoDetailFragment
 import com.tutu.myblbl.core.common.ext.isOpenDetailFirstEnabled
+import com.tutu.myblbl.core.common.log.AppLog
 
 object VideoRouteNavigator {
+
+    private const val TAG = "VideoRouteNav"
 
     fun openVideo(
         context: Context,
@@ -20,13 +23,16 @@ object VideoRouteNavigator {
         startEpisodeIndex: Int = -1,
         forcePlayer: Boolean = false
     ) {
+        AppLog.d(TAG, "openVideo: bvid=${video.bvid}, aid=${video.aid}, title=${video.title}, forcePlayer=$forcePlayer")
         if (!forcePlayer && shouldOpenVideoDetailFirst(context, video)) {
             val hostActivity = findMainActivityHost(context)
+            AppLog.d(TAG, "openVideo: detailFirst=true, host=$hostActivity")
             if (hostActivity != null) {
                 hostActivity.openInHostContainer(VideoDetailFragment.newInstance(video))
                 return
             }
         }
+        AppLog.d(TAG, "openVideo: starting PlayerActivity")
         PlayerActivity.start(
             context = context,
             video = video,

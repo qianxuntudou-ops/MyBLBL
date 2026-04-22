@@ -18,6 +18,7 @@ import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.RequestOptions
 import com.bumptech.glide.request.target.Target
 import com.tutu.myblbl.R
+import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.network.NetworkManager
 import kotlinx.coroutines.CoroutineScope
@@ -141,18 +142,47 @@ object ImageLoader {
             .also { cachedCoverRequestOptions = it }
     }
 
+    private const val TAG = "ImageLoader"
+
     fun loadVideoCover(
         imageView: ImageView,
         url: String?,
         placeholder: Int = R.drawable.default_video,
         error: Int = R.drawable.default_video
     ) {
-        if (!isContextAlive(imageView)) return
+        if (!isContextAlive(imageView)) {
+            AppLog.w(TAG, "loadVideoCover: context not alive, url=$url")
+            return
+        }
+        val optimizedUrl = buildOptimizedVideoCoverUrl(imageView, url)
+        AppLog.d(TAG, "loadVideoCover: raw=$url, optimized=$optimizedUrl")
         Glide.with(imageView)
-            .load(buildImageModel(buildOptimizedVideoCoverUrl(imageView, url)))
+            .load(buildImageModel(optimizedUrl))
             .placeholder(placeholder)
             .error(error)
             .apply(getCoverRequestOptions(imageView.context))
+            .listener(object : RequestListener<Drawable> {
+                override fun onResourceReady(
+                    resource: Drawable,
+                    model: Any,
+                    target: Target<Drawable>?,
+                    dataSource: DataSource,
+                    isFirstResource: Boolean
+                ): Boolean {
+                    AppLog.d(TAG, "loadVideoCover OK: url=$optimizedUrl")
+                    return false
+                }
+
+                override fun onLoadFailed(
+                    e: GlideException?,
+                    model: Any?,
+                    target: Target<Drawable>,
+                    isFirstResource: Boolean
+                ): Boolean {
+                    AppLog.e(TAG, "loadVideoCover FAILED: url=$optimizedUrl", e)
+                    return false
+                }
+            })
             .into(imageView)
     }
 

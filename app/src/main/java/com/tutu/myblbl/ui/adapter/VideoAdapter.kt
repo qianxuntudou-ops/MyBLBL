@@ -16,6 +16,7 @@ import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.core.ui.base.BaseAdapter
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.common.format.NumberUtils
+import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.time.TimeUtils
 import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
 import com.tutu.myblbl.ui.dialog.VideoCardMenuDialog
@@ -232,11 +233,17 @@ class VideoAdapter(
             binding.root.setOnClickListener {
                 if (longPressTriggered) {
                     longPressTriggered = false
+                    AppLog.w("VideoAdapter", "click blocked by longPressTriggered")
                     return@setOnClickListener
                 }
                 val position = bindingAdapterPosition
                 if (position != androidx.recyclerview.widget.RecyclerView.NO_POSITION) {
                     onItemInteracted?.invoke(binding.root, position)
+                }
+                if (currentVideo == null) {
+                    AppLog.e("VideoAdapter", "click but currentVideo is null, pos=$position")
+                } else {
+                    AppLog.d("VideoAdapter", "click: pos=$position, bvid=${currentVideo?.bvid}, title=${currentVideo?.title}")
                 }
                 currentVideo?.let { onItemClick(binding.root, it) }
             }

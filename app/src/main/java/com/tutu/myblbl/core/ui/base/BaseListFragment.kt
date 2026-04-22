@@ -328,6 +328,14 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
             rv.layoutManager?.onRestoreInstanceState(state)
         }
 
+        val currentFocus = activity?.currentFocus
+        if (currentFocus == null || !currentFocus.isDescendantOf(rv)) {
+            if (pendingReturnRestoreAttempts <= 0) {
+                pendingLayoutState = null
+            }
+            return
+        }
+
         val focusedView = adp.focusedView
         if (focusedView != null && focusedView.isAttachedToWindow && focusedView.visibility == View.VISIBLE) {
             focusedView.requestFocus()

@@ -6,7 +6,8 @@
     android:layout_height="@dimen/px615"
     android:background="@drawable/dialog_background"
     android:clickable="true"
-    android:focusable="true">
+    android:focusable="false"
+    android:focusableInTouchMode="false">
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/top_title"

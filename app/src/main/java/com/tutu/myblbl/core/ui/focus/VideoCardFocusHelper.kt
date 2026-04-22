@@ -147,7 +147,20 @@ object VideoCardFocusHelper {
                     val spanCount = layoutManager.spanCount
                     val spanIndex = layoutManager.spanSizeLookup.getSpanIndex(position, spanCount)
                     val spanSize = layoutManager.spanSizeLookup.getSpanSize(position)
-                    spanIndex + spanSize == spanCount
+                    if (spanIndex + spanSize == spanCount) {
+                        true
+                    } else {
+                        val currentGroup = layoutManager.spanSizeLookup
+                            .getSpanGroupIndex(position, spanCount)
+                        var nextPos = position + 1
+                        while (nextPos < adapter.itemCount) {
+                            val nextGroup = layoutManager.spanSizeLookup
+                                .getSpanGroupIndex(nextPos, spanCount)
+                            if (nextGroup != currentGroup) break
+                            return false
+                        }
+                        true
+                    }
                 }
             }
             is LinearLayoutManager -> layoutManager.orientation == RecyclerView.VERTICAL

@@ -92,9 +92,6 @@ class SettingSelectionDialogAdapter(
             binding.root.animate()
                 .scaleX(if (isFocused) 1.02f else 1f)
                 .scaleY(if (isFocused) 1.02f else 1f)
-                .translationX(
-                    if (isFocused) binding.root.resources.displayMetrics.density * 6f else 0f
-                )
                 .setDuration(120L)
                 .start()
 

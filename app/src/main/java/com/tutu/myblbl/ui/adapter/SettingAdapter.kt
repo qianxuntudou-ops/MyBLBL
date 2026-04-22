@@ -2,7 +2,6 @@ package com.tutu.myblbl.ui.adapter
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import androidx.core.view.ViewCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -111,23 +110,18 @@ class SettingAdapter(
         }
 
         fun bindFocusState(isFocused: Boolean, position: Int) {
-            binding.clickView.isSelected = isFocused
             binding.iconArrow.alpha = if (isFocused) 1f else 0.6f
             binding.tvInfo.alpha = if (isFocused) 1f else 0.8f
             if (isFocused) {
-                binding.clickView.setBackgroundResource(com.tutu.myblbl.R.drawable.cell_setting_background)
+                binding.clickView.setBackgroundResource(com.tutu.myblbl.R.drawable.cell_background)
             } else {
                 bindStripe(position)
             }
-            val density = binding.clickView.resources.displayMetrics.density
-            val targetTranslation = if (isFocused) density * 6f else 0f
             binding.clickView.animate()
                 .scaleX(if (isFocused) 1.02f else 1f)
                 .scaleY(if (isFocused) 1.02f else 1f)
-                .translationX(targetTranslation)
-                .setDuration(150L)
+                .setDuration(120L)
                 .start()
-            ViewCompat.setElevation(binding.clickView, if (isFocused) density * 4f else 0f)
         }
     }
 }

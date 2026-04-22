@@ -434,7 +434,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.dialog_background)
             isClickable = true
-            isFocusable = true
+            isFocusable = false
+            isFocusableInTouchMode = false
             setOnClickListener { dialog.dismiss() }
         }
 
@@ -1045,7 +1046,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.dialog_background)
             isClickable = true
-            isFocusable = true
+            isFocusable = false
+            isFocusableInTouchMode = false
             setOnClickListener { dialog.dismiss() }
         }
 
@@ -1119,6 +1121,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         root.addView(actionContainer)
         dialog.setContentView(root)
         dialog.show()
+        (actionContainer.getChildAt(0) as? android.view.View)?.requestFocus()
     }
 
     private fun showGaiaVgateVoucherDialog() {
@@ -1158,7 +1161,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             layoutParams = lp
         })
 
+        val editTextId = View.generateViewId()
+        val firstActionId = View.generateViewId()
         val editText = EditText(requireContext()).apply {
+            id = editTextId
             hint = "请粘贴验证凭证"
             inputType = EditorInfo.TYPE_CLASS_TEXT
             setText(initial)
@@ -1166,6 +1172,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             setHintTextColor(0x80FFFFFF.toInt())
             setPadding(px16, px16, px16, px16)
             setBackgroundResource(R.drawable.bg_search_input)
+            nextFocusDownId = firstActionId
             val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, resources.getDimensionPixelSize(R.dimen.px150))
             lp.setMargins(px40, px20, px40, 0)
             layoutParams = lp
@@ -1202,7 +1209,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
 
         listOf("清除" to { clearVoucher(); dialog.dismiss() },
                "取消" to { dialog.dismiss() },
-               "保存" to { saveVoucher() }).forEach { (text, action) ->
+               "保存" to { saveVoucher() }).forEachIndexed { index, (text, action) ->
             actionContainer.addView(TextView(requireContext()).apply {
                 this.text = text
                 setTextColor(textColor)
@@ -1212,9 +1219,22 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
                 isFocusable = true
                 setOnClickListener { action() }
                 setBackgroundResource(R.drawable.bg_dialog_button)
+                if (index == 0) {
+                    id = firstActionId
+                    nextFocusUpId = editTextId
+                }
             }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
                 setMargins(px10, 0, px10, 0)
             })
+        }
+
+        editText.setOnKeyListener { _, keyCode, event ->
+            if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                actionContainer.getChildAt(0)?.requestFocus()
+                true
+            } else {
+                false
+            }
         }
 
         root.addView(actionContainer)

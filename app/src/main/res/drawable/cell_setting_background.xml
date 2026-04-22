@@ -27,6 +27,7 @@
         <shape>
             <solid android:color="#2A2A2A"/>
             <corners android:radius="@dimen/px15"/>
+            <stroke android:width="@dimen/px2" android:color="#444444"/>
         </shape>
     </item>
 </selector>

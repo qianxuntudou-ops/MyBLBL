@@ -44,7 +44,7 @@ class SettingAdapter(
     }
 
     override fun onBindViewHolder(holder: SettingViewHolder, position: Int) {
-        holder.bind(getItem(position))
+        holder.bind(getItem(position), position)
     }
 
     override fun onBindViewHolder(
@@ -56,7 +56,7 @@ class SettingAdapter(
             super.onBindViewHolder(holder, position, payloads)
         } else {
             holder.bindContent(getItem(position))
-            holder.bindFocusState(position == focusedPosition)
+            holder.bindFocusState(position == focusedPosition, position)
         }
     }
 
@@ -92,9 +92,9 @@ class SettingAdapter(
             }
         }
 
-        fun bind(item: SettingModel) {
+        fun bind(item: SettingModel, position: Int) {
             bindContent(item)
-            bindFocusState(bindingAdapterPosition == focusedPosition)
+            bindFocusState(bindingAdapterPosition == focusedPosition, position)
         }
 
         fun bindContent(item: SettingModel) {
@@ -102,10 +102,23 @@ class SettingAdapter(
             binding.tvInfo.text = item.info
         }
 
-        fun bindFocusState(isFocused: Boolean) {
+        private fun bindStripe(position: Int) {
+            if (position % 2 == 0) {
+                binding.clickView.setBackgroundResource(com.tutu.myblbl.R.drawable.cell_setting_background)
+            } else {
+                binding.clickView.background = null
+            }
+        }
+
+        fun bindFocusState(isFocused: Boolean, position: Int) {
             binding.clickView.isSelected = isFocused
             binding.iconArrow.alpha = if (isFocused) 1f else 0.6f
             binding.tvInfo.alpha = if (isFocused) 1f else 0.8f
+            if (isFocused) {
+                binding.clickView.setBackgroundResource(com.tutu.myblbl.R.drawable.cell_setting_background)
+            } else {
+                bindStripe(position)
+            }
             val density = binding.clickView.resources.displayMetrics.density
             val targetTranslation = if (isFocused) density * 6f else 0f
             binding.clickView.animate()

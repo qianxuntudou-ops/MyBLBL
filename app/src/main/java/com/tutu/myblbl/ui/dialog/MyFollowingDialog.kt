@@ -10,6 +10,7 @@ import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
+import com.tutu.myblbl.core.ui.focus.RecyclerViewLoadMoreFocusController
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.databinding.DialogMyFollowingBinding
 import com.tutu.myblbl.model.series.SeriesModel
@@ -52,12 +53,16 @@ class MyFollowingDialog(
         onTopEdgeUp = {
             binding.buttonBack.requestFocus()
             true
+        },
+        onBottomEdgeDown = {
+            !hasMore
         }
     )
 
     private var currentPage = 1
     private var hasMore = true
     private var isLoading = false
+    private var loadMoreFocusController: RecyclerViewLoadMoreFocusController? = null
 
     init {
         supportRequestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -102,6 +107,7 @@ class MyFollowingDialog(
                 }
             }
         })
+        installLoadMoreFocusController()
         showLoading()
     }
 
@@ -128,6 +134,7 @@ class MyFollowingDialog(
                     } else if (list.isNotEmpty()) {
                         adapter.addData(list)
                     }
+                    loadMoreFocusController?.consumePendingFocusAfterLoadMore()
                     hasMore = list.size >= PAGE_SIZE
                     if (currentPage == 1 && list.isEmpty()) {
                         val emptyMsg = if (type == TYPE_CINEMA) {
@@ -145,6 +152,7 @@ class MyFollowingDialog(
                 }
                 .onFailure {
                     isLoading = false
+                    loadMoreFocusController?.clearPendingFocusAfterLoadMore()
                     if (currentPage > 1) {
                         currentPage--
                         if (adapter.itemCount > 0) {
@@ -187,7 +195,27 @@ class MyFollowingDialog(
         return false
     }
 
+    private fun installLoadMoreFocusController() {
+        loadMoreFocusController?.release()
+        loadMoreFocusController = RecyclerViewLoadMoreFocusController(
+            recyclerView = binding.recyclerView,
+            callbacks = object : RecyclerViewLoadMoreFocusController.Callbacks {
+                override fun canLoadMore(): Boolean = !isLoading && hasMore
+
+                override fun loadMore() {
+                    if (!canLoadMore()) {
+                        return
+                    }
+                    currentPage++
+                    loadData()
+                }
+            }
+        ).also { it.install() }
+    }
+
     override fun dismiss() {
+        loadMoreFocusController?.release()
+        loadMoreFocusController = null
         scope.cancel()
         super.dismiss()
     }

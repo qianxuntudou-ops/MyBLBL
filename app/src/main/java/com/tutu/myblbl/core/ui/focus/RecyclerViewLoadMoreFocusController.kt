@@ -50,6 +50,7 @@ class RecyclerViewLoadMoreFocusController(
     private val focusRetryDelayMillis = 16L
     private val focusRetryMaxAttempts = 30
     private val focusProtectWindowMs = 500L
+    private val recyclerFocusRecoverWindowMs = 3_000L
     private var lastVerticalNavAtMs = 0L
     private var lastVerticalNavDirection = View.FOCUS_DOWN
     private var lastKnownFocusedAdapterPos = RecyclerView.NO_POSITION
@@ -515,7 +516,9 @@ class RecyclerViewLoadMoreFocusController(
                         firstVisible = firstVisible,
                         lastVisible = lastVisible,
                         targetSpanIndex = targetSpan,
-                        direction = lastVerticalNavDirection
+                        direction = lastVerticalNavDirection,
+                        anchor = anchor,
+                        desired = desired
                     ) ?: candidateInVisibleRange
                 }
             }
@@ -626,6 +629,7 @@ class RecyclerViewLoadMoreFocusController(
             }
             if (newFocus === recyclerView) {
                 suppressRecyclerDefaultFocusHighlight()
+                maybeRecoverRecyclerFocus("globalFocus")
             } else if (oldFocus === recyclerView) {
                 restoreRecyclerDefaultFocusHighlightIfSuppressed()
             }
@@ -634,6 +638,7 @@ class RecyclerViewLoadMoreFocusController(
         runCatching { recyclerView.viewTreeObserver.addOnGlobalFocusChangeListener(listener) }
         if (recyclerView.isFocused) {
             suppressRecyclerDefaultFocusHighlight()
+            maybeRecoverRecyclerFocus("installFocused")
         }
     }
 
@@ -667,6 +672,65 @@ class RecyclerViewLoadMoreFocusController(
             "from=${viewSummary(itemView)} currentPos=$currentPosition next=${viewSummary(next)} nextPos=$nextPosition state=${stateSummary()}"
         )
         return false
+    }
+
+    private fun maybeRecoverRecyclerFocus(reason: String) {
+        if (!installed || !config.isEnabled() || !recyclerView.isAttachedToWindow) {
+            return
+        }
+        if (pendingFocusAfterLoadMoreAnchorPos != RecyclerView.NO_POSITION) {
+            log("recoverRecyclerFocus.skipPending", "reason=$reason state=${stateSummary()}")
+            return
+        }
+        if (recyclerView.rootView?.findFocus() !== recyclerView) {
+            return
+        }
+
+        val now = SystemClock.uptimeMillis()
+        val delta = now - lastVerticalNavAtMs
+        val itemCount = recyclerView.adapter?.itemCount ?: 0
+        val hasKnownFocus = lastKnownFocusedAdapterPos in 0 until itemCount
+        if (!hasKnownFocus && delta > recyclerFocusRecoverWindowMs) {
+            log(
+                "recoverRecyclerFocus.skipWindow",
+                "reason=$reason delta=$delta hasKnownFocus=$hasKnownFocus state=${stateSummary()}"
+            )
+            return
+        }
+
+        recyclerView.postIfAlive {
+            if (!installed || !config.isEnabled() || !recyclerView.isAttachedToWindow) {
+                return@postIfAlive
+            }
+            if (pendingFocusAfterLoadMoreAnchorPos != RecyclerView.NO_POSITION) {
+                log("recoverRecyclerFocus.skipPendingPosted", "reason=$reason state=${stateSummary()}")
+                return@postIfAlive
+            }
+            if (recyclerView.rootView?.findFocus() !== recyclerView) {
+                return@postIfAlive
+            }
+
+            if (restoreFocusAfterDetach()) {
+                log("recoverRecyclerFocus.restored", "reason=$reason state=${stateSummary()}")
+                return@postIfAlive
+            }
+
+            val postedItemCount = recyclerView.adapter?.itemCount ?: 0
+            if (postedItemCount <= 0) {
+                return@postIfAlive
+            }
+            val fallbackPosition = when {
+                lastKnownFocusedAdapterPos in 0 until postedItemCount -> lastKnownFocusedAdapterPos
+                (firstVisibleAdapterPosition() ?: RecyclerView.NO_POSITION) in 0 until postedItemCount ->
+                    firstVisibleAdapterPosition()!!
+                else -> 0
+            }
+            log(
+                "recoverRecyclerFocus.fallback",
+                "reason=$reason fallback=$fallbackPosition state=${stateSummary()}"
+            )
+            scrollAndFocusAdapterPosition(fallbackPosition, smooth = false)
+        }
     }
 
     private fun scrollAndFocusAdapterPosition(
@@ -829,25 +893,39 @@ class RecyclerViewLoadMoreFocusController(
         firstVisible: Int,
         lastVisible: Int,
         targetSpanIndex: Int,
-        direction: Int
+        direction: Int,
+        anchor: Int,
+        desired: Int
     ): Int? {
         val spanCount = layoutManager.spanCount.coerceAtLeast(1)
         val lookup = layoutManager.spanSizeLookup
-        return if (direction == View.FOCUS_UP) {
-            for (position in lastVisible downTo firstVisible) {
+        if (direction == View.FOCUS_UP) {
+            val directionalStart = minOf(lastVisible, anchor - 1, desired)
+            for (position in directionalStart downTo firstVisible) {
                 if (lookup.getSpanIndex(position, spanCount) == targetSpanIndex) {
                     return position
                 }
             }
-            null
-        } else {
-            for (position in firstVisible..lastVisible) {
-                if (lookup.getSpanIndex(position, spanCount) == targetSpanIndex) {
+            for (position in minOf(lastVisible, desired) downTo firstVisible) {
+                if (position < anchor && lookup.getSpanIndex(position, spanCount) == targetSpanIndex) {
                     return position
                 }
             }
-            null
+            return null
         }
+
+        val directionalStart = maxOf(firstVisible, anchor + 1, desired)
+        for (position in directionalStart..lastVisible) {
+            if (lookup.getSpanIndex(position, spanCount) == targetSpanIndex) {
+                return position
+            }
+        }
+        for (position in maxOf(firstVisible, desired)..lastVisible) {
+            if (position > anchor && lookup.getSpanIndex(position, spanCount) == targetSpanIndex) {
+                return position
+            }
+        }
+        return null
     }
 
     private fun preferredDownCandidatePosition(position: Int, itemCount: Int): Int? {

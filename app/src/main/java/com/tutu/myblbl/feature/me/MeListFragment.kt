@@ -330,12 +330,13 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         val adapter = videoAdapter ?: return
         val filtered = ContentFilter.filterVideos(requireContext(), videos)
         adapter.setData(filtered)
+        loadMoreFocusController?.consumePendingFocusAfterLoadMore()
         cacheLaterVideos(videos)
         updateContentState(filtered.isEmpty())
     }
 
     private fun installLoadMoreFocusControllerIfNeeded() {
-        if (type != TYPE_HISTORY) {
+        if (type != TYPE_HISTORY && type != TYPE_LATER) {
             return
         }
         loadMoreFocusController?.release()
@@ -343,7 +344,11 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             recyclerView = binding.recyclerView,
             callbacks = object : RecyclerViewLoadMoreFocusController.Callbacks {
                 override fun canLoadMore(): Boolean {
-                    return type == TYPE_HISTORY && !viewModel.loading.value && viewModel.hasMore.value
+                    return when (type) {
+                        TYPE_HISTORY -> !viewModel.loading.value && viewModel.hasMore.value
+                        TYPE_LATER -> false
+                        else -> false
+                    }
                 }
 
                 override fun loadMore() {

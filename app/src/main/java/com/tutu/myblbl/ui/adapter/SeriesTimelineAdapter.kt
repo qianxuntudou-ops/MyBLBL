@@ -18,7 +18,8 @@ class SeriesTimelineAdapter(
     private val trackFocusedView: Boolean = true,
     private val enableSidebarExit: Boolean = true,
     private val onTopEdgeUp: (() -> Boolean)? = null,
-    private val onLeftEdge: (() -> Boolean)? = null
+    private val onLeftEdge: (() -> Boolean)? = null,
+    private val onBottomEdgeDown: (() -> Boolean)? = null
 ) : ListAdapter<SeriesTimeLineModel, SeriesTimelineAdapter.SeriesTimelineViewHolder>(DIFF_CALLBACK) {
 
     var focusedView: View? = null
@@ -69,7 +70,8 @@ class SeriesTimelineAdapter(
             trackFocusedView = trackFocusedView,
             enableSidebarExit = enableSidebarExit,
             onTopEdgeUp = onTopEdgeUp,
-            onLeftEdge = onLeftEdge
+            onLeftEdge = onLeftEdge,
+            onBottomEdgeDown = onBottomEdgeDown
         ) { view ->
             if (trackFocusedView) {
                 focusedView = view
@@ -89,6 +91,7 @@ class SeriesTimelineAdapter(
         private val enableSidebarExit: Boolean,
         private val onTopEdgeUp: (() -> Boolean)?,
         private val onLeftEdge: (() -> Boolean)?,
+        private val onBottomEdgeDown: (() -> Boolean)?,
         private val onFocused: (View) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
 
@@ -108,7 +111,8 @@ class SeriesTimelineAdapter(
                 VideoCardFocusHelper.bindSidebarExit(
                     binding.clickView,
                     onTopEdgeUp = onTopEdgeUp,
-                    onLeftEdge = onLeftEdge
+                    onLeftEdge = onLeftEdge,
+                    onBottomEdgeDown = onBottomEdgeDown
                 )
             }
         }

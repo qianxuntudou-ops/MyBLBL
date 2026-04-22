@@ -85,29 +85,40 @@ class HomeLaneAdapter(
     override fun onCreateContentViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         return when (viewType) {
             VIEW_TYPE_TIMELINE -> {
+                lateinit var holder: TimelineViewHolder
                 val binding = CellLaneSeriesTimeLineBinding.inflate(
                     LayoutInflater.from(parent.context),
                     parent,
                     false
                 )
-                TimelineViewHolder(binding, onTimelineClick, onTopEdgeUp, ::rememberFocusedView)
+                holder = TimelineViewHolder(
+                    binding = binding,
+                    onTimelineClick = onTimelineClick,
+                    onTopEdgeUp = onTopEdgeUp,
+                    onViewFocused = ::rememberFocusedView,
+                    onBottomEdgeDown = { focusNextSectionFrom(holder) }
+                )
+                holder
             }
 
             else -> {
+                lateinit var holder: ScrollableViewHolder
                 val binding = CellLaneScrollableBinding.inflate(
                     LayoutInflater.from(parent.context),
                     parent,
                     false
                 )
-                ScrollableViewHolder(
+                holder = ScrollableViewHolder(
                     binding,
                     onSeriesClick,
                     onMoreClick,
                     defaultMoreSeasonType,
                     onTopEdgeUp,
                     ::rememberFocusedView,
-                    onFollowSectionClick
+                    onFollowSectionClick,
+                    onBottomEdgeDown = { focusNextSectionFrom(holder) }
                 )
+                holder
             }
         }
     }
@@ -124,6 +135,42 @@ class HomeLaneAdapter(
         focusedView = view
     }
 
+    private fun focusNextSectionFrom(currentHolder: RecyclerView.ViewHolder): Boolean {
+        val currentPosition = currentHolder.bindingAdapterPosition
+        if (currentPosition == RecyclerView.NO_POSITION) {
+            return true
+        }
+        val parentRecyclerView = currentHolder.itemView.findParentRecyclerView() ?: return true
+        val targetPosition = (currentPosition + 1 until items.size).firstOrNull() ?: return true
+        if (requestHeaderFocusAt(parentRecyclerView, targetPosition) ||
+            requestPrimaryFocusAt(parentRecyclerView, targetPosition)
+        ) {
+            return true
+        }
+        parentRecyclerView.scrollToPosition(targetPosition)
+        parentRecyclerView.post {
+            requestHeaderFocusAt(parentRecyclerView, targetPosition) ||
+                requestPrimaryFocusAt(parentRecyclerView, targetPosition)
+        }
+        return true
+    }
+
+    private fun requestHeaderFocusAt(recyclerView: RecyclerView, position: Int): Boolean {
+        return when (val holder = recyclerView.findViewHolderForAdapterPosition(position)) {
+            is ScrollableViewHolder -> holder.requestHeaderFocus()
+            is TimelineViewHolder -> holder.requestHeaderFocus()
+            else -> false
+        }
+    }
+
+    private fun requestPrimaryFocusAt(recyclerView: RecyclerView, position: Int): Boolean {
+        return when (val holder = recyclerView.findViewHolderForAdapterPosition(position)) {
+            is ScrollableViewHolder -> holder.requestPrimaryFocus()
+            is TimelineViewHolder -> holder.requestPrimaryFocus()
+            else -> false
+        }
+    }
+
     class ScrollableViewHolder(
         private val binding: CellLaneScrollableBinding,
         onSeriesClick: (LaneItemModel) -> Unit,
@@ -131,12 +178,14 @@ class HomeLaneAdapter(
         private val defaultMoreSeasonType: Int?,
         private val onTopEdgeUp: () -> Boolean,
         private val onViewFocused: (View) -> Unit,
-        private val onFollowSectionClick: ((Int) -> Unit)? = null
+        private val onFollowSectionClick: ((Int) -> Unit)? = null,
+        private val onBottomEdgeDown: () -> Boolean
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private val adapter = LaneItemAdapter(
             onItemClick = onSeriesClick,
-            onItemFocused = onViewFocused
+            onItemFocused = onViewFocused,
+            onBottomEdgeDown = onBottomEdgeDown
         )
         private var moreSeasonType: Int? = null
         private var currentMoreUrl: String = ""
@@ -214,6 +263,8 @@ class HomeLaneAdapter(
             return binding.topTitle.requestFocus() || requestFirstCardFocus()
         }
 
+        fun requestHeaderFocus(): Boolean = binding.topTitle.requestFocus()
+
         private fun requestFirstCardFocus(): Boolean {
             return adapter.requestFirstItemFocus(binding.recyclerView)
         }
@@ -223,13 +274,15 @@ class HomeLaneAdapter(
         private val binding: CellLaneSeriesTimeLineBinding,
         onTimelineClick: (SeriesTimeLineModel) -> Unit,
         private val onTopEdgeUp: () -> Boolean,
-        private val onViewFocused: (View) -> Unit
+        private val onViewFocused: (View) -> Unit,
+        private val onBottomEdgeDown: () -> Boolean
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private val adapter = SeriesTimelineAdapter(
             onItemClick = onTimelineClick,
             onItemFocused = onViewFocused,
-            trackFocusedView = false
+            trackFocusedView = false,
+            onBottomEdgeDown = onBottomEdgeDown
         )
         private var item: HomeLaneSection? = null
 
@@ -298,6 +351,8 @@ class HomeLaneAdapter(
                 requestSelectedFilterFocus() ||
                 requestFirstCardFocus()
         }
+
+        fun requestHeaderFocus(): Boolean = binding.topTitle.requestFocus()
 
         private fun requestSelectedFilterFocus(): Boolean {
             val target = when (binding.radioGroup.checkedRadioButtonId) {
@@ -370,6 +425,17 @@ class HomeLaneAdapter(
         }
     }
 
+}
+
+private fun View.findParentRecyclerView(): RecyclerView? {
+    var current = parent
+    while (current != null) {
+        if (current is RecyclerView) {
+            return current
+        }
+        current = current.parent
+    }
+    return null
 }
 
 private fun Context.findMainActivity(): MainActivity? {

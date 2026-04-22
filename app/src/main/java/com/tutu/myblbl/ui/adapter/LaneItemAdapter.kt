@@ -17,7 +17,8 @@ import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
 
 class LaneItemAdapter(
     private val onItemClick: (LaneItemModel) -> Unit = {},
-    private val onItemFocused: ((View) -> Unit)? = null
+    private val onItemFocused: ((View) -> Unit)? = null,
+    private val onBottomEdgeDown: (() -> Boolean)? = null
 ) : ListAdapter<LaneItemModel, LaneItemAdapter.LaneItemViewHolder>(LaneItemDiffCallback) {
 
     init {
@@ -35,7 +36,7 @@ class LaneItemAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LaneItemViewHolder {
         val binding = CellMovieBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return LaneItemViewHolder(binding, onItemClick, onItemFocused)
+        return LaneItemViewHolder(binding, onItemClick, onItemFocused, onBottomEdgeDown)
     }
 
     override fun onBindViewHolder(holder: LaneItemViewHolder, position: Int) {
@@ -52,7 +53,8 @@ class LaneItemAdapter(
     class LaneItemViewHolder(
         private val binding: CellMovieBinding,
         private val onItemClick: (LaneItemModel) -> Unit,
-        private val onItemFocused: ((View) -> Unit)?
+        private val onItemFocused: ((View) -> Unit)?,
+        private val onBottomEdgeDown: (() -> Boolean)?
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private var currentItem: LaneItemModel? = null
@@ -68,7 +70,10 @@ class LaneItemAdapter(
                     onItemFocused?.invoke(view)
                 }
             }
-            VideoCardFocusHelper.bindSidebarExit(binding.clickView)
+            VideoCardFocusHelper.bindSidebarExit(
+                binding.clickView,
+                onBottomEdgeDown = onBottomEdgeDown
+            )
         }
 
         fun bind(item: LaneItemModel) {

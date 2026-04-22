@@ -21,6 +21,7 @@ class SeriesAdapter(
     private val onTopEdgeUp: (() -> Boolean)? = null,
     private val onLeftEdge: (() -> Boolean)? = null,
     private val onRightEdge: (() -> Boolean)? = null,
+    private val onBottomEdgeDown: (() -> Boolean)? = null,
     private val onItemFocused: (() -> Unit)? = null,
     private val nextFocusUpId: Int? = null,
     private val rememberFocusedItem: Boolean = true,
@@ -73,6 +74,7 @@ class SeriesAdapter(
             onTopEdgeUp = onTopEdgeUp,
             onLeftEdge = onLeftEdge,
             onRightEdge = onRightEdge,
+            onBottomEdgeDown = onBottomEdgeDown,
             nextFocusUpId = nextFocusUpId,
             onVerticalKey = onVerticalKey,
             onFocused = { view ->
@@ -96,6 +98,7 @@ class SeriesAdapter(
         private val onTopEdgeUp: (() -> Boolean)?,
         private val onLeftEdge: (() -> Boolean)?,
         private val onRightEdge: (() -> Boolean)?,
+        private val onBottomEdgeDown: (() -> Boolean)?,
         private val nextFocusUpId: Int?,
         private val onVerticalKey: ((View, Int) -> Boolean)?,
         private val onFocused: (View) -> Unit,
@@ -125,12 +128,18 @@ class SeriesAdapter(
                     }
                 }
             }
-            if (enableSidebarExit || onTopEdgeUp != null || onLeftEdge != null || onRightEdge != null) {
+            if (enableSidebarExit ||
+                onTopEdgeUp != null ||
+                onLeftEdge != null ||
+                onRightEdge != null ||
+                onBottomEdgeDown != null
+            ) {
                 VideoCardFocusHelper.bindSidebarExit(
                     binding.clickView,
                     onTopEdgeUp = onTopEdgeUp,
                     onLeftEdge = onLeftEdge,
-                    onRightEdge = onRightEdge
+                    onRightEdge = onRightEdge,
+                    onBottomEdgeDown = onBottomEdgeDown
                 )
             }
         }

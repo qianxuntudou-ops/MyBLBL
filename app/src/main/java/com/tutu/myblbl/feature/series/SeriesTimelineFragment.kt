@@ -218,14 +218,19 @@ class SeriesTimelineFragment : BaseFragment<FragmentSeriesTimelineBinding>() {
             return
         }
 
-        if (targetDayOfWeek == 0) {
-            updateEpisodes(timelineDays.firstOrNull()?.episodes.orEmpty())
-            return
-        }
-
         val todayIndex = timelineDays.indexOfFirst { it.isToday == 1 }
             .takeIf { it >= 0 }
             ?: 0
+
+        if (targetDayOfWeek == 0) {
+            val recentEpisodes = timelineDays
+                .flatMap { it.episodes }
+                .filter { it.published == 1 }
+                .sortedByDescending { it.pubTs }
+            updateEpisodes(recentEpisodes)
+            return
+        }
+
         if (timelineDays[todayIndex].dayOfWeek > targetDayOfWeek) {
             for (index in todayIndex downTo 0) {
                 if (timelineDays[index].dayOfWeek == targetDayOfWeek) {

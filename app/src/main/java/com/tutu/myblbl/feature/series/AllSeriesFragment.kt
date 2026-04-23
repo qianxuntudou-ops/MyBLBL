@@ -8,6 +8,7 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import androidx.appcompat.app.AppCompatDialog
 import androidx.core.os.bundleOf
 import androidx.lifecycle.lifecycleScope
@@ -28,6 +29,7 @@ import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
 import com.tutu.myblbl.core.ui.decoration.LinearSpacingItemDecoration
 import com.tutu.myblbl.core.ui.focus.RecyclerViewLoadMoreFocusController
+import com.tutu.myblbl.core.common.log.AppLog
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
@@ -40,6 +42,7 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
     }
 
     companion object {
+        private const val FOCUS_TAG = "SeriesFocus"
         private const val ARG_SEASON_TYPE = "seasonType"
         private const val ARG_MORE_URL = "moreUrl"
         private const val ARG_ENTRY_TITLE = "entryTitle"
@@ -212,6 +215,7 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             }
         })
         installLoadMoreFocusController()
+        installFocusDebugListeners()
     }
 
     override fun initData() {
@@ -469,7 +473,43 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         return true
     }
 
+    private var globalFocusListener: ViewTreeObserver.OnGlobalFocusChangeListener? = null
+
+    private fun installFocusDebugListeners() {
+        binding.recyclerView.setOnFocusChangeListener { _, hasFocus ->
+            AppLog.d(FOCUS_TAG, "RecyclerView focus=$hasFocus")
+        }
+        globalFocusListener = object : ViewTreeObserver.OnGlobalFocusChangeListener {
+            override fun onGlobalFocusChanged(oldFocus: View?, newFocus: View?) {
+                if (oldFocus == null && newFocus == null) return
+                val inRecycler = newFocus != null && isDescendantOf(newFocus, binding.recyclerView)
+                val inFilter = newFocus != null && isDescendantOf(newFocus, binding.viewFilter)
+                val inTopBar = newFocus != null && isDescendantOf(newFocus, binding.viewTop)
+                val escaped = newFocus != null && !inRecycler && !inFilter && !inTopBar
+                if (escaped) {
+                    AppLog.w(FOCUS_TAG, "FOCUS ESCAPED! from=${describeView(oldFocus)} to=${describeView(newFocus)} " +
+                        "lastArea=$lastFocusedArea lastTouchDelta=${SystemClock.uptimeMillis() - lastTouchInteractionAt}ms " +
+                        "isTouchScrolling=$isTouchScrolling")
+                }
+            }
+        }
+        binding.root.viewTreeObserver.addOnGlobalFocusChangeListener(globalFocusListener)
+    }
+
+    private fun isDescendantOf(view: View, ancestor: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current === ancestor) return true
+            current = current.parent as? View
+        }
+        return false
+    }
+
     override fun onDestroyView() {
+        globalFocusListener?.let { listener: ViewTreeObserver.OnGlobalFocusChangeListener ->
+            binding.root.viewTreeObserver.removeOnGlobalFocusChangeListener(listener)
+        }
+        globalFocusListener = null
         loadMoreFocusController?.release()
         loadMoreFocusController = null
         listLayoutState = binding.recyclerView.layoutManager?.onSaveInstanceState()

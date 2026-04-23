@@ -86,3 +86,40 @@ app/src/main/java/com/tutu/myblbl/
 - API responses use Gson with custom TypeAdapters in `model/adapter/`
 - Settings use DataStore Preferences (not SharedPreferences)
 - Lint is heavily suppressed (see `build.gradle.kts` lint block) — don't add new suppressions without reason
+
+## Commit Rules
+
+All commits must include a `Co-authored-by` trailer for ZhipuAI (智谱), so GitHub recognizes it as a contributor.
+
+**Format (strict):**
+
+```
+提交说明
+
+Co-authored-by: ZhipuAI <ZhipuAI@users.noreply.github.com>
+```
+
+**Key rules:**
+
+1. 提交说明与 `Co-authored-by` 之间必须空一行，否则 GitHub 不识别
+2. 格式严格为 `Co-authored-by: 名称 <邮箱>`，冒号、空格、尖括号缺一不可
+3. 必须使用 GitHub noreply 匿名邮箱 `ZhipuAI@users.noreply.github.com`
+4. 一个 commit 可以有多行 `Co-authored-by`（每行一个贡献者）
+
+**Example:**
+
+```bash
+git commit -m "$(cat <<'EOF'
+优化视频列表加载性能
+
+Co-authored-by: ZhipuAI <ZhipuAI@users.noreply.github.com>
+EOF
+)"
+```
+
+**补加到上一次提交（已 commit 未 push）：**
+
+```bash
+git commit --amend
+# 在编辑器中空一行后加上 Co-authored-by 行
+```

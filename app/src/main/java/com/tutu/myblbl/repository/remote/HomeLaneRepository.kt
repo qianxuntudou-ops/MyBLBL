@@ -212,13 +212,10 @@ class HomeLaneRepository(
                 }
             )
         }
-        val todayIndex = normalizedDays.indexOfFirst { it.isToday == 1 }
-            .takeIf { it >= 0 }
-            ?: 0
-        val recentEpisodes = mutableListOf<SeriesTimeLineModel>()
-        for (index in todayIndex downTo maxOf(todayIndex - 3, 0)) {
-            recentEpisodes += normalizedDays[index].episodes
-        }
+        val recentEpisodes = normalizedDays
+            .flatMap { it.episodes }
+            .filter { it.published == 1 }
+            .sortedByDescending { it.pubTs }
 
         val recentDay = TimeLineADayModel(
             episodes = recentEpisodes

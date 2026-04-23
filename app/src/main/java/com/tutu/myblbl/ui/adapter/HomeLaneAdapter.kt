@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellLaneSeriesTimeLineBinding
@@ -26,6 +27,29 @@ class HomeLaneAdapter(
     private val onTopEdgeUp: () -> Boolean = { false },
     private val onFollowSectionClick: ((Int) -> Unit)? = null
 ) : BaseAdapter<HomeLaneSection, RecyclerView.ViewHolder>() {
+
+    private var outerRecyclerView: RecyclerView? = null
+
+    private val outerDetachListener = object : RecyclerView.OnChildAttachStateChangeListener {
+        override fun onChildViewAttachedToWindow(view: View) = Unit
+
+        override fun onChildViewDetachedFromWindow(detached: View) {
+            val focused = detached.rootView.findFocus() ?: return
+            if (!isDescendantOf(focused, detached)) return
+            val rv = outerRecyclerView ?: return
+            restoreFocusToVisibleLane(rv)
+        }
+    }
+
+    override fun onAttachedToRecyclerView(recyclerView: RecyclerView) {
+        outerRecyclerView = recyclerView
+        recyclerView.addOnChildAttachStateChangeListener(outerDetachListener)
+    }
+
+    override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
+        recyclerView.removeOnChildAttachStateChangeListener(outerDetachListener)
+        outerRecyclerView = null
+    }
 
     companion object {
         private const val VIEW_TYPE_SCROLLABLE = 100
@@ -136,21 +160,34 @@ class HomeLaneAdapter(
     }
 
     private fun focusNextSectionFrom(currentHolder: RecyclerView.ViewHolder): Boolean {
+        val outerRV = outerRecyclerView ?: currentHolder.itemView.findParentRecyclerView() ?: return true
         val currentPosition = currentHolder.bindingAdapterPosition
         if (currentPosition == RecyclerView.NO_POSITION) {
-            return true
+            return restoreFocusToVisibleLane(outerRV)
         }
-        val parentRecyclerView = currentHolder.itemView.findParentRecyclerView() ?: return true
         val targetPosition = (currentPosition + 1 until items.size).firstOrNull() ?: return true
-        if (requestHeaderFocusAt(parentRecyclerView, targetPosition) ||
-            requestPrimaryFocusAt(parentRecyclerView, targetPosition)
+        if (requestHeaderFocusAt(outerRV, targetPosition) ||
+            requestPrimaryFocusAt(outerRV, targetPosition)
         ) {
             return true
         }
-        parentRecyclerView.scrollToPosition(targetPosition)
-        parentRecyclerView.post {
-            requestHeaderFocusAt(parentRecyclerView, targetPosition) ||
-                requestPrimaryFocusAt(parentRecyclerView, targetPosition)
+        outerRV.scrollToPosition(targetPosition)
+        outerRV.post {
+            requestHeaderFocusAt(outerRV, targetPosition) ||
+                requestPrimaryFocusAt(outerRV, targetPosition)
+        }
+        return true
+    }
+
+    private fun restoreFocusToVisibleLane(rv: RecyclerView): Boolean {
+        val lm = rv.layoutManager as? LinearLayoutManager ?: return true
+        val first = lm.findFirstVisibleItemPosition()
+        val last = lm.findLastVisibleItemPosition()
+        if (first == RecyclerView.NO_POSITION) return true
+        var pos = last
+        while (pos >= first) {
+            if (requestPrimaryFocusAt(rv, pos)) return true
+            pos--
         }
         return true
     }
@@ -436,6 +473,15 @@ private fun View.findParentRecyclerView(): RecyclerView? {
         current = current.parent
     }
     return null
+}
+
+private fun isDescendantOf(view: View, ancestor: View): Boolean {
+    var current: View? = view
+    while (current != null) {
+        if (current === ancestor) return true
+        current = current.parent as? View
+    }
+    return false
 }
 
 private fun Context.findMainActivity(): MainActivity? {

@@ -38,6 +38,7 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
     private var categoryId: Int = 0
     override val enableSwipeRefresh: Boolean = false
     override val autoLoad: Boolean = false
+    override val enableLoadMoreFocusController: Boolean = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,18 +95,62 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
     override fun initView() {
         super.initView()
         adapter?.showLoadMore = false
-        recyclerView?.setOnFocusChangeListener { _, hasFocus ->
-        }
-        recyclerView?.setOnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN &&
-                (keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
-                    keyCode == KeyEvent.KEYCODE_DPAD_UP ||
-                    keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
-                    keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
-            ) {
+        installFocusProtection()
+    }
+
+    private var childDetachListener: RecyclerView.OnChildAttachStateChangeListener? = null
+
+    private fun installFocusProtection() {
+        val rv = recyclerView ?: return
+        childDetachListener = object : RecyclerView.OnChildAttachStateChangeListener {
+            override fun onChildViewAttachedToWindow(view: View) = Unit
+
+            override fun onChildViewDetachedFromWindow(detached: View) {
+                val focused = activity?.currentFocus ?: return
+                if (focused !== detached && !isDescendantOf(focused, detached)) return
+                val lm = layoutManager ?: return
+                val first = lm.findFirstVisibleItemPosition()
+                val last = lm.findLastVisibleItemPosition()
+                if (first == RecyclerView.NO_POSITION) return
+                for (pos in last downTo first) {
+                    val holder = rv.findViewHolderForAdapterPosition(pos)
+                    if (holder != null && holder.itemView !== detached && holder.itemView.requestFocus()) {
+                        return
+                    }
+                }
             }
-            false
         }
+        childDetachListener?.let { rv.addOnChildAttachStateChangeListener(it) }
+    }
+
+    private fun isDescendantOf(view: android.view.View, ancestor: android.view.View): Boolean {
+        var current: android.view.View? = view
+        while (current != null) {
+            if (current === ancestor) return true
+            current = current.parent as? android.view.View
+        }
+        return false
+    }
+
+    private fun viewId(view: android.view.View): String {
+        val idName = try { view.context.resources.getResourceEntryName(view.id) } catch (_: Exception) { "${view.id}" }
+        return "${view.javaClass.simpleName}($idName)"
+    }
+
+    private fun keyName(keyCode: Int): String = when (keyCode) {
+        KeyEvent.KEYCODE_DPAD_UP -> "UP"
+        KeyEvent.KEYCODE_DPAD_DOWN -> "DOWN"
+        KeyEvent.KEYCODE_DPAD_LEFT -> "LEFT"
+        KeyEvent.KEYCODE_DPAD_RIGHT -> "RIGHT"
+        else -> keyCode.toString()
+    }
+
+    override fun onDestroyView() {
+        childDetachListener?.let {
+            recyclerView?.removeOnChildAttachStateChangeListener(it)
+        }
+        childDetachListener = null
+        super.onDestroyView()
     }
 
     override fun initObserver() {
@@ -197,6 +242,24 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
     }
 
     private fun keepCurrentFocus(): Boolean {
+        val rv = recyclerView ?: return true
+        val focused = activity?.currentFocus
+        if (focused != null && focused.isAttachedToWindow && isDescendantOf(focused, rv)) {
+            return true
+        }
+        rv.post {
+            if (!isAdded || view == null) return@post
+            val currentFocus = activity?.currentFocus
+            if (currentFocus != null && isDescendantOf(currentFocus, rv)) return@post
+            val lm = layoutManager ?: return@post
+            val first = lm.findFirstVisibleItemPosition()
+            val last = lm.findLastVisibleItemPosition()
+            if (first == RecyclerView.NO_POSITION) return@post
+            for (pos in last downTo first) {
+                val holder = rv.findViewHolderForAdapterPosition(pos)
+                if (holder?.itemView?.requestFocus() == true) return@post
+            }
+        }
         return true
     }
 

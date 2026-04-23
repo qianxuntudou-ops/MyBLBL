@@ -4,4 +4,5 @@
     <item type="id" name="view_youtube_overlay" />
     <item type="id" name="setting_view" />
     <item type="id" name="tag_recycler_load_more_focus_controller" />
+    <item type="id" name="tag_focus_detach_listener" />
 </resources>

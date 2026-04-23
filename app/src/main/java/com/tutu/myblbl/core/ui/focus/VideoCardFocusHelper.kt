@@ -4,14 +4,15 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.view.KeyEvent
 import android.view.View
+import android.view.FocusFinder
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.R
 import com.tutu.myblbl.ui.activity.MainActivity
 
 object VideoCardFocusHelper {
-    private const val TAG = "FocusCard"
+    private val TAG_DETACH_LISTENER = R.id.tag_focus_detach_listener
 
     fun bindSidebarExit(
         view: View,
@@ -21,6 +22,7 @@ object VideoCardFocusHelper {
         onBottomEdgeDown: (() -> Boolean)? = null,
         chainedListener: View.OnKeyListener? = null
     ) {
+        installDetachProtection(view)
         view.setOnKeyListener { target, keyCode, event ->
             val handledBySidebar = handleSidebarNavigation(
                 target, keyCode, event,
@@ -32,6 +34,53 @@ object VideoCardFocusHelper {
                 chainedListener?.onKey(target, keyCode, event) ?: false
             }
         }
+    }
+
+    private fun installDetachProtection(view: View) {
+        tryInstallDetachProtection(view)
+        if (view.parent == null) {
+            view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) {
+                    v.removeOnAttachStateChangeListener(this)
+                    tryInstallDetachProtection(v)
+                }
+                override fun onViewDetachedFromWindow(v: View) = Unit
+            })
+        }
+    }
+
+    private fun tryInstallDetachProtection(view: View) {
+        val rv = view.findParentRecyclerView() ?: return
+        if (rv.getTag(TAG_DETACH_LISTENER) != null) return
+        val listener = object : RecyclerView.OnChildAttachStateChangeListener {
+            override fun onChildViewAttachedToWindow(v: View) = Unit
+
+            override fun onChildViewDetachedFromWindow(detached: View) {
+                val focused = detached.rootView.findFocus() ?: return
+                if (focused !== detached && !isDescendantOf(focused, detached)) return
+                val lm = rv.layoutManager as? LinearLayoutManager ?: return
+                val first = lm.findFirstVisibleItemPosition()
+                val last = lm.findLastVisibleItemPosition()
+                if (first == RecyclerView.NO_POSITION) return
+                var pos = last
+                while (pos >= first) {
+                    val holder = rv.findViewHolderForAdapterPosition(pos)
+                    if (holder != null && holder.itemView !== detached && holder.itemView.requestFocus()) {
+                        return
+                    }
+                    pos--
+                }
+            }
+        }
+        rv.addOnChildAttachStateChangeListener(listener)
+        rv.setTag(TAG_DETACH_LISTENER, true)
+        rv.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) = Unit
+            override fun onViewDetachedFromWindow(v: View) {
+                rv.removeOnChildAttachStateChangeListener(listener)
+                rv.setTag(TAG_DETACH_LISTENER, null)
+            }
+        })
     }
 
     private fun handleSidebarNavigation(
@@ -66,7 +115,6 @@ object VideoCardFocusHelper {
 
             KeyEvent.KEYCODE_DPAD_UP -> {
                 RecyclerViewLoadMoreFocusController.fromView(target)?.let { controller ->
-                    AppLog.d(TAG, "up target=${target.javaClass.simpleName}@${Integer.toHexString(System.identityHashCode(target))}")
                     controller.notifyItemVerticalNavigation(target, View.FOCUS_UP)
                 }
                 val atTopEdge = isAtTopEdge(target)
@@ -79,31 +127,27 @@ object VideoCardFocusHelper {
             KeyEvent.KEYCODE_DPAD_DOWN -> {
                 val atBottomEdge = isAtBottomEdge(target)
                 if (atBottomEdge && onBottomEdgeDown != null) {
-                    AppLog.d(TAG, "down bottomEdgeCallback target=${target.javaClass.simpleName}@${Integer.toHexString(System.identityHashCode(target))}")
                     return onBottomEdgeDown()
                 }
                 val loadMoreController = RecyclerViewLoadMoreFocusController.fromView(target)
                 if (loadMoreController != null) {
-                    AppLog.d(
-                        TAG,
-                        "down delegate target=${target.javaClass.simpleName}@${Integer.toHexString(System.identityHashCode(target))} atBottom=$atBottomEdge"
-                    )
                     return loadMoreController.handleItemDpadDown(target)
                 }
-                return false
+                // No controller — handle focus navigation ourselves to prevent escape
+                val rv = target.findParentRecyclerView()
+                if (rv != null) {
+                    val nextFocus = FocusFinder.getInstance().findNextFocus(rv, target, View.FOCUS_DOWN)
+                    if (nextFocus != null && isDescendantOf(nextFocus, rv)) {
+                        nextFocus.requestFocus()
+                        return true
+                    }
+                    // No next focus in RV — consume event, don't let framework navigate away
+                    return true
+                }
+                return true
             }
         }
         return false
-    }
-
-    private fun keyName(keyCode: Int): String {
-        return when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_UP -> "UP"
-            KeyEvent.KEYCODE_DPAD_DOWN -> "DOWN"
-            KeyEvent.KEYCODE_DPAD_LEFT -> "LEFT"
-            KeyEvent.KEYCODE_DPAD_RIGHT -> "RIGHT"
-            else -> keyCode.toString()
-        }
     }
 
     private fun isAtLeftEdge(view: View): Boolean {
@@ -216,6 +260,15 @@ object VideoCardFocusHelper {
             current = current.parent
         }
         return null
+    }
+
+    private fun isDescendantOf(view: View, ancestor: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current === ancestor) return true
+            current = current.parent as? View
+        }
+        return false
     }
 
     private fun Context.findMainActivity(): MainActivity? {

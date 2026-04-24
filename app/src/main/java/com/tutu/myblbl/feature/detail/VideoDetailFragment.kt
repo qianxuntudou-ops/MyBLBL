@@ -150,7 +150,8 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
             onUgcOrderToggle = { toggleUgcOrder() },
             onRelatedVideoClick = { model -> onRelatedVideoClicked(model) },
             onDescriptionClick = { desc -> showDescriptionDialog(desc) },
-            onFollowClick = { toggleFollow() }
+            onFollowClick = { toggleFollow() },
+            onTripleAction = { tripleAction() }
         )
 
         binding.recyclerView.layoutManager = LinearLayoutManager(requireContext())
@@ -626,6 +627,31 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                 }
             }.onFailure { toast(it.message ?: "操作失败") }
         }
+    }
+
+    private fun tripleAction() {
+        if (!sessionGateway.isLoggedIn()) {
+            toast(getString(R.string.need_sign_in))
+            return
+        }
+        val currentAid = videoView?.aid ?: videoModel?.aid ?: return
+        val currentBvid = videoView?.bvid ?: videoModel?.bvid
+        if (!isLiked) toggleLike()
+        if (!isCoined) {
+            val coinCount = appSettings.getCachedString("give_coin_number")?.toIntOrNull()?.coerceIn(1, 2) ?: 2
+            lifecycleScope.launch {
+                runCatching { videoRepository.giveCoin(currentAid, currentBvid, multiply = coinCount) }
+                    .onSuccess { response ->
+                        if (response.isSuccess) {
+                            isCoined = true
+                            updateActionButtonsDirectly()
+                        } else {
+                            toast(response.message)
+                        }
+                    }.onFailure { toast(it.message ?: "投币失败") }
+            }
+        }
+        if (!isFavorited) toggleFavorite()
     }
 
     private fun updateActionButtonsDirectly() {

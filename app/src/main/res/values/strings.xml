@@ -401,7 +401,7 @@
     <string name="video_play_exit">再按一次返回退出播放</string>
     <string name="video_quality">画质</string>
     <string name="watch">观看</string>
-    <string name="detail">详情</string>
+    <string name="detail">简介详情</string>
     <string name="wednesday">周三</string>
     <string name="zone">分区</string>
 </resources>

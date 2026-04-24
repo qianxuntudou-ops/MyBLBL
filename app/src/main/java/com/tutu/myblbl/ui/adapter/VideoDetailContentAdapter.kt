@@ -22,6 +22,9 @@ import com.tutu.myblbl.databinding.CellVideoDetailHeadBinding
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.model.video.detail.Tag
 import com.tutu.myblbl.model.video.detail.VideoView
+import android.widget.Toast
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 class VideoDetailContentAdapter(
@@ -36,7 +39,8 @@ class VideoDetailContentAdapter(
     private val onUgcOrderToggle: () -> Unit,
     private val onRelatedVideoClick: (VideoModel) -> Unit,
     private val onDescriptionClick: (CharSequence) -> Unit,
-    private val onFollowClick: () -> Unit
+    private val onFollowClick: () -> Unit,
+    private val onTripleAction: () -> Unit
 ) : ListAdapter<VideoDetailContentAdapter.Row, RecyclerView.ViewHolder>(RowItemCallback) {
 
     sealed interface Row {
@@ -82,6 +86,7 @@ class VideoDetailContentAdapter(
                 onTagClick,
                 onDescriptionClick,
                 onFollowClick,
+                onTripleAction,
                 parent.context
             )
 
@@ -122,12 +127,15 @@ class VideoDetailContentAdapter(
         private val onTagClick: (Tag) -> Unit,
         private val onDescriptionClick: (CharSequence) -> Unit,
         private val onFollowClick: () -> Unit,
+        private val onTripleAction: () -> Unit,
         private val context: Context
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private var currentTags: List<Tag> = emptyList()
         private var currentDescription: CharSequence = ""
         private var relationAttribute = 0
+
+        private var tripleActionTriggered = false
 
         init {
             binding.buttonPlay.setOnClickListener { onPlayClick() }
@@ -138,18 +146,68 @@ class VideoDetailContentAdapter(
                 } else false
             }
             binding.buttonUploader.setOnClickListener { onUploaderClick() }
-            binding.buttonLike.setOnClickListener { onLikeClick() }
+            binding.buttonLike.setOnClickListener {
+                if (!tripleActionTriggered) {
+                    onLikeClick()
+                    showTripleHintIfNeeded()
+                }
+            }
             binding.buttonCoin.setOnClickListener { onCoinClick() }
             binding.buttonFavorite.setOnClickListener { onFavoriteClick() }
             binding.buttonDetail.setOnClickListener { onDescriptionClick(currentDescription) }
             binding.buttonFollow.setOnClickListener { onFollowClick() }
+
+            binding.buttonLike.setOnLongClickListener {
+                tripleActionTriggered = false
+                binding.viewTripleProgress.onComplete = {
+                    tripleActionTriggered = true
+                    onTripleAction()
+                }
+                binding.viewTripleProgress.start()
+                true
+            }
+            binding.buttonLike.setOnKeyListener { _, keyCode, event ->
+                if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || keyCode == android.view.KeyEvent.KEYCODE_ENTER) {
+                    if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                        tripleActionTriggered = false
+                        binding.viewTripleProgress.onComplete = {
+                            tripleActionTriggered = true
+                            onTripleAction()
+                        }
+                        binding.viewTripleProgress.start()
+                    } else if (event.action == android.view.KeyEvent.ACTION_UP) {
+                        if (!tripleActionTriggered) {
+                            binding.viewTripleProgress.cancel()
+                        }
+                    }
+                    true
+                } else false
+            }
 
             val scrollListener = View.OnFocusChangeListener { _, hasFocus ->
                 if (hasFocus) {
                     (itemView.parent as? RecyclerView)?.smoothScrollToPosition(0)
                 }
             }
-            binding.buttonPlay.onFocusChangeListener = scrollListener
+
+            val accentColor = ContextCompat.getColor(context, R.color.colorAccent)
+            val white = android.graphics.Color.WHITE
+
+            binding.buttonPlay.onFocusChangeListener = View.OnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) {
+                    (itemView.parent as? RecyclerView)?.smoothScrollToPosition(0)
+                }
+                val scale = if (hasFocus) 1.3f else 1.0f
+                val iconColor = if (hasFocus) accentColor else white
+                val ringColor = if (hasFocus) accentColor else white
+                binding.iconPlayButton.animate().scaleX(scale).scaleY(scale).setDuration(200).start()
+                binding.viewPlayRing.animate().scaleX(scale).scaleY(scale).setDuration(200).start()
+                binding.iconPlayButton.setColorFilter(iconColor)
+                val ringDrawable = binding.viewPlayRing.background?.mutate()
+                if (ringDrawable is android.graphics.drawable.GradientDrawable) {
+                    ringDrawable.setStroke(context.resources.getDimensionPixelSize(R.dimen.px3), ringColor)
+                }
+            }
             binding.buttonUploader.onFocusChangeListener = scrollListener
             binding.buttonLike.onFocusChangeListener = scrollListener
             binding.buttonCoin.onFocusChangeListener = scrollListener
@@ -215,16 +273,15 @@ class VideoDetailContentAdapter(
 
             currentDescription = view.desc.orEmpty()
             binding.textDescription.text = currentDescription
-            binding.textDescription.post {
-                val layout = binding.textDescription.layout
-                val truncated = layout != null
-                        && layout.lineCount >= 3
-                        && layout.getEllipsisCount(2) > 0
-                binding.buttonDetail.visibility = if (truncated) View.VISIBLE else View.GONE
-            }
 
             updateTagLayout(tags)
             updateActionButtons(isLiked, isCoined, isFavorited)
+
+            binding.buttonPlay.post {
+                if (!binding.buttonPlay.hasFocus()) {
+                    binding.buttonPlay.requestFocus()
+                }
+            }
         }
 
         private fun updateTagLayout(tags: List<Tag>) {
@@ -300,6 +357,15 @@ class VideoDetailContentAdapter(
                 binding.textFollow.setTextColor(ContextCompat.getColor(context, R.color.colorAccent))
                 binding.iconFollow.setImageResource(R.drawable.ic_plus)
                 binding.iconFollow.imageTintList = ContextCompat.getColorStateList(context, R.color.colorAccent)
+            }
+        }
+
+        private fun showTripleHintIfNeeded() {
+            val prefs = context.getSharedPreferences("triple_action_hint", Context.MODE_PRIVATE)
+            val today = SimpleDateFormat("yyyyMMdd", Locale.getDefault()).format(Date())
+            if (prefs.getString("last_hint_date", "") != today) {
+                prefs.edit().putString("last_hint_date", today).apply()
+                Toast.makeText(context, "长按点赞可一键三连", Toast.LENGTH_SHORT).show()
             }
         }
 

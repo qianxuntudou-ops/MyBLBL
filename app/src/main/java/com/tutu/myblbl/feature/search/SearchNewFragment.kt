@@ -297,9 +297,14 @@ class SearchNewFragment :
 
     private fun setupResultHeader() {
         binding.buttonResultBack.apply {
-            setOnClickListener {
-                showSearchPanel()
+            val goBack = {
+                if (arguments?.containsKey(ARG_KEYWORD) == true) {
+                    navigateBackFromUi()
+                } else {
+                    showSearchPanel()
+                }
             }
+            setOnClickListener { goBack() }
             setOnKeyListener { view, keyCode, event ->
                 if (event.action != KeyEvent.ACTION_DOWN) {
                     return@setOnKeyListener false
@@ -311,7 +316,7 @@ class SearchNewFragment :
                     KeyEvent.KEYCODE_DPAD_UP -> true
                     KeyEvent.KEYCODE_DPAD_CENTER,
                     KeyEvent.KEYCODE_ENTER -> {
-                        showSearchPanel()
+                        goBack()
                         true
                     }
                     else -> false
@@ -513,6 +518,9 @@ class SearchNewFragment :
 
     fun onBackPressed(): Boolean {
         if (isResultPanelVisible) {
+            if (arguments?.containsKey(ARG_KEYWORD) == true) {
+                return false
+            }
             showSearchPanel()
             return true
         }

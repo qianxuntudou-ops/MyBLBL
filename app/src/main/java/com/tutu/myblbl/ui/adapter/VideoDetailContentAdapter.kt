@@ -136,6 +136,13 @@ class VideoDetailContentAdapter(
         private var relationAttribute = 0
 
         private var tripleActionTriggered = false
+        private val tripleStartRunnable = Runnable {
+            binding.viewTripleProgress.onComplete = {
+                tripleActionTriggered = true
+                onTripleAction()
+            }
+            binding.viewTripleProgress.start()
+        }
 
         init {
             binding.buttonPlay.setOnClickListener { onPlayClick() }
@@ -159,25 +166,32 @@ class VideoDetailContentAdapter(
 
             binding.buttonLike.setOnLongClickListener {
                 tripleActionTriggered = false
-                binding.viewTripleProgress.onComplete = {
-                    tripleActionTriggered = true
-                    onTripleAction()
-                }
-                binding.viewTripleProgress.start()
+                tripleStartRunnable.run()
                 true
             }
-            binding.buttonLike.setOnKeyListener { _, keyCode, event ->
+            binding.buttonLike.setOnTouchListener { _, event ->
+                if (event.action == android.view.MotionEvent.ACTION_UP || event.action == android.view.MotionEvent.ACTION_CANCEL) {
+                    if (binding.viewTripleProgress.visibility == View.VISIBLE && !tripleActionTriggered) {
+                        binding.viewTripleProgress.cancel()
+                    }
+                }
+                false
+            }
+            binding.buttonLike.setOnKeyListener { v, keyCode, event ->
                 if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || keyCode == android.view.KeyEvent.KEYCODE_ENTER) {
                     if (event.action == android.view.KeyEvent.ACTION_DOWN) {
                         tripleActionTriggered = false
-                        binding.viewTripleProgress.onComplete = {
-                            tripleActionTriggered = true
-                            onTripleAction()
-                        }
-                        binding.viewTripleProgress.start()
+                        v.removeCallbacks(tripleStartRunnable)
+                        v.postDelayed(tripleStartRunnable, 500)
                     } else if (event.action == android.view.KeyEvent.ACTION_UP) {
-                        if (!tripleActionTriggered) {
+                        v.removeCallbacks(tripleStartRunnable)
+                        val wasLongPress = binding.viewTripleProgress.visibility == View.VISIBLE
+                        if (wasLongPress) {
                             binding.viewTripleProgress.cancel()
+                        }
+                        if (!tripleActionTriggered && !wasLongPress) {
+                            onLikeClick()
+                            showTripleHintIfNeeded()
                         }
                     }
                     true
@@ -277,8 +291,8 @@ class VideoDetailContentAdapter(
             updateTagLayout(tags)
             updateActionButtons(isLiked, isCoined, isFavorited)
 
-            binding.buttonPlay.post {
-                if (!binding.buttonPlay.hasFocus()) {
+            if (!itemView.hasFocus()) {
+                binding.buttonPlay.post {
                     binding.buttonPlay.requestFocus()
                 }
             }

@@ -23,6 +23,8 @@ class TripleActionProgressView @JvmOverloads constructor(
         strokeCap = Paint.Cap.ROUND
     }
 
+    private val buttonSize = context.resources.getDimension(R.dimen.px80)
+    private val gap = context.resources.getDimension(R.dimen.px20)
     private val oval = RectF()
     private var sweepAngle = 0f
 
@@ -89,11 +91,13 @@ class TripleActionProgressView @JvmOverloads constructor(
         super.onDraw(canvas)
         if (sweepAngle <= 0f) return
 
-        val cx = width / 2f
         val cy = height / 2f
-        val radius = (minOf(width, height) / 2f) - paint.strokeWidth
-        oval.set(cx - radius, cy - radius, cx + radius, cy + radius)
+        val radius = (buttonSize / 2f) - paint.strokeWidth
 
-        canvas.drawArc(oval, -90f, sweepAngle, false, paint)
+        for (i in 0..2) {
+            val cx = i * (buttonSize + gap) + buttonSize / 2f
+            oval.set(cx - radius, cy - radius, cx + radius, cy + radius)
+            canvas.drawArc(oval, -90f, sweepAngle, false, paint)
+        }
     }
 }

@@ -15,12 +15,14 @@ class PlayerSessionCoordinator {
         data class PlayNextEpisode(
             val title: String,
             val coverUrl: String,
+            val preloadTarget: PlaybackPreloadTarget?,
             val perform: () -> Unit
         ) : ContinuationPlan
 
         data class PlayVideo(
             val title: String,
             val coverUrl: String,
+            val preloadTarget: PlaybackPreloadTarget?,
             val perform: () -> Unit
         ) : ContinuationPlan
 
@@ -143,6 +145,13 @@ class PlayerSessionCoordinator {
             return ContinuationPlan.PlayNextEpisode(
                 title = nextEpisode.title,
                 coverUrl = nextEpisode.cover,
+                preloadTarget = PlaybackPreloadTarget(
+                    aid = nextEpisode.aid.takeIf { it > 0L },
+                    bvid = nextEpisode.bvid.takeIf { it.isNotBlank() },
+                    cid = nextEpisode.cid,
+                    epId = nextEpisode.epId.takeIf { it > 0L },
+                    source = PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN
+                ),
                 perform = playNextEpisode
             )
         }
@@ -151,6 +160,7 @@ class PlayerSessionCoordinator {
             return ContinuationPlan.PlayVideo(
                 title = queuedVideo.title,
                 coverUrl = queuedVideo.coverUrl,
+                preloadTarget = queuedVideo.toPreloadTarget(PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN),
                 perform = { playVideo(queuedVideo) }
             )
         }
@@ -159,6 +169,7 @@ class PlayerSessionCoordinator {
             return ContinuationPlan.PlayVideo(
                 title = related.title,
                 coverUrl = related.coverUrl,
+                preloadTarget = related.toPreloadTarget(PlaybackPreloadTarget.Source.AUTOPLAY_COUNTDOWN),
                 perform = { playVideo(related) }
             )
         }

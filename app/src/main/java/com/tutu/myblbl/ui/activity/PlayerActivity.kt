@@ -526,7 +526,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             imageNext = imageNext,
             textNext = textNext,
             countdownView = countdownView,
-            canExecutePendingAction = { player?.playbackState == Player.STATE_ENDED }
+            canExecutePendingAction = { player?.playbackState == Player.STATE_ENDED },
+            onPendingActionCleared = { viewModel.preloadPlayback(null) }
         )
         overlayUiController = VideoPlayerOverlayController(
             activity = this,
@@ -583,11 +584,14 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     AppLog.i("VideoPlayerViewModel", "PLAYER_PERF breakdown: total=${total}ms cdn=${cdn}ms buffer=${buffer}ms decoder=${decoder}ms render=${render}ms")
                     playerPerfTrace = null
                 }
-                PlaybackStartupTrace.log(
-                    traceId = activeStartupTraceId,
-                    startElapsedMs = activeStartupTraceStartElapsedMs,
-                    step = "first_frame"
-                )
+                if (!activeStartupFirstFrameLogged) {
+                    activeStartupFirstFrameLogged = true
+                    PlaybackStartupTrace.log(
+                        traceId = activeStartupTraceId,
+                        startElapsedMs = activeStartupTraceStartElapsedMs,
+                        step = "first_frame"
+                    )
+                }
                 viewModel.onPlaybackFirstFrame()
                 startupTrace
                     ?.takeIf { !it.firstFrameLogged }
@@ -743,6 +747,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 )
                 activeStartupTraceId = playbackRequest.startupTraceId
                 activeStartupTraceStartElapsedMs = playbackRequest.startupTraceStartElapsedMs
+                activeStartupFirstFrameLogged = false
                 playerPerfTrace = PlayerPerfTrace(prepareMs = System.currentTimeMillis())
                 suppressPlaybackEnvironmentSync = true
                 try {
@@ -867,7 +872,17 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         lifecycleScope.launch {
             viewModel.danmakuUpdates.collect { update ->
                 if (update.replace) {
-                    playerView.setDanmakuData(update.items)
+                    PlaybackStartupTrace.log(
+                        traceId = activeStartupTraceId,
+                        startElapsedMs = activeStartupTraceStartElapsedMs,
+                        step = "danmaku_ui_submitted",
+                        message = "replace=true count=${update.items.size}"
+                    )
+                    playerView.setDanmakuData(
+                        data = update.items,
+                        startupTraceId = activeStartupTraceId,
+                        startupTraceStartElapsedMs = activeStartupTraceStartElapsedMs
+                    )
                 } else {
                     playerView.appendDanmakuData(update.items)
                 }
@@ -1017,6 +1032,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private var playerPerfTrace: PlayerPerfTrace? = null
     private var activeStartupTraceId: String = PlaybackStartupTrace.NO_TRACE
     private var activeStartupTraceStartElapsedMs: Long = 0L
+    private var activeStartupFirstFrameLogged: Boolean = false
 
     private data class PlayerPerfTrace(
         val prepareMs: Long,
@@ -1331,9 +1347,11 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             )
         ) {
             is PlayerSessionCoordinator.ContinuationPlan.PlayNextEpisode -> {
+                viewModel.preloadPlayback(plan.preloadTarget)
                 autoPlayController.queueNextAction(plan.title, plan.coverUrl, plan.perform)
             }
             is PlayerSessionCoordinator.ContinuationPlan.PlayVideo -> {
+                viewModel.preloadPlayback(plan.preloadTarget)
                 autoPlayController.queueNextAction(plan.title, plan.coverUrl, plan.perform)
             }
             is PlayerSessionCoordinator.ContinuationPlan.ExitPlayer -> finish()

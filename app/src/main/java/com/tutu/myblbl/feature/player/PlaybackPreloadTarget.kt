@@ -16,6 +16,7 @@ data class PlaybackPreloadTarget(
         NEXT_EPISODE,
         PLAY_QUEUE,
         RELATED_VIDEO,
+        AUTOPLAY_COUNTDOWN,
         LIST_TOUCH
     }
 

@@ -39,6 +39,7 @@ import com.tutu.myblbl.model.video.quality.VideoQuality
 import com.tutu.myblbl.core.common.ext.isAdvancedDanmakuEnabled
 import com.tutu.myblbl.core.common.ext.getDanmakuSmartFilterLevel
 import com.tutu.myblbl.feature.player.LiveQualityInfo
+import com.tutu.myblbl.feature.player.PlaybackStartupTrace
 
 @OptIn(UnstableApi::class)
 class MyPlayerView @JvmOverloads constructor(
@@ -1427,8 +1428,12 @@ class MyPlayerView @JvmOverloads constructor(
         controller?.setShowMultiWindowTimeBar(show)
     }
 
-    fun setDanmakuData(data: List<DmModel>) {
-        danmakuController.setData(data)
+    fun setDanmakuData(
+        data: List<DmModel>,
+        startupTraceId: String = PlaybackStartupTrace.NO_TRACE,
+        startupTraceStartElapsedMs: Long = 0L
+    ) {
+        danmakuController.setData(data, startupTraceId, startupTraceStartElapsedMs)
     }
 
     fun setSpecialDanmakuData(data: List<SpecialDanmakuModel>) {

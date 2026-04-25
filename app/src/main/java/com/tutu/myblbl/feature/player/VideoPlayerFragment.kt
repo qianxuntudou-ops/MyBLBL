@@ -411,7 +411,8 @@ class VideoPlayerFragment : Fragment() {
             imageNext = imageNext,
             textNext = textNext,
             countdownView = countdownView,
-            canExecutePendingAction = { _binding != null && player?.playbackState == Player.STATE_ENDED }
+            canExecutePendingAction = { _binding != null && player?.playbackState == Player.STATE_ENDED },
+            onPendingActionCleared = { viewModel.preloadPlayback(null) }
         )
         overlayUiController = VideoPlayerOverlayController(
             activity = requireActivity() as androidx.appcompat.app.AppCompatActivity,
@@ -692,6 +693,8 @@ class VideoPlayerFragment : Fragment() {
                     sequence = ++startupTraceSequence,
                     startedAtMs = SystemClock.elapsedRealtime()
                 )
+                activeStartupTraceId = playbackRequest.startupTraceId
+                activeStartupTraceStartElapsedMs = playbackRequest.startupTraceStartElapsedMs
                 playerPerfTrace = PlayerPerfTrace(prepareMs = System.currentTimeMillis())
                 AppLog.i("VideoPlayerViewModel", "PLAYER_PERF trace created prepareMs=${playerPerfTrace!!.prepareMs}")
                 suppressPlaybackEnvironmentSync = true
@@ -811,7 +814,17 @@ class VideoPlayerFragment : Fragment() {
                 launch {
                     viewModel.danmakuUpdates.collect { update ->
                         if (update.replace) {
-                            playerView.setDanmakuData(update.items)
+                            PlaybackStartupTrace.log(
+                                traceId = activeStartupTraceId,
+                                startElapsedMs = activeStartupTraceStartElapsedMs,
+                                step = "danmaku_ui_submitted",
+                                message = "replace=true count=${update.items.size}"
+                            )
+                            playerView.setDanmakuData(
+                                data = update.items,
+                                startupTraceId = activeStartupTraceId,
+                                startupTraceStartElapsedMs = activeStartupTraceStartElapsedMs
+                            )
                         } else {
                             playerView.appendDanmakuData(update.items)
                         }
@@ -1217,10 +1230,12 @@ class VideoPlayerFragment : Fragment() {
             )
         ) {
             is PlayerSessionCoordinator.ContinuationPlan.PlayNextEpisode -> {
+                viewModel.preloadPlayback(plan.preloadTarget)
                 autoPlayController.queueNextAction(plan.title, plan.coverUrl, plan.perform)
             }
 
             is PlayerSessionCoordinator.ContinuationPlan.PlayVideo -> {
+                viewModel.preloadPlayback(plan.preloadTarget)
                 autoPlayController.queueNextAction(plan.title, plan.coverUrl, plan.perform)
             }
 
@@ -1380,6 +1395,8 @@ class VideoPlayerFragment : Fragment() {
 
     /** 追踪单次播放请求的 ExoPlayer 内部阶段耗时 */
     private var playerPerfTrace: PlayerPerfTrace? = null
+    private var activeStartupTraceId: String = PlaybackStartupTrace.NO_TRACE
+    private var activeStartupTraceStartElapsedMs: Long = 0L
 
     private data class PlayerPerfTrace(
         val prepareMs: Long,       // prepare() 被调用的时间

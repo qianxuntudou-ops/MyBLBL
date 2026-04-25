@@ -19,7 +19,8 @@ class VideoPlayerAutoPlayController(
     private val imageNext: AppCompatImageView,
     private val textNext: TextView,
     private val countdownView: CountdownView,
-    private val canExecutePendingAction: () -> Boolean
+    private val canExecutePendingAction: () -> Boolean,
+    private val onPendingActionCleared: () -> Unit = {}
 ) {
 
     private val handler = Handler(Looper.getMainLooper())
@@ -44,7 +45,11 @@ class VideoPlayerAutoPlayController(
 
     fun cancelPendingAction() {
         handler.removeCallbacks(autoNextRunnable)
+        val hadPendingAction = pendingAutoPlayAction != null
         pendingAutoPlayAction = null
+        if (hadPendingAction) {
+            onPendingActionCleared()
+        }
     }
 
     fun hideNextPreview() {
@@ -68,7 +73,11 @@ class VideoPlayerAutoPlayController(
     private fun hideNextPreview(clearPendingAction: Boolean) {
         handler.removeCallbacks(autoNextRunnable)
         if (clearPendingAction) {
+            val hadPendingAction = pendingAutoPlayAction != null
             pendingAutoPlayAction = null
+            if (hadPendingAction) {
+                onPendingActionCleared()
+            }
         }
         countdownView.stopCountdown()
         if (!viewNext.isVisible) {

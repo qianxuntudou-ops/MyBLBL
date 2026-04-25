@@ -444,6 +444,7 @@ class VideoPlayerViewModel(
     private var currentStartupTraceId: String = PlaybackStartupTrace.NO_TRACE
     private var currentStartupTraceStartElapsedMs: Long = 0L
     private var firstDanmakuTraceLoggedId: String = PlaybackStartupTrace.NO_TRACE
+    private var firstDanmakuSegmentTraceLoggedId: String = PlaybackStartupTrace.NO_TRACE
     private var pendingPlayerExtrasCid: Long = 0L
     private var loadedPlayerExtrasCid: Long = 0L
     private val hardwareSupportedVideoCodecs: Set<VideoCodecEnum>
@@ -527,6 +528,7 @@ class VideoPlayerViewModel(
         currentStartupTraceId = startupTraceId
         currentStartupTraceStartElapsedMs = startupTraceStartElapsedMs
         firstDanmakuTraceLoggedId = PlaybackStartupTrace.NO_TRACE
+        firstDanmakuSegmentTraceLoggedId = PlaybackStartupTrace.NO_TRACE
         PlaybackStartupTrace.log(
             traceId = currentStartupTraceId,
             startElapsedMs = currentStartupTraceStartElapsedMs,
@@ -685,7 +687,7 @@ class VideoPlayerViewModel(
         _interactionModel.value = null
         _videoSnapshot.value = null
         _error.value = null
-        clearPreloadedPlayback(cancelJob = false)
+        clearPreloadedPlaybackIfDifferent(currentPlayRequestIdentity(), cancelJob = false)
         loadPlayUrl(preferLastPlayTime = false)
     }
 
@@ -699,7 +701,13 @@ class VideoPlayerViewModel(
             return
         }
         reportPlaybackHeartbeat()
-        clearPreloadedPlayback(cancelJob = false)
+        val targetIdentity = PlayRequestIdentity(
+            aid = targetAid,
+            bvid = targetBvid?.takeIf { it.isNotBlank() },
+            cid = video.cid,
+            epId = targetEpId
+        )
+        clearPreloadedPlaybackIfDifferent(targetIdentity, cancelJob = false)
         loadVideoInfo(
             aid = targetAid,
             bvid = targetBvid,
@@ -725,7 +733,7 @@ class VideoPlayerViewModel(
         currentSubtitleCueIndex = 0
         _selectedSubtitleIndex.value = -1
         _currentSubtitleText.value = null
-        clearPreloadedPlayback(cancelJob = false)
+        clearPreloadedPlaybackIfDifferent(currentPlayRequestIdentity(), cancelJob = false)
         loadPlayUrl(preferLastPlayTime = false)
         loadInteractionInfo(edgeId)
         loadVideoSnapshot()
@@ -842,6 +850,12 @@ class VideoPlayerViewModel(
         preloadJob?.cancel()
         preloadedPlayback = null
         preloadingIdentity = identity
+        PlaybackStartupTrace.log(
+            traceId = currentStartupTraceId,
+            startElapsedMs = currentStartupTraceStartElapsedMs,
+            step = "playback_preload_started",
+            message = "source=${target.source} cid=${identity.cid} epId=${identity.epId ?: 0L}"
+        )
         preloadJob = viewModelScope.launch {
             val preparedPlayback = runCatching {
                 requestPreparedPlayback(
@@ -864,6 +878,12 @@ class VideoPlayerViewModel(
             preloadedPlayback = PreloadedPlayback(
                 source = target.source,
                 preparedPlayback = preparedPlayback
+            )
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "playback_preload_ready",
+                message = "source=${target.source} cid=${identity.cid} epId=${identity.epId ?: 0L}"
             )
         }
     }
@@ -1126,8 +1146,20 @@ class VideoPlayerViewModel(
             preparedPlaybackDeferred != null &&
             canReusePreparedPlayback(initialIdentity, resolvedIdentity)
         ) {
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "pgc_prepared_playback_reused",
+                message = "cid=${resolvedIdentity?.cid ?: 0L} epId=${resolvedIdentity?.epId ?: 0L}"
+            )
             preparedPlaybackDeferred.await()
         } else {
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "pgc_prepared_playback_not_reused",
+                message = "initial=$initialIdentity resolved=$resolvedIdentity hasDeferred=${preparedPlaybackDeferred != null}"
+            )
             null
         }
         if (!isActiveVideoLoad(loadGeneration)) {
@@ -1316,6 +1348,9 @@ class VideoPlayerViewModel(
         }
         if (initialIdentity.epId != resolvedIdentity.epId) {
             return false
+        }
+        if (initialIdentity.epId != null) {
+            return true
         }
         val initialBvid = initialIdentity.bvid.orEmpty()
         val resolvedBvid = resolvedIdentity.bvid.orEmpty()
@@ -2129,9 +2164,21 @@ class VideoPlayerViewModel(
             return null
         }
         if (preloaded.preparedPlayback.identity != identity) {
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "playback_preload_miss",
+                message = "requested=$identity preloaded=${preloaded.preparedPlayback.identity} source=${preloaded.source}"
+            )
             return null
         }
         preloadedPlayback = null
+        PlaybackStartupTrace.log(
+            traceId = currentStartupTraceId,
+            startElapsedMs = currentStartupTraceStartElapsedMs,
+            step = "playback_preload_consumed",
+            message = "cid=${identity.cid} epId=${identity.epId ?: 0L} source=${preloaded.source}"
+        )
         return preloaded.preparedPlayback.copy(
             playWhenReady = pendingPlayWhenReady,
             replaceInPlace = false
@@ -2145,6 +2192,16 @@ class VideoPlayerViewModel(
             preloadJob = null
             preloadingIdentity = null
         }
+    }
+
+    private fun clearPreloadedPlaybackIfDifferent(
+        identity: PlayRequestIdentity?,
+        cancelJob: Boolean
+    ) {
+        if (identity != null && preloadedPlayback?.preparedPlayback?.identity == identity) {
+            return
+        }
+        clearPreloadedPlayback(cancelJob = cancelJob)
     }
 
     private fun isActiveVideoLoad(loadGeneration: Long): Boolean {
@@ -2179,6 +2236,7 @@ class VideoPlayerViewModel(
                 )
             }
             val snapshotDeferred = async {
+                delay(1_500L)
                 playInfoGateway.requestVideoSnapshot(
                     aid = aid,
                     bvid = bvid,
@@ -2264,7 +2322,9 @@ class VideoPlayerViewModel(
         val loadGeneration = ++danmakuLoadGeneration
         danmakuLoadJob = viewModelScope.launch {
             // 1. 获取弹幕 view 元数据（优先：预加载 > 缓存 > 网络）
+            var danmakuViewSource = "none"
             val danmakuView = if (preloadedDanmakuViewCid == cid) {
+                danmakuViewSource = "preloaded"
                 preloadedDanmakuView.also {
                     preloadedDanmakuViewCid = 0L
                     preloadedDanmakuView = null
@@ -2276,12 +2336,14 @@ class VideoPlayerViewModel(
                     ?.takeIf { System.currentTimeMillis() - it.second < danmakuViewCacheTtlMs }
                     ?.first
                 if (cached != null) {
+                    danmakuViewSource = "cache"
                     cached
                 } else {
                     playInfoGateway.requestDanmakuViewBytes(
                         cid = cid,
                         aid = aid
                     )?.let { bytes ->
+                        danmakuViewSource = "network"
                         runCatching { DmProtoParser.parseView(bytes) }.getOrNull()
                     }
                 }
@@ -2290,6 +2352,12 @@ class VideoPlayerViewModel(
             if (danmakuView != null) {
                 danmakuViewCache[cid] = danmakuView to System.currentTimeMillis()
             }
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "danmaku_view_ready",
+                message = "cid=$cid source=$danmakuViewSource segments=${danmakuView?.totalSegments ?: 0} special=${danmakuView?.specialDanmakuUrls?.size ?: 0}"
+            )
 
             val segmentCount = danmakuView?.totalSegments
                 ?.takeIf { it > 0 }
@@ -2322,6 +2390,15 @@ class VideoPlayerViewModel(
             }
             if (!isActiveDanmakuRequest(loadGeneration)) {
                 return@launch
+            }
+            if (firstDanmakuSegmentTraceLoggedId != currentStartupTraceId) {
+                firstDanmakuSegmentTraceLoggedId = currentStartupTraceId
+                PlaybackStartupTrace.log(
+                    traceId = currentStartupTraceId,
+                    startElapsedMs = currentStartupTraceStartElapsedMs,
+                    step = "danmaku_initial_segment_ready",
+                    message = "segment=$initialSegment regular=${currentPayload.regularItems.size} special=${currentPayload.specialItems.size}"
+                )
             }
             // 缓存当前段
             danmakuSegmentItems[initialSegment] = currentPayload.regularItems.toList()
@@ -2379,6 +2456,12 @@ class VideoPlayerViewModel(
                 aid = aid,
                 segmentIndex = segmentIndex
             ) ?: return@forEach
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "danmaku_segment_bytes_loaded",
+                message = "cid=$cid segment=$segmentIndex bytes=${bytes.size}"
+            )
             val segment = runCatching {
                 DmProtoParser.parseSegment(bytes)
             }.getOrNull() ?: return@forEach
@@ -2423,6 +2506,12 @@ class VideoPlayerViewModel(
                     )
                 }
             }
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "danmaku_segment_parsed",
+                message = "cid=$cid segment=$segmentIndex elems=${segment.elems.size} regular=${regularItems.size - regularStartIndex} special=${specialItems.size - specialStartIndex} advanced=$advancedCount"
+            )
         }
         SpecialDanmakuPayload(
             regularItems = regularItems,

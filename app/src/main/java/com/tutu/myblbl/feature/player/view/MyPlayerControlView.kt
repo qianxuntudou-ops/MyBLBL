@@ -388,8 +388,8 @@ class MyPlayerControlView @JvmOverloads constructor(
         setRepeatMode(player?.repeatMode ?: Player.REPEAT_MODE_OFF)
     }
 
-    fun show() {
-        controlViewLayoutManager.show()
+    fun show(focusPlayPause: Boolean = false) {
+        controlViewLayoutManager.show(focusPlayPause)
     }
 
     fun hide() {

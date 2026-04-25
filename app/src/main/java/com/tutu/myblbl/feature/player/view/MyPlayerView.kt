@@ -540,13 +540,15 @@ class MyPlayerView @JvmOverloads constructor(
         val controller = controller ?: return
 
         if (controller.isFullyVisible()) {
-            if (isForced) {
+            if (shouldShowIndefinitely) {
+                controller.setShowTimeoutMs(0)
+            } else if (isForced) {
                 controller.resetHideCallbacks()
             }
             return
         }
 
-        if (!isForced) return
+        if (!isForced && !shouldShowIndefinitely) return
 
         showController(shouldShowIndefinitely)
     }
@@ -575,7 +577,7 @@ class MyPlayerView @JvmOverloads constructor(
         if (!useController()) return
 
         controller?.setShowTimeoutMs(if (indefinitely) 0 else controllerShowTimeoutMs)
-        controller?.show()
+        controller?.show(focusPlayPause = true)
     }
 
     fun hideController() {

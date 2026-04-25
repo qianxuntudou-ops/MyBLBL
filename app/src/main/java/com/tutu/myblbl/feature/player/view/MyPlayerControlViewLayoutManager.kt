@@ -103,7 +103,7 @@ class MyPlayerControlViewLayoutManager(
         overflowShowButton.visibility = View.GONE
     }
 
-    fun show() {
+    fun show(focusPlayPause: Boolean = false) {
         val fromSeekProgress = uxState == UX_STATE_ONLY_PROGRESS_VISIBLE
         if (!playerControlView.isVisible()) {
             playerControlView.visibility = View.VISIBLE
@@ -113,7 +113,7 @@ class MyPlayerControlViewLayoutManager(
         updateAdaptiveLayout()
         showAllBars()
         playerControlView.post {
-            if (fromSeekProgress) {
+            if (fromSeekProgress && !focusPlayPause) {
                 playerControlView.requestTimeBarFocus()
             } else {
                 playerControlView.requestPlayPauseFocus()

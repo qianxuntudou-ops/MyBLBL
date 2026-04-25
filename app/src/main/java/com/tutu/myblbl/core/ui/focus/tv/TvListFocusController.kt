@@ -35,6 +35,9 @@ class TvListFocusController(
             KeyEvent.KEYCODE_DPAD_RIGHT -> View.FOCUS_RIGHT
             else -> return false
         }
+        if (direction != View.FOCUS_DOWN) {
+            pendingMoveAfterLoadMore = null
+        }
         val position = resolveAdapterPosition(view)
         if (position != RecyclerView.NO_POSITION && adapter.isFocusablePosition(position)) {
             currentAnchor = createAnchor(view, position, TvFocusAnchor.Source.FOCUS)
@@ -164,6 +167,9 @@ class TvListFocusController(
         if (direction == View.FOCUS_DOWN && canLoadMore()) {
             pendingMoveAfterLoadMore = anchor.copy(source = TvFocusAnchor.Source.PENDING_LOAD_MORE)
             loadMore()
+            return true
+        }
+        if (direction == View.FOCUS_DOWN && pendingMoveAfterLoadMore != null) {
             return true
         }
         return false

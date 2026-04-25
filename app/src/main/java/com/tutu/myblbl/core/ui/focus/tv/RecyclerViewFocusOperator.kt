@@ -9,9 +9,11 @@ class RecyclerViewFocusOperator(
     private val adapter: TvFocusableAdapter
 ) {
     private var focusToken = 0
+    private var pendingFocusPosition = RecyclerView.NO_POSITION
 
     fun cancelPendingFocus() {
         focusToken++
+        pendingFocusPosition = RecyclerView.NO_POSITION
     }
 
     fun focusPosition(
@@ -23,8 +25,13 @@ class RecyclerViewFocusOperator(
         if (!adapter.isFocusablePosition(position)) {
             return false
         }
-        val token = ++focusToken
+        if (position != pendingFocusPosition) {
+            focusToken++
+        }
+        pendingFocusPosition = position
+        val token = focusToken
         if (requestAttachedPositionFocus(position, onFocused)) {
+            pendingFocusPosition = RecyclerView.NO_POSITION
             return true
         }
 
@@ -40,9 +47,11 @@ class RecyclerViewFocusOperator(
                 return@post
             }
             if (requestAttachedPositionFocus(position, onFocused)) {
+                pendingFocusPosition = RecyclerView.NO_POSITION
                 return@post
             }
             focusNearestVisible(position, onFocused)
+            pendingFocusPosition = RecyclerView.NO_POSITION
         }
         return true
     }

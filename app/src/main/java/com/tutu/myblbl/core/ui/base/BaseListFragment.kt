@@ -349,7 +349,7 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
             recyclerView = rv,
             adapter = focusableAdapter,
             strategy = createTvFocusStrategy(),
-            canLoadMore = { hasMore && !isLoading },
+            canLoadMore = { hasMore },
             loadMore = {
                 if (!isLoading && hasMore) {
                     currentPage++

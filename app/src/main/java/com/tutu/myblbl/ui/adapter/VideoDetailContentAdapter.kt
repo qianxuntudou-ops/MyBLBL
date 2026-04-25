@@ -146,9 +146,21 @@ class VideoDetailContentAdapter(
 
         init {
             binding.buttonPlay.setOnClickListener { onPlayClick() }
+            binding.buttonPlay.setOnTouchListener { _, event ->
+                when (event.action) {
+                    android.view.MotionEvent.ACTION_DOWN -> animatePlayPress(1.0f)
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> animatePlayPress(1.3f)
+                }
+                false
+            }
             binding.buttonPlay.setOnKeyListener { _, keyCode, event ->
-                if (event.action == android.view.KeyEvent.ACTION_DOWN && (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || keyCode == android.view.KeyEvent.KEYCODE_ENTER)) {
-                    onPlayClick()
+                if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER || keyCode == android.view.KeyEvent.KEYCODE_ENTER) {
+                    if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                        animatePlayPress(1.0f)
+                    } else if (event.action == android.view.KeyEvent.ACTION_UP) {
+                        animatePlayPress(1.3f)
+                        onPlayClick()
+                    }
                     true
                 } else false
             }
@@ -226,6 +238,11 @@ class VideoDetailContentAdapter(
             binding.buttonCoin.onFocusChangeListener = scrollListener
             binding.buttonFavorite.onFocusChangeListener = scrollListener
             binding.buttonFollow.onFocusChangeListener = scrollListener
+        }
+
+        private fun animatePlayPress(scale: Float) {
+            binding.viewPlayRing.animate().scaleX(scale).scaleY(scale).setDuration(100).start()
+            binding.iconPlayButton.animate().scaleX(scale).scaleY(scale).setDuration(100).start()
         }
 
         fun bind(view: VideoView, tags: List<Tag>, isLiked: Boolean, isCoined: Boolean, isFavorited: Boolean) {
@@ -314,7 +331,7 @@ class VideoDetailContentAdapter(
                 return
             }
             binding.textDescription.visibility = View.VISIBLE
-            val displayText = "简介：$description"
+            val displayText = "简介：${description.toString().replace(Regex("[\\r\\n]+"), " ")}"
             binding.textDescription.text = displayText
             binding.textDescription.post {
                 val availableWidth = binding.textDescription.width -
@@ -343,7 +360,7 @@ class VideoDetailContentAdapter(
         }
 
         private fun createTagView(text: String): AppCompatTextView {
-            val textSizePx = context.resources.getDimension(R.dimen.px30)
+            val textSizePx = context.resources.getDimension(R.dimen.px24)
             val ta = context.obtainStyledAttributes(intArrayOf(android.R.attr.textColorPrimary))
             val textColor = ta.getColor(0, 0)
             ta.recycle()
@@ -353,14 +370,14 @@ class VideoDetailContentAdapter(
                 setTextSize(0, textSizePx)
                 setTextColor(textColor)
                 setBackgroundResource(R.drawable.button_common)
-                setPadding(20, 5, 20, 5)
+                setPadding(15, 3, 15, 3)
                 layoutParams = FlexboxLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    topMargin = 10
-                    bottomMargin = 5
-                    rightMargin = 15
+                    topMargin = 5
+                    bottomMargin = 3
+                    rightMargin = 8
                 }
                 isClickable = true
                 isFocusable = true

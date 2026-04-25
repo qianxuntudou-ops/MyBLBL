@@ -9,6 +9,7 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.ext.toast
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import com.tutu.myblbl.core.ui.base.BaseListFragment
+import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.ui.adapter.VideoAdapter
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
@@ -26,12 +27,19 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage {
     private var pendingScrollToTopAfterRefresh = false
 
     override val autoLoad: Boolean = false
-    override val enableLoadMoreFocusController: Boolean = true
-
     override fun createAdapter(): VideoAdapter {
         return VideoAdapter(
             onItemClick = ::onVideoClick,
             onTopEdgeUp = ::focusTopTab,
+            onItemFocusedWithView = { view, position ->
+                tvFocusController?.onItemFocused(view, position)
+            },
+            onItemDpad = { view, keyCode, event ->
+                tvFocusController?.handleKey(view, keyCode, event) == true
+            },
+            onItemsChanged = {
+                notifyTvListDataChanged(TvDataChangeReason.REMOVE_ITEM)
+            },
             detectPortraitFromCover = false
         )
     }
@@ -47,6 +55,7 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage {
         currentPage = 1
         hasMore = true
         pendingScrollToTopAfterRefresh = true
+        clearTvFocusAnchorForUserRefresh()
         isLoading = true
         feedViewModel.refresh()
     }
@@ -142,7 +151,6 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage {
                 showLoading(false)
                 showError(message.ifBlank { getString(R.string.net_error) })
             } else {
-                loadMoreFocusController?.clearPendingFocusAfterLoadMore()
                 if (toastNonEmptyError && message.isNotBlank()) {
                     requireContext().toast(message)
                 }
@@ -186,9 +194,22 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage {
     private fun applyReplacedVideosNow(videos: List<VideoModel>) {
         isLoading = false
         setRefreshing(false)
+        val wasPendingScrollToTop = pendingScrollToTopAfterRefresh
         val shouldPreserveScroll = (adapter?.contentCount() ?: 0) > 0 &&
-            !pendingScrollToTopAfterRefresh
-        setAdapterData(videos, preserveScrollOffset = shouldPreserveScroll)
+            !pendingScrollToTopAfterRefresh &&
+            !isTvListFocusEnabled()
+        setAdapterData(
+            videos,
+            preserveScrollOffset = shouldPreserveScroll,
+            onComplete = {
+                val reason = if (wasPendingScrollToTop) {
+                    TvDataChangeReason.USER_REFRESH
+                } else {
+                    TvDataChangeReason.REPLACE_PRESERVE_ANCHOR
+                }
+                notifyTvListDataChanged(reason)
+            }
+        )
         if (videos.isNotEmpty()) {
             showContent()
             showLoading(false)
@@ -215,7 +236,9 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage {
             showLoading(false)
             dispatchContentReadyIfNeeded()
         }
-        loadMoreFocusController?.consumePendingFocusAfterLoadMore()
+        if (isTvListFocusEnabled()) {
+            notifyTvListDataChanged(TvDataChangeReason.APPEND)
+        }
         feedViewModel.consumeListChange()
     }
 

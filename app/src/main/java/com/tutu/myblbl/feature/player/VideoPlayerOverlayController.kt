@@ -175,7 +175,7 @@ class VideoPlayerOverlayController(
             GridLayoutManager(activity, 1, RecyclerView.HORIZONTAL, false)
         recyclerViewRelated.adapter = relatedAdapter
         if (viewRelated.isVisible) {
-            recyclerViewRelated.requestFocus()
+            focusRelatedItem()
             return
         }
         dimBackground.visibility = View.VISIBLE
@@ -187,7 +187,7 @@ class VideoPlayerOverlayController(
                 override fun onAnimationStart(animation: Animation?) = Unit
 
                 override fun onAnimationEnd(animation: Animation?) {
-                    recyclerViewRelated.post { recyclerViewRelated.requestFocus() }
+                    recyclerViewRelated.post { focusRelatedItem() }
                 }
 
                 override fun onAnimationRepeat(animation: Animation?) = Unit
@@ -411,11 +411,30 @@ class VideoPlayerOverlayController(
                 if (v === viewRelated) return@OnGlobalFocusChangeListener
                 v = v.parent as? View
             }
-            // Focus escaped the panel — bring it back
-            recyclerViewRelated.post { recyclerViewRelated.requestFocus() }
+            recyclerViewRelated.post { focusRelatedItem() }
         }
         viewRelated.viewTreeObserver.addOnGlobalFocusChangeListener(listener)
         relatedPanelFocusListener = listener
+    }
+
+    private fun focusRelatedItem(): Boolean {
+        val itemCount = relatedAdapter.contentCount()
+        val closeButton = viewRelated.findViewById<View?>(R.id.button_close_related)
+        if (itemCount <= 0) {
+            return closeButton?.requestFocus() == true || viewRelated.requestFocus()
+        }
+        recyclerViewRelated.findViewHolderForAdapterPosition(0)?.itemView?.let { itemView ->
+            if (itemView.requestFocus()) {
+                return true
+            }
+        }
+        recyclerViewRelated.scrollToPosition(0)
+        recyclerViewRelated.post {
+            recyclerViewRelated.findViewHolderForAdapterPosition(0)?.itemView?.requestFocus()
+                ?: closeButton?.requestFocus()
+                ?: viewRelated.requestFocus()
+        }
+        return true
     }
 
     private fun removeRelatedPanelFocusTrap() {

@@ -13,7 +13,9 @@ import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
 import com.tutu.myblbl.core.common.content.ContentFilter
-import com.tutu.myblbl.core.ui.focus.RecyclerViewLoadMoreFocusController
+import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
+import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
+import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -40,8 +42,18 @@ class ChannelVideoFragment : BaseFragment<FragmentBaseListBinding>() {
     private var hasMore = true
     private var isLoading = false
     private var recyclerView: RecyclerView? = null
-    private val videoAdapter = VideoAdapter()
-    private var loadMoreFocusController: RecyclerViewLoadMoreFocusController? = null
+    private var tvFocusController: TvListFocusController? = null
+    private val videoAdapter = VideoAdapter(
+        onItemFocusedWithView = { view, position ->
+            tvFocusController?.onItemFocused(view, position)
+        },
+        onItemDpad = { view, keyCode, event ->
+            tvFocusController?.handleKey(view, keyCode, event) == true
+        },
+        onItemsChanged = {
+            tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
+        }
+    )
     private val videoRepository: VideoRepository by inject()
 
     override fun initArguments() {
@@ -76,7 +88,7 @@ class ChannelVideoFragment : BaseFragment<FragmentBaseListBinding>() {
                 }
             }
         })
-        installLoadMoreFocusController()
+        installTvFocusController()
 
         videoAdapter.setOnItemClickListener { _, item ->
             VideoRouteNavigator.openVideo(
@@ -120,15 +132,15 @@ class ChannelVideoFragment : BaseFragment<FragmentBaseListBinding>() {
                     )
                     if (!hasExistingItems) {
                         videoAdapter.setData(videos)
+                        tvFocusController?.onDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
                     } else {
                         videoAdapter.addData(videos)
+                        tvFocusController?.onDataChanged(TvDataChangeReason.APPEND)
                     }
-                    loadMoreFocusController?.consumePendingFocusAfterLoadMore()
                 }
             }.onFailure {
                 showLoading(false)
                 isLoading = false
-                loadMoreFocusController?.clearPendingFocusAfterLoadMore()
                 showError(it.message)
             }
         }
@@ -139,27 +151,25 @@ class ChannelVideoFragment : BaseFragment<FragmentBaseListBinding>() {
         loadData()
     }
 
-    private fun installLoadMoreFocusController() {
+    private fun installTvFocusController() {
         val rv = recyclerView ?: return
-        loadMoreFocusController?.release()
-        loadMoreFocusController = RecyclerViewLoadMoreFocusController(
+        tvFocusController?.release()
+        tvFocusController = TvListFocusController(
             recyclerView = rv,
-            callbacks = object : RecyclerViewLoadMoreFocusController.Callbacks {
-                override fun canLoadMore(): Boolean = !isLoading && hasMore
-
-                override fun loadMore() {
-                    if (!canLoadMore()) {
-                        return
-                    }
+            adapter = videoAdapter,
+            strategy = GridTvFocusStrategy { 4 },
+            canLoadMore = { !isLoading && hasMore },
+            loadMore = {
+                if (!isLoading && hasMore) {
                     loadMore()
                 }
             }
-        ).also { it.install() }
+        )
     }
 
     override fun onDestroyView() {
-        loadMoreFocusController?.release()
-        loadMoreFocusController = null
+        tvFocusController?.release()
+        tvFocusController = null
         videoAdapter.clear()
         recyclerView = null
         super.onDestroyView()

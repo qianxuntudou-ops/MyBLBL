@@ -3,7 +3,6 @@
 package com.tutu.myblbl.feature.me
 
 import android.os.Bundle
-import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.KeyEvent
 import android.view.View
@@ -22,13 +21,15 @@ import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.ui.adapter.HistoryVideoAdapter
 import com.tutu.myblbl.ui.adapter.VideoAdapter
 import com.tutu.myblbl.core.ui.base.BaseFragment
-import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.core.common.cache.FileCacheManager
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.content.ContentFilter
-import com.tutu.myblbl.core.ui.focus.RecyclerViewLoadMoreFocusController
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
+import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
+import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
+import com.tutu.myblbl.core.ui.focus.tv.TvFocusableAdapter
+import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import kotlinx.coroutines.flow.collectLatest
@@ -66,13 +67,12 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     private var lastFocusedHistoryPosition = RecyclerView.NO_POSITION
     private var lastFocusedHistoryKey: String? = null
     private var pendingRestoreFocus = false
-    private var pendingListLayoutState: Parcelable? = null
     private var pendingHistoryAnchorPosition = RecyclerView.NO_POSITION
     private var pendingHistoryAnchorOffset = 0
     private var pendingHistoryReturnRestore = false
     private var pendingHistoryScrollToTop = false
     private var lastKnownLoggedIn = false
-    private var loadMoreFocusController: RecyclerViewLoadMoreFocusController? = null
+    private var tvFocusController: TvListFocusController? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,13 +93,31 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                 onTopEdgeUp = {
                     focusTopTab()
                 },
-                onItemFocused = { position -> lastFocusedHistoryPosition = position }
+                onItemFocused = { position -> lastFocusedHistoryPosition = position },
+                onItemFocusedWithView = { view, position ->
+                    tvFocusController?.onItemFocused(view, position)
+                },
+                onItemDpad = { view, keyCode, event ->
+                    tvFocusController?.handleKey(view, keyCode, event) == true
+                },
+                onItemsChanged = {
+                    tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
+                }
             )
         } else {
             videoAdapter = VideoAdapter(
                 onItemClick = ::onVideoClick,
                 onTopEdgeUp = {
                     focusTopTab()
+                },
+                onItemFocusedWithView = { view, position ->
+                    tvFocusController?.onItemFocused(view, position)
+                },
+                onItemDpad = { view, keyCode, event ->
+                    tvFocusController?.handleKey(view, keyCode, event) == true
+                },
+                onItemsChanged = {
+                    tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
                 }
             ).apply {
                 setShowLoadMore(false)
@@ -126,7 +144,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             }
         }
         setupLoadMore()
-        installLoadMoreFocusControllerIfNeeded()
+        installTvFocusControllerIfNeeded()
         swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(
             recyclerView = binding.recyclerView,
             onRefresh = { refresh() }
@@ -206,7 +224,6 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.error.collectLatest { error ->
                     error?.let {
-                        loadMoreFocusController?.clearPendingFocusAfterLoadMore()
                         if (!hasContentItems()) {
                             showState(it, showRetry = shouldShowRetry(it))
                         }
@@ -239,6 +256,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                                     }
                                     if (filtered.size < snapshot.size) {
                                         adapter.setData(filtered)
+                                        tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
                                         updateContentState(filtered.isEmpty())
                                     }
                                 }
@@ -261,7 +279,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
 
     private fun onVideoClick(video: VideoModel) {
         pendingRestoreFocus = true
-        pendingListLayoutState = binding.recyclerView.layoutManager?.onSaveInstanceState()
+        tvFocusController?.captureCurrentAnchor()
         VideoRouteNavigator.openVideo(
             context = requireContext(),
             video = video,
@@ -280,7 +298,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             pendingRestoreFocus = true
             pendingHistoryReturnRestore = true
             pendingHistoryScrollToTop = false
-            pendingListLayoutState = binding.recyclerView.layoutManager?.onSaveInstanceState()
+            tvFocusController?.captureCurrentAnchor()
             captureHistoryViewportAnchor()
             VideoRouteNavigator.openHistory(
                 context = requireContext(),
@@ -310,7 +328,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         val shouldRestoreFocus = pendingHistoryReturnRestore && filtered.isNotEmpty()
         val shouldScrollToTop = pendingHistoryScrollToTop && filtered.isNotEmpty()
         adapter.setData(filtered) {
-            loadMoreFocusController?.consumePendingFocusAfterLoadMore()
+            tvFocusController?.onDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
             when {
                 shouldRestoreFocus -> {
                     restoreContentFocus()
@@ -330,36 +348,35 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         val adapter = videoAdapter ?: return
         val filtered = ContentFilter.filterVideos(requireContext(), videos)
         adapter.setData(filtered)
-        loadMoreFocusController?.consumePendingFocusAfterLoadMore()
+        tvFocusController?.onDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
         cacheLaterVideos(videos)
         updateContentState(filtered.isEmpty())
     }
 
-    private fun installLoadMoreFocusControllerIfNeeded() {
+    private fun installTvFocusControllerIfNeeded() {
         if (type != TYPE_HISTORY && type != TYPE_LATER) {
             return
         }
-        loadMoreFocusController?.release()
-        loadMoreFocusController = RecyclerViewLoadMoreFocusController(
+        val focusableAdapter = (historyAdapter ?: videoAdapter) as? TvFocusableAdapter ?: return
+        tvFocusController?.release()
+        tvFocusController = TvListFocusController(
             recyclerView = binding.recyclerView,
-            callbacks = object : RecyclerViewLoadMoreFocusController.Callbacks {
-                override fun canLoadMore(): Boolean {
-                    return when (type) {
-                        TYPE_HISTORY -> !viewModel.loading.value && viewModel.hasMore.value
-                        TYPE_LATER -> false
-                        else -> false
-                    }
+            adapter = focusableAdapter,
+            strategy = GridTvFocusStrategy { 4 },
+            canLoadMore = {
+                when (type) {
+                    TYPE_HISTORY -> !viewModel.loading.value && viewModel.hasMore.value
+                    TYPE_LATER -> false
+                    else -> false
                 }
-
-                override fun loadMore() {
-                    if (!canLoadMore()) {
-                        return
-                    }
+            },
+            loadMore = {
+                if (type == TYPE_HISTORY && !viewModel.loading.value && viewModel.hasMore.value) {
                     currentPage++
                     loadData()
                 }
             }
-        ).also { it.install() }
+        )
     }
 
     private fun updateContentState(isEmpty: Boolean) {
@@ -399,7 +416,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         pendingRestoreFocus = false
         pendingHistoryReturnRestore = false
         pendingHistoryScrollToTop = type == TYPE_HISTORY
-        pendingListLayoutState = null
+        tvFocusController?.clearAnchorForUserRefresh()
         pendingHistoryAnchorPosition = RecyclerView.NO_POSITION
         pendingHistoryAnchorOffset = 0
         if (type == TYPE_HISTORY) {
@@ -459,6 +476,9 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         if (itemCount == 0) {
             return false
         }
+        if (tvFocusController?.focusPrimary() == true) {
+            return true
+        }
         val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
             recyclerView = binding.recyclerView,
             itemCount = itemCount
@@ -498,10 +518,6 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             if (!isAdded || binding.recyclerView.visibility != View.VISIBLE) {
                 return@post
             }
-            pendingListLayoutState?.let { state ->
-                binding.recyclerView.layoutManager?.onRestoreInstanceState(state)
-                pendingListLayoutState = null
-            }
             if (type == TYPE_HISTORY) {
                 val adapter = historyAdapter ?: return@post
                 restoreHistoryViewportAnchor()
@@ -512,24 +528,14 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
                         .takeIf { it != RecyclerView.NO_POSITION }
                         ?.coerceIn(0, adapter.itemCount - 1)
                     ?: 0
-                val handled = requestVisibleHistoryFocus(targetPosition)
+                val handled = tvFocusController?.requestFocusPosition(targetPosition) == true ||
+                    requestVisibleHistoryFocus(targetPosition)
                 binding.recyclerView.post {
                     restoreHistoryViewportAnchor()
                 }
             } else {
-                val handled = videoAdapter?.focusedView?.requestFocus() == true
-                if (!handled) {
-                    val adapter = videoAdapter
-                    val rememberedPosition = adapter?.getRememberedPosition() ?: RecyclerView.NO_POSITION
-                    if (rememberedPosition != RecyclerView.NO_POSITION && (adapter?.contentCount() ?: 0) > 0) {
-                        RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
-                            recyclerView = binding.recyclerView,
-                            position = rememberedPosition.coerceIn(0, adapter!!.contentCount() - 1),
-                            scrollIfMissing = false
-                        )
-                    } else {
-                        focusPrimaryContent()
-                    }
+                if (tvFocusController?.focusPrimary() != true) {
+                    focusPrimaryContent()
                 }
             }
         }
@@ -556,11 +562,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     }
 
     private fun requestItemFocus(position: Int, retries: Int = 6) {
-        val result = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
-            recyclerView = binding.recyclerView,
-            position = position
-        )
-        if (result.handled || retries <= 0) {
+        if (tvFocusController?.requestFocusPosition(position) == true || retries <= 0) {
             return
         }
         binding.recyclerView.post { requestItemFocus(position, retries - 1) }
@@ -600,7 +602,6 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     }
 
     private fun scrollHistoryListToTopAfterRefresh() {
-        pendingListLayoutState = null
         pendingHistoryAnchorPosition = RecyclerView.NO_POSITION
         pendingHistoryAnchorOffset = 0
         binding.recyclerView.stopScroll()
@@ -626,8 +627,10 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             return
         }
         if (immediate) {
+            tvFocusController?.clearAnchorForUserRefresh()
             binding.recyclerView.scrollToPosition(0)
         } else {
+            tvFocusController?.clearAnchorForUserRefresh()
             binding.recyclerView.smoothScrollToPosition(0)
         }
     }
@@ -697,8 +700,8 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
     }
 
     override fun onDestroyView() {
-        loadMoreFocusController?.release()
-        loadMoreFocusController = null
+        tvFocusController?.release()
+        tvFocusController = null
         super.onDestroyView()
     }
 

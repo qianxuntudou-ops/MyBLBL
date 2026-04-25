@@ -20,13 +20,14 @@ object VideoCardFocusHelper {
         onLeftEdge: (() -> Boolean)? = null,
         onRightEdge: (() -> Boolean)? = null,
         onBottomEdgeDown: (() -> Boolean)? = null,
+        handleListDpadDown: Boolean = true,
         chainedListener: View.OnKeyListener? = null
     ) {
         installDetachProtection(view)
         view.setOnKeyListener { target, keyCode, event ->
             val handledBySidebar = handleSidebarNavigation(
                 target, keyCode, event,
-                onTopEdgeUp, onLeftEdge, onRightEdge, onBottomEdgeDown
+                onTopEdgeUp, onLeftEdge, onRightEdge, onBottomEdgeDown, handleListDpadDown
             )
             if (handledBySidebar) {
                 true
@@ -90,7 +91,8 @@ object VideoCardFocusHelper {
         onTopEdgeUp: (() -> Boolean)?,
         onLeftEdge: (() -> Boolean)?,
         onRightEdge: (() -> Boolean)?,
-        onBottomEdgeDown: (() -> Boolean)?
+        onBottomEdgeDown: (() -> Boolean)?,
+        handleListDpadDown: Boolean
     ): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) {
             return false
@@ -128,6 +130,9 @@ object VideoCardFocusHelper {
                 val atBottomEdge = isAtBottomEdge(target)
                 if (atBottomEdge && onBottomEdgeDown != null) {
                     return onBottomEdgeDown()
+                }
+                if (!handleListDpadDown) {
+                    return false
                 }
                 val loadMoreController = RecyclerViewLoadMoreFocusController.fromView(target)
                 if (loadMoreController != null) {

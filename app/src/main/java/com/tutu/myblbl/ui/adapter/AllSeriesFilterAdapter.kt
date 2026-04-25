@@ -36,17 +36,12 @@ class AllSeriesFilterAdapter(
     private var expanded = false
     private var focusedPosition = RecyclerView.NO_POSITION
     private var pendingFocusPosition = RecyclerView.NO_POSITION
-    var focusedView: View? = null
-        private set
 
     fun setData(data: List<AllSeriesFilterModel>) {
-        focusedView = null
+        focusedPosition = focusedPosition
+            .takeIf { it != RecyclerView.NO_POSITION && it < data.size }
+            ?: RecyclerView.NO_POSITION
         submitList(data)
-    }
-
-    fun requestFocusedView(): Boolean {
-        val view = focusedView ?: return false
-        return view.requestFocus()
     }
 
     fun requestSavedItemFocus(recyclerView: RecyclerView): Boolean {
@@ -86,7 +81,6 @@ class AllSeriesFilterAdapter(
             false
         )
         return FilterViewHolder(binding, onItemClick, onTopEdgeUp) { view ->
-            focusedView = view
             focusedPosition = holderBindingAdapterPosition(view)
             onItemFocused?.invoke()
         }.also { holder ->

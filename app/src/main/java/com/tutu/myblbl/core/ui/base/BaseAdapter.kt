@@ -8,36 +8,37 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
+import com.tutu.myblbl.core.ui.focus.tv.TvFocusableAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.Adapter<VH>() {
+abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.Adapter<VH>(), TvFocusableAdapter {
 
     internal val items = ArrayList<MODEL>()
     internal var showLoadMore = true
-    internal var focusedView: View? = null
-    internal var rememberedPosition: Int = RecyclerView.NO_POSITION
 
     private val adapterScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
 
     protected open fun areItemsSame(old: MODEL, new: MODEL): Boolean = old == new
     protected open fun areContentsSame(old: MODEL, new: MODEL): Boolean = old == new
+    protected open fun getFocusStableKey(item: MODEL): String? = null
 
     fun contentCount(): Int = items.size
 
-    fun getRememberedPosition(): Int = rememberedPosition
+    override fun focusableItemCount(): Int = contentCount()
 
-    fun rememberItemInteraction(view: View, position: Int) {
-        if (position == RecyclerView.NO_POSITION) {
-            return
-        }
-        focusedView = view
-        rememberedPosition = position
+    override fun stableKeyAt(position: Int): String? {
+        return items.getOrNull(position)?.let(::getFocusStableKey)
+    }
+
+    override fun findPositionByStableKey(key: String): Int {
+        return items.indexOfFirst { getFocusStableKey(it) == key }
+            .takeIf { it >= 0 }
+            ?: RecyclerView.NO_POSITION
     }
 
     fun setShowLoadMore(show: Boolean) {
@@ -71,10 +72,6 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
     abstract fun onCreateContentViewHolder(parent: ViewGroup, viewType: Int): VH
 
     fun setData(data: List<MODEL>, onComplete: (() -> Unit)? = null) {
-        focusedView = null
-        rememberedPosition = rememberedPosition
-            .takeIf { it != RecyclerView.NO_POSITION && it < data.size }
-            ?: RecyclerView.NO_POSITION
         val oldItems = items.toList()
         adapterScope.launch {
             val diffResult = withContext(Dispatchers.Default) {
@@ -123,8 +120,6 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
     }
 
     fun clear() {
-        focusedView = null
-        rememberedPosition = RecyclerView.NO_POSITION
         items.clear()
     }
 

@@ -29,6 +29,9 @@ class VideoAdapter(
     private val onTopEdgeUp: (() -> Boolean)? = null,
     private val onBottomEdgeDown: (() -> Boolean)? = null,
     private val onItemFocused: ((Int) -> Unit)? = null,
+    private val onItemFocusedWithView: ((View, Int) -> Unit)? = null,
+    private val onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null,
+    private val onItemsChanged: (() -> Unit)? = null,
     private val detectPortraitFromCover: Boolean = true
 ) : BaseAdapter<VideoModel, VideoAdapter.VideoViewHolder>() {
 
@@ -103,16 +106,17 @@ class VideoAdapter(
             onBottomEdgeDown,
             { view, position, hasFocus ->
                 if (hasFocus) {
-                    rememberItemInteraction(view, position)
                     onItemFocused?.invoke(position)
+                    onItemFocusedWithView?.invoke(view, position)
                 }
             },
             { view, position ->
-                rememberItemInteraction(view, position)
                 onItemFocused?.invoke(position)
+                onItemFocusedWithView?.invoke(view, position)
             },
             { video -> removeDislikedItem(video) },
             { upName -> removeDislikedUpItems(upName) },
+            onItemDpad,
             detectPortraitFromCover
         )
     }
@@ -121,6 +125,8 @@ class VideoAdapter(
         val video = items[position]
         holder.bind(video, video.aid == currentPlayingAid)
     }
+
+    override fun getFocusStableKey(item: VideoModel): String = videoKey(item)
 
     override fun getItemId(position: Int): Long {
         return if (position < items.size) videoKey(items[position]).hashCode().toLong() else super.getItemId(position)
@@ -146,24 +152,26 @@ class VideoAdapter(
         val key = videoKey(video)
         val filtered = items.filter { videoKey(it) != key }
         if (filtered.size == items.size) return
-        val viewToFocus = focusedView
         submitItemsInBackground(
             newItems = filtered,
             areItemsTheSame = { old, new -> DIFF_CALLBACK.areItemsTheSame(old, new) },
             areContentsTheSame = { old, new -> DIFF_CALLBACK.areContentsTheSame(old, new) },
-            onComplete = { viewToFocus?.requestFocus() }
+            onComplete = {
+                onItemsChanged?.invoke()
+            }
         )
     }
 
     private fun removeDislikedUpItems(upName: String) {
         val filtered = items.filter { !it.authorName.equals(upName, ignoreCase = true) }
         if (filtered.size == items.size) return
-        val viewToFocus = focusedView
         submitItemsInBackground(
             newItems = filtered,
             areItemsTheSame = { old, new -> DIFF_CALLBACK.areItemsTheSame(old, new) },
             areContentsTheSame = { old, new -> DIFF_CALLBACK.areContentsTheSame(old, new) },
-            onComplete = { viewToFocus?.requestFocus() }
+            onComplete = {
+                onItemsChanged?.invoke()
+            }
         )
     }
 
@@ -177,6 +185,7 @@ class VideoAdapter(
         private val onItemInteracted: ((View, Int) -> Unit)? = null,
         private val onItemDisliked: ((VideoModel) -> Unit)? = null,
         private val onUpDisliked: ((String) -> Unit)? = null,
+        private val onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null,
         private val detectPortraitFromCover: Boolean = true
     ) : androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root) {
 
@@ -185,7 +194,7 @@ class VideoAdapter(
         private var longPressRunnable: Runnable? = null
         private var longPressTriggered = false
 
-        private val keyListener = View.OnKeyListener { _, keyCode, event ->
+        private val keyListener = View.OnKeyListener { view, keyCode, event ->
             if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
                 when (event.action) {
                     KeyEvent.ACTION_DOWN -> {
@@ -199,7 +208,7 @@ class VideoAdapter(
                 }
                 false
             } else {
-                false
+                onItemDpad?.invoke(view, keyCode, event) == true
             }
         }
 
@@ -262,6 +271,7 @@ class VideoAdapter(
                 view = binding.root,
                 onTopEdgeUp = onTopEdgeUp,
                 onBottomEdgeDown = onBottomEdgeDown,
+                handleListDpadDown = false,
                 chainedListener = keyListener
             )
             if (onFocusChange != null) {

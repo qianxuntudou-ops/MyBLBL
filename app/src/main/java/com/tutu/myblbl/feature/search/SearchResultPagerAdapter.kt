@@ -16,9 +16,11 @@ import com.tutu.myblbl.model.search.SearchItemModel
 import com.tutu.myblbl.model.search.SearchType
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.content.ContentFilter
-import com.tutu.myblbl.core.ui.focus.RecyclerViewLoadMoreFocusController
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
+import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
+import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
+import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
 
 class SearchResultPagerAdapter(
     private val onItemClick: (SearchResultEntry) -> Unit,
@@ -146,13 +148,13 @@ class SearchResultPagerAdapter(
         private var currentType: SearchType? = null
         private var currentAdapter: SearchItemAdapter? = null
         private var currentPage: SearchResultPage? = null
-        private var loadMoreFocusController: RecyclerViewLoadMoreFocusController? = null
+        private var tvFocusController: TvListFocusController? = null
+        private var currentSpanCount: Int = 4
 
         fun bind(page: SearchResultPage) {
             currentPage = page
             if (currentType != page.type || currentAdapter == null) {
                 currentType = page.type
-                currentAdapter = SearchItemAdapter(page.type, onItemClick, onTopEdgeUp)
                 val spanCount = when (page.type) {
                     SearchType.Video,
                     SearchType.LiveRoom -> 4
@@ -161,6 +163,21 @@ class SearchResultPagerAdapter(
                     SearchType.FilmAndTv,
                     SearchType.User -> 6
                 }
+                currentSpanCount = spanCount
+                currentAdapter = SearchItemAdapter(
+                    page.type,
+                    onItemClick,
+                    onTopEdgeUp,
+                    onItemFocused = { view, position ->
+                        tvFocusController?.onItemFocused(view, position)
+                    },
+                    onItemDpad = { view, keyCode, event ->
+                        tvFocusController?.handleKey(view, keyCode, event) == true
+                    },
+                    onItemsChanged = {
+                        tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
+                    }
+                )
                 binding.recyclerViewResult.layoutManager =
                     WrapContentGridLayoutManager(binding.root.context, spanCount)
                 binding.recyclerViewResult.adapter = currentAdapter
@@ -196,7 +213,7 @@ class SearchResultPagerAdapter(
                         }
                     }
                 })
-                installLoadMoreFocusController()
+                installTvFocusController()
             }
             submit(page)
         }
@@ -208,7 +225,7 @@ class SearchResultPagerAdapter(
                 binding.recyclerViewResult.isVisible = filteredItems.isNotEmpty()
                 binding.textEmpty.isVisible = !page.loading && filteredItems.isEmpty()
                 binding.textEmpty.setText(R.string.search_empty)
-                loadMoreFocusController?.consumePendingFocusAfterLoadMore()
+                tvFocusController?.onDataChanged(TvDataChangeReason.APPEND)
                 Unit
             }
             if (binding.recyclerViewResult.isComputingLayout) {
@@ -232,11 +249,12 @@ class SearchResultPagerAdapter(
         }
 
         fun release() {
-            loadMoreFocusController?.release()
-            loadMoreFocusController = null
+            tvFocusController?.release()
+            tvFocusController = null
         }
 
         fun scrollToTop() {
+            tvFocusController?.clearAnchorForUserRefresh()
             binding.recyclerViewResult.smoothScrollToPosition(0)
         }
 
@@ -244,41 +262,44 @@ class SearchResultPagerAdapter(
             if (currentAdapter?.itemCount.orZero() <= 0) {
                 return false
             }
-            return TabContentFocusHelper.requestSpatialOrPrimary(
-                anchorView = anchorView,
-                root = binding.recyclerViewResult,
-                direction = View.FOCUS_DOWN
-            ) {
-                TabContentFocusHelper.requestRecyclerPrimaryFocus(
-                    recyclerView = binding.recyclerViewResult,
-                    itemCount = currentAdapter?.itemCount.orZero()
-                ).resolved
+            if (anchorView != null) {
+                val handled = TabContentFocusHelper.requestSpatialOrPrimary(
+                    anchorView = anchorView,
+                    root = binding.recyclerViewResult,
+                    direction = View.FOCUS_DOWN
+                ) {
+                    tvFocusController?.focusPrimary() == true
+                }
+                if (handled) {
+                    return true
+                }
             }
+            return tvFocusController?.focusPrimary() == true
         }
 
-        private fun installLoadMoreFocusController() {
-            loadMoreFocusController?.release()
-            loadMoreFocusController = RecyclerViewLoadMoreFocusController(
+        private fun installTvFocusController() {
+            tvFocusController?.release()
+            val adapter = currentAdapter ?: return
+            tvFocusController = TvListFocusController(
                 recyclerView = binding.recyclerViewResult,
-                callbacks = object : RecyclerViewLoadMoreFocusController.Callbacks {
-                    override fun canLoadMore(): Boolean {
-                        val page = currentPage
-                        return page != null && page.hasMore && !page.loading
+                adapter = adapter,
+                strategy = GridTvFocusStrategy { currentSpanCount },
+                canLoadMore = {
+                    val page = currentPage
+                    page != null && page.hasMore && !page.loading
+                },
+                loadMore = loadMore@{
+                    val type = currentType ?: return@loadMore
+                    val page = currentPage ?: return@loadMore
+                    if (!page.hasMore || page.loading) {
+                        return@loadMore
                     }
-
-                    override fun loadMore() {
-                        val type = currentType ?: return
-                        val page = currentPage ?: return
-                        if (!page.hasMore || page.loading) {
-                            return
-                        }
-                        page.loading = true
-                        binding.recyclerViewResult.post {
-                            onLoadMore(type)
-                        }
+                    page.loading = true
+                    binding.recyclerViewResult.post {
+                        onLoadMore(type)
                     }
                 }
-            ).also { it.install() }
+            )
         }
     }
 

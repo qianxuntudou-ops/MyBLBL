@@ -19,20 +19,23 @@ import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.common.format.NumberUtils
 import com.tutu.myblbl.core.common.time.TimeUtils
 import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
+import com.tutu.myblbl.core.ui.focus.tv.TvFocusableAdapter
 import com.tutu.myblbl.ui.dialog.VideoCardMenuDialog
 
 class DynamicVideoAdapter(
     private val onItemClick: (VideoModel) -> Unit,
     private val onItemFocused: (Int) -> Unit,
-    private val onLeftEdge: () -> Boolean = { false }
-) : ListAdapter<VideoModel, DynamicVideoAdapter.ViewHolder>(DiffCallback) {
+    private val onLeftEdge: () -> Boolean = { false },
+    private val onItemFocusedWithView: ((View, Int) -> Unit)? = null,
+    private val onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null,
+    private val onItemsChanged: (() -> Unit)? = null
+) : ListAdapter<VideoModel, DynamicVideoAdapter.ViewHolder>(DiffCallback), TvFocusableAdapter {
 
-    var focusedView: View? = null
-        private set
+    private var focusedPosition = RecyclerView.NO_POSITION
 
     fun setData(list: List<VideoModel>) {
         val deduplicated = deduplicate(list)
-        focusedView = null
+        focusedPosition = RecyclerView.NO_POSITION
         submitList(deduplicated)
     }
 
@@ -45,6 +48,18 @@ class DynamicVideoAdapter(
     }
 
     fun getItemsSnapshot(): List<VideoModel> = currentList.toList()
+
+    override fun focusableItemCount(): Int = itemCount
+
+    override fun stableKeyAt(position: Int): String? {
+        return currentList.getOrNull(position)?.let(::dynamicVideoKey)
+    }
+
+    override fun findPositionByStableKey(key: String): Int {
+        return currentList.indexOfFirst { dynamicVideoKey(it) == key }
+            .takeIf { it >= 0 }
+            ?: RecyclerView.NO_POSITION
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = CellVideoBinding.inflate(
@@ -68,16 +83,18 @@ class DynamicVideoAdapter(
     private fun removeBlockedItems(blockedName: String) {
         val filtered = currentList.filter { !it.authorName.equals(blockedName, ignoreCase = true) }
         if (filtered.size == currentList.size) return
-        submitList(filtered)
-        focusedView?.requestFocus()
+        submitList(filtered) {
+            onItemsChanged?.invoke()
+        }
     }
 
     private fun removeDislikedItem(video: VideoModel) {
         val key = dynamicVideoKey(video)
         val filtered = currentList.filter { dynamicVideoKey(it) != key }
         if (filtered.size == currentList.size) return
-        submitList(filtered)
-        focusedView?.requestFocus()
+        submitList(filtered) {
+            onItemsChanged?.invoke()
+        }
     }
 
     inner class ViewHolder(
@@ -89,7 +106,7 @@ class DynamicVideoAdapter(
         private var longPressRunnable: Runnable? = null
         private var longPressTriggered = false
 
-        private val keyListener = View.OnKeyListener { _, keyCode, event ->
+        private val keyListener = View.OnKeyListener { view, keyCode, event ->
             if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
                 when (event.action) {
                     KeyEvent.ACTION_DOWN -> {
@@ -103,7 +120,7 @@ class DynamicVideoAdapter(
                 }
                 false
             } else {
-                false
+                onItemDpad?.invoke(view, keyCode, event) == true
             }
         }
 
@@ -115,16 +132,18 @@ class DynamicVideoAdapter(
                 }
                 val position = bindingAdapterPosition
                 if (position != NO_POSITION) {
-                    focusedView = binding.root
+                    focusedPosition = position
                     onItemFocused(position)
+                    onItemFocusedWithView?.invoke(binding.root, position)
                     onItemClick(getItem(position))
                 }
             }
             binding.root.setOnFocusChangeListener { view, hasFocus ->
                 val position = bindingAdapterPosition
                 if (hasFocus && position != NO_POSITION) {
-                    focusedView = view
+                    focusedPosition = position
                     onItemFocused(position)
+                    onItemFocusedWithView?.invoke(view, position)
                 }
             }
             binding.root.setOnTouchListener { _, event ->
@@ -137,6 +156,7 @@ class DynamicVideoAdapter(
             VideoCardFocusHelper.bindSidebarExit(
                 view = binding.root,
                 onLeftEdge = onLeftEdge,
+                handleListDpadDown = false,
                 chainedListener = keyListener
             )
         }

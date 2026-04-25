@@ -380,7 +380,7 @@ class SeriesDetailContentAdapter(
             if (orderButtonFocused && binding.buttonOrder.isShown && binding.buttonOrder.requestFocus()) {
                 return true
             }
-            return adapter.requestFocusedView()
+            return adapter.requestStoredItemFocus(binding.recyclerView)
         }
 
         private fun onRowContentFocused() {
@@ -420,7 +420,7 @@ class SeriesDetailContentAdapter(
         }
 
         fun requestStoredFocus(): Boolean {
-            return adapter.requestFocusedView()
+            return adapter.requestStoredItemFocus(binding.recyclerView)
         }
 
         private fun onRowContentFocused() {
@@ -455,7 +455,7 @@ class SeriesDetailContentAdapter(
         }
 
         fun requestStoredFocus(): Boolean {
-            return adapter.requestFocusedView()
+            return adapter.requestStoredItemFocus(binding.recyclerView)
         }
 
         private fun onRowContentFocused() {
@@ -490,7 +490,7 @@ class SeriesDetailContentAdapter(
         }
 
         fun requestStoredFocus(): Boolean {
-            return adapter.requestFocusedView()
+            return adapter.requestStoredItemFocus(binding.recyclerView)
         }
 
         private fun onRowContentFocused() {
@@ -504,19 +504,25 @@ class SeriesDetailContentAdapter(
         private val onVerticalKey: ((View, Int) -> Boolean)? = null
     ) : ListAdapter<VideoModel, SectionEpisodeAdapter.SectionEpisodeViewHolder>(VideoItemCallback) {
 
-        private var focusedView: View? = null
+        private var focusedPosition = RecyclerView.NO_POSITION
 
         fun setItems(data: List<VideoModel>) {
             if (currentList == data) {
                 return
             }
-            focusedView = null
+            focusedPosition = focusedPosition
+                .takeIf { it != RecyclerView.NO_POSITION && it < data.size }
+                ?: RecyclerView.NO_POSITION
             submitList(data)
         }
 
-        fun requestFocusedView(): Boolean {
-            val view = focusedView ?: return false
-            return view.requestFocus()
+        fun requestStoredItemFocus(recyclerView: RecyclerView): Boolean {
+            val position = focusedPosition
+            if (position == RecyclerView.NO_POSITION) {
+                return false
+            }
+            return (recyclerView.findViewHolderForAdapterPosition(position) as? SectionEpisodeViewHolder)
+                ?.requestFocus() == true
         }
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SectionEpisodeViewHolder {
@@ -530,7 +536,7 @@ class SeriesDetailContentAdapter(
             }.also { holder ->
                 holder.onVerticalKey = onVerticalKey
                 holder.onFocusedViewChanged = { view ->
-                    focusedView = view
+                    focusedPosition = recyclerPositionOf(view)
                 }
             }
         }
@@ -548,6 +554,8 @@ class SeriesDetailContentAdapter(
             private var currentItem: VideoModel? = null
             var onVerticalKey: ((View, Int) -> Boolean)? = null
             var onFocusedViewChanged: ((View) -> Unit)? = null
+
+            fun requestFocus(): Boolean = binding.clickView.requestFocus()
 
             init {
                 binding.clickView.setOnClickListener {
@@ -593,6 +601,10 @@ class SeriesDetailContentAdapter(
                     view.layoutParams = layoutParams
                 }
             }
+        }
+
+        private fun recyclerPositionOf(view: View): Int {
+            return (view.parent as? RecyclerView)?.getChildAdapterPosition(view) ?: RecyclerView.NO_POSITION
         }
 
         companion object {

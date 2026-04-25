@@ -20,7 +20,6 @@ class FavoriteFolderAdapter(
 ) : ListAdapter<FavoriteFolderModel, FavoriteFolderAdapter.FolderViewHolder>(DIFF_CALLBACK) {
 
     private var focusedPosition = RecyclerView.NO_POSITION
-    private var focusedView: View? = null
     private var attachedRecyclerView: RecyclerView? = null
 
     companion object {
@@ -41,7 +40,7 @@ class FavoriteFolderAdapter(
 
     fun setData(newItems: List<FavoriteFolderModel>) {
         focusedPosition = focusedPosition
-            .takeIf { it != RecyclerView.NO_POSITION && it < newItems.size && hasActiveFocus() }
+            .takeIf { it != RecyclerView.NO_POSITION && it < newItems.size }
             ?: RecyclerView.NO_POSITION
         submitList(newItems)
     }
@@ -77,7 +76,7 @@ class FavoriteFolderAdapter(
     }
 
     override fun onBindViewHolder(holder: FolderViewHolder, position: Int) {
-        holder.bind(getItem(position), position == focusedPosition && hasActiveFocus())
+        holder.bind(getItem(position), position == focusedPosition)
     }
 
     override fun getItemId(position: Int): Long = getItem(position).id
@@ -91,16 +90,12 @@ class FavoriteFolderAdapter(
         if (attachedRecyclerView === recyclerView) {
             attachedRecyclerView = null
         }
-        focusedView = null
         focusedPosition = RecyclerView.NO_POSITION
         super.onDetachedFromRecyclerView(recyclerView)
     }
 
     override fun onViewRecycled(holder: FolderViewHolder) {
-        if (focusedView === holder.itemView) {
-            focusedView = null
-            focusedPosition = RecyclerView.NO_POSITION
-        }
+        setFocusedState(holder.itemView, false)
         super.onViewRecycled(holder)
     }
 
@@ -121,17 +116,14 @@ class FavoriteFolderAdapter(
                     return@setOnFocusChangeListener
                 }
                 if (hasFocus) {
-                    val prev = focusedView
-                    focusedView = binding.root
+                    val previous = focusedPosition
                     focusedPosition = position
-                    setFocusedState(prev, false)
+                    if (previous != RecyclerView.NO_POSITION && previous != position) {
+                        notifyItemChanged(previous)
+                    }
                     setFocusedState(binding.root, true)
                     onItemFocused?.invoke(position)
                 } else {
-                    if (focusedView === binding.root) {
-                        focusedView = null
-                        focusedPosition = RecyclerView.NO_POSITION
-                    }
                     setFocusedState(binding.root, false)
                 }
             }
@@ -166,6 +158,4 @@ class FavoriteFolderAdapter(
         view.isSelected = focused
         view.findViewById<AppCompatTextView>(com.tutu.myblbl.R.id.tvTitle)?.isSelected = focused
     }
-
-    private fun hasActiveFocus(): Boolean = focusedView?.hasFocus() == true
 }

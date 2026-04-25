@@ -26,9 +26,11 @@ import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.ui.base.RecyclerViewFocusRestoreHelper
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.core.common.content.ContentFilter
-import com.tutu.myblbl.core.ui.focus.RecyclerViewLoadMoreFocusController
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
+import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
+import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
+import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import kotlinx.coroutines.Dispatchers
@@ -68,7 +70,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     private var pendingScrollToTop = false
     private var pendingVideoFocusRestoreOnResume = false
     private var preferredContentFocusTarget = ContentFocusTarget.LEFT_UP_LIST
-    private var videoLoadMoreFocusController: RecyclerViewLoadMoreFocusController? = null
+    private var videoFocusController: TvListFocusController? = null
 
     override fun getViewBinding(
         inflater: LayoutInflater,
@@ -119,7 +121,16 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                 lastFocusedVideoPosition = position
                 preferredContentFocusTarget = ContentFocusTarget.RIGHT_VIDEO_LIST
             },
-            onLeftEdge = { focusSelectedUpItem() }
+            onLeftEdge = { focusSelectedUpItem() },
+            onItemFocusedWithView = { view, position ->
+                videoFocusController?.onItemFocused(view, position)
+            },
+            onItemDpad = { view, keyCode, event ->
+                videoFocusController?.handleKey(view, keyCode, event) == true
+            },
+            onItemsChanged = {
+                videoFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
+            }
         )
         binding.recyclerViewRight.layoutManager = WrapContentGridLayoutManager(requireContext(), 3)
         binding.recyclerViewRight.adapter = videoAdapter
@@ -131,7 +142,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                 if (dy > 0) checkLoadMore()
             }
         })
-        installVideoLoadMoreFocusController()
+        installVideoFocusController()
         swipeRefreshLayout = SwipeRefreshHelper.wrapRecyclerView(
             recyclerView = binding.recyclerViewRight,
             onRefresh = ::refreshCurrentVideoList
@@ -260,7 +271,9 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                     } else if (videos.isNotEmpty()) {
                         videoAdapter.addData(videos)
                     }
-                    videoLoadMoreFocusController?.consumePendingFocusAfterLoadMore()
+                    videoFocusController?.onDataChanged(
+                        if (page <= 1) TvDataChangeReason.REPLACE_PRESERVE_ANCHOR else TvDataChangeReason.APPEND
+                    )
                     if (videos.isNotEmpty()) {
                         showContent()
                         if (pendingScrollToTop) {
@@ -296,7 +309,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                 viewModel.status.collectLatest { status ->
                     latestStatus = status
                     if (status == DynamicViewModel.DynamicStatus.Error) {
-                        videoLoadMoreFocusController?.clearPendingFocusAfterLoadMore()
+                        videoFocusController?.clearAnchorForUserRefresh()
                     }
                     renderUiState()
                 }
@@ -423,16 +436,8 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         if (viewError?.visibility == View.VISIBLE || videoAdapter.itemCount == 0) {
             return
         }
-        val fv = videoAdapter.focusedView
-        if (fv != null && fv.isAttachedToWindow && fv.visibility == View.VISIBLE) {
-            fv.requestFocus()
-            return
-        }
         val targetPosition = lastFocusedVideoPosition.coerceIn(0, videoAdapter.itemCount - 1)
-        val result = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
-            recyclerView = binding.recyclerViewRight,
-            position = targetPosition
-        )
+        videoFocusController?.requestFocusPosition(targetPosition)
     }
 
     private fun scheduleVideoFocusRestore(retries: Int = 8) {
@@ -494,17 +499,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         if (videoAdapter.itemCount == 0) {
             return false
         }
-        val fv = videoAdapter.focusedView
-        if (fv != null && fv.isAttachedToWindow && fv.visibility == View.VISIBLE) {
-            return fv.requestFocus()
-        }
-        val targetPosition = lastFocusedVideoPosition.coerceIn(0, videoAdapter.itemCount - 1)
-        val result = TabContentFocusHelper.requestRecyclerPrimaryFocus(
-            recyclerView = binding.recyclerViewRight,
-            itemCount = videoAdapter.itemCount,
-            fallbackPosition = targetPosition
-        )
-        return result.resolved
+        return videoFocusController?.focusPrimary() == true
     }
 
     private fun focusPrimaryContent(): Boolean {
@@ -552,6 +547,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
     }
 
     private fun scrollVideoListToTop() {
+        videoFocusController?.clearAnchorForUserRefresh()
         binding.recyclerViewRight.scrollToPosition(0)
     }
 
@@ -634,27 +630,24 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         }
     }
 
-    private fun installVideoLoadMoreFocusController() {
-        videoLoadMoreFocusController?.release()
-        videoLoadMoreFocusController = RecyclerViewLoadMoreFocusController(
+    private fun installVideoFocusController() {
+        videoFocusController?.release()
+        videoFocusController = TvListFocusController(
             recyclerView = binding.recyclerViewRight,
-            callbacks = object : RecyclerViewLoadMoreFocusController.Callbacks {
-                override fun canLoadMore(): Boolean = !viewModel.loading.value && viewModel.hasMoreVideos.value
-
-
-                override fun loadMore() {
-                    if (!canLoadMore()) {
-                        return
-                    }
+            adapter = videoAdapter,
+            strategy = GridTvFocusStrategy { 3 },
+            canLoadMore = { !viewModel.loading.value && viewModel.hasMoreVideos.value },
+            loadMore = {
+                if (!viewModel.loading.value && viewModel.hasMoreVideos.value) {
                     viewModel.loadNextPage(pageSize)
                 }
             }
-        ).also { it.install() }
+        )
     }
 
     override fun onDestroyView() {
-        videoLoadMoreFocusController?.release()
-        videoLoadMoreFocusController = null
+        videoFocusController?.release()
+        videoFocusController = null
         super.onDestroyView()
     }
 

@@ -71,14 +71,6 @@ class HomeLaneAdapter(
         return "${title.trim()}#${style}#${moreSeasonType}"
     }
 
-    fun requestFocusedView(): Boolean {
-        val view = focusedView ?: return false
-        if (!view.isAttachedToWindow || view.visibility != View.VISIBLE) {
-            return false
-        }
-        return view.requestFocus()
-    }
-
     fun insertTimelineSection(section: HomeLaneSection): Boolean {
         if (items.isEmpty()) {
             return false
@@ -119,7 +111,6 @@ class HomeLaneAdapter(
                     binding = binding,
                     onTimelineClick = onTimelineClick,
                     onTopEdgeUp = onTopEdgeUp,
-                    onViewFocused = ::rememberFocusedView,
                     onBottomEdgeDown = { focusNextSectionFrom(holder) }
                 )
                 holder
@@ -138,7 +129,6 @@ class HomeLaneAdapter(
                     onMoreClick,
                     defaultMoreSeasonType,
                     onTopEdgeUp,
-                    ::rememberFocusedView,
                     onFollowSectionClick,
                     onBottomEdgeDown = { focusNextSectionFrom(holder) }
                 )
@@ -155,10 +145,6 @@ class HomeLaneAdapter(
         }
     }
 
-    private fun rememberFocusedView(view: View) {
-        focusedView = view
-    }
-
     private fun focusNextSectionFrom(currentHolder: RecyclerView.ViewHolder): Boolean {
         val outerRV = outerRecyclerView ?: currentHolder.itemView.findParentRecyclerView() ?: return true
         val currentPosition = currentHolder.bindingAdapterPosition
@@ -166,14 +152,21 @@ class HomeLaneAdapter(
             return restoreFocusToVisibleLane(outerRV)
         }
         val targetPosition = (currentPosition + 1 until items.size).firstOrNull() ?: return true
-        if (requestHeaderFocusAt(outerRV, targetPosition) ||
+        val preferredChildPosition = when (currentHolder) {
+            is ScrollableViewHolder -> currentHolder.focusedChildPosition()
+            is TimelineViewHolder -> currentHolder.focusedChildPosition()
+            else -> RecyclerView.NO_POSITION
+        }
+        if (requestChildFocusAt(outerRV, targetPosition, preferredChildPosition) ||
+            requestHeaderFocusAt(outerRV, targetPosition) ||
             requestPrimaryFocusAt(outerRV, targetPosition)
         ) {
             return true
         }
         outerRV.scrollToPosition(targetPosition)
         outerRV.post {
-            requestHeaderFocusAt(outerRV, targetPosition) ||
+            requestChildFocusAt(outerRV, targetPosition, preferredChildPosition) ||
+                requestHeaderFocusAt(outerRV, targetPosition) ||
                 requestPrimaryFocusAt(outerRV, targetPosition)
         }
         return true
@@ -208,20 +201,33 @@ class HomeLaneAdapter(
         }
     }
 
+    private fun requestChildFocusAt(
+        recyclerView: RecyclerView,
+        position: Int,
+        preferredChildPosition: Int
+    ): Boolean {
+        if (preferredChildPosition == RecyclerView.NO_POSITION) {
+            return false
+        }
+        return when (val holder = recyclerView.findViewHolderForAdapterPosition(position)) {
+            is ScrollableViewHolder -> holder.requestChildFocus(preferredChildPosition)
+            is TimelineViewHolder -> holder.requestChildFocus(preferredChildPosition)
+            else -> false
+        }
+    }
+
     class ScrollableViewHolder(
         private val binding: CellLaneScrollableBinding,
         onSeriesClick: (LaneItemModel) -> Unit,
         private val onMoreClick: (Int, String, String) -> Unit,
         private val defaultMoreSeasonType: Int?,
         private val onTopEdgeUp: () -> Boolean,
-        private val onViewFocused: (View) -> Unit,
         private val onFollowSectionClick: ((Int) -> Unit)? = null,
         private val onBottomEdgeDown: () -> Boolean
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private val adapter = LaneItemAdapter(
             onItemClick = onSeriesClick,
-            onItemFocused = onViewFocused,
             onBottomEdgeDown = onBottomEdgeDown
         )
         private var moreSeasonType: Int? = null
@@ -258,14 +264,8 @@ class HomeLaneAdapter(
                     moreSeasonType?.let { onMoreClick(it, currentMoreUrl, binding.topTitle.text.toString()) }
                 }
             }
-            val trackFocus = View.OnFocusChangeListener { view, hasFocus ->
-                if (hasFocus) {
-                    onViewFocused(view)
-                }
-            }
             binding.topTitle.setOnKeyListener(sectionHeaderKeyListener)
             binding.topTitle.setOnClickListener(openMore)
-            binding.topTitle.onFocusChangeListener = trackFocus
         }
 
         fun bind(item: HomeLaneSection) {
@@ -302,6 +302,29 @@ class HomeLaneAdapter(
 
         fun requestHeaderFocus(): Boolean = binding.topTitle.requestFocus()
 
+        fun focusedChildPosition(): Int {
+            val focused = binding.recyclerView.rootView?.findFocus() ?: return RecyclerView.NO_POSITION
+            val child = binding.recyclerView.findContainingItemView(focused) ?: return RecyclerView.NO_POSITION
+            return binding.recyclerView.getChildAdapterPosition(child)
+        }
+
+        fun requestChildFocus(preferredPosition: Int): Boolean {
+            val targetPosition = preferredPosition.coerceIn(0, (adapter.itemCount - 1).coerceAtLeast(0))
+            if (adapter.itemCount <= 0) {
+                return false
+            }
+            val holder = binding.recyclerView.findViewHolderForAdapterPosition(targetPosition)
+            if (holder is LaneItemAdapter.LaneItemViewHolder && holder.requestFocus()) {
+                return true
+            }
+            binding.recyclerView.scrollToPosition(targetPosition)
+            binding.recyclerView.post {
+                (binding.recyclerView.findViewHolderForAdapterPosition(targetPosition) as? LaneItemAdapter.LaneItemViewHolder)
+                    ?.requestFocus()
+            }
+            return true
+        }
+
         private fun requestFirstCardFocus(): Boolean {
             return adapter.requestFirstItemFocus(binding.recyclerView)
         }
@@ -311,13 +334,11 @@ class HomeLaneAdapter(
         private val binding: CellLaneSeriesTimeLineBinding,
         onTimelineClick: (SeriesTimeLineModel) -> Unit,
         private val onTopEdgeUp: () -> Boolean,
-        private val onViewFocused: (View) -> Unit,
         private val onBottomEdgeDown: () -> Boolean
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private val adapter = SeriesTimelineAdapter(
             onItemClick = onTimelineClick,
-            onItemFocused = onViewFocused,
             trackFocusedView = false,
             onBottomEdgeDown = onBottomEdgeDown
         )
@@ -343,11 +364,6 @@ class HomeLaneAdapter(
                     else -> false
                 }
             }
-            val trackFocus = View.OnFocusChangeListener { view, hasFocus ->
-                if (hasFocus) {
-                    onViewFocused(view)
-                }
-            }
             binding.radioGroup.setOnCheckedChangeListener { _, checkedId ->
                 when (checkedId) {
                     R.id.button_radio_0 -> showTimeline(0)
@@ -361,7 +377,6 @@ class HomeLaneAdapter(
                 }
             }
             binding.topTitle.setOnKeyListener(timelineHeaderKeyListener)
-            binding.topTitle.onFocusChangeListener = trackFocus
             listOf(
                 binding.buttonRadio0,
                 binding.buttonRadio1,
@@ -373,7 +388,6 @@ class HomeLaneAdapter(
                 binding.buttonRadio7
             ).forEach { radioButton ->
                 radioButton.setOnKeyListener(timelineHeaderKeyListener)
-                radioButton.onFocusChangeListener = trackFocus
             }
         }
 
@@ -390,6 +404,29 @@ class HomeLaneAdapter(
         }
 
         fun requestHeaderFocus(): Boolean = binding.topTitle.requestFocus()
+
+        fun focusedChildPosition(): Int {
+            val focused = binding.recyclerView.rootView?.findFocus() ?: return RecyclerView.NO_POSITION
+            val child = binding.recyclerView.findContainingItemView(focused) ?: return RecyclerView.NO_POSITION
+            return binding.recyclerView.getChildAdapterPosition(child)
+        }
+
+        fun requestChildFocus(preferredPosition: Int): Boolean {
+            val count = binding.recyclerView.adapter?.itemCount ?: 0
+            if (count <= 0 || binding.recyclerView.visibility != View.VISIBLE) {
+                return false
+            }
+            val targetPosition = preferredPosition.coerceIn(0, count - 1)
+            val holder = binding.recyclerView.findViewHolderForAdapterPosition(targetPosition)
+            if (holder?.itemView?.requestFocus() == true) {
+                return true
+            }
+            binding.recyclerView.scrollToPosition(targetPosition)
+            binding.recyclerView.post {
+                binding.recyclerView.findViewHolderForAdapterPosition(targetPosition)?.itemView?.requestFocus()
+            }
+            return true
+        }
 
         private fun requestSelectedFilterFocus(): Boolean {
             val target = when (binding.radioGroup.checkedRadioButtonId) {

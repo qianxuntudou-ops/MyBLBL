@@ -1,6 +1,5 @@
 package com.tutu.myblbl.core.ui.base
 
-import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -14,6 +13,11 @@ import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.ui.focus.RecyclerViewLoadMoreFocusController
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
 import com.tutu.myblbl.core.ui.focus.TabContentFocusHelper
+import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
+import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
+import com.tutu.myblbl.core.ui.focus.tv.TvFocusStrategy
+import com.tutu.myblbl.core.ui.focus.tv.TvFocusableAdapter
+import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
 
 abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>() {
 
@@ -37,17 +41,16 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
     protected open val autoLoad: Boolean = true
     protected open val enableSwipeRefresh: Boolean = true
     protected open val enableLoadMoreFocusController: Boolean = false
-    private var pendingReturnRestoreAttempts = 0
-    private var pendingLayoutState: Parcelable? = null
-    private var restorePosted = false
+    protected open val enableTvListFocusController: Boolean = false
     private var pendingRecyclerIdleAction: (() -> Unit)? = null
     protected var loadMoreFocusController: RecyclerViewLoadMoreFocusController? = null
+    protected var tvFocusController: TvListFocusController? = null
     private val restoreObserver = object : RecyclerView.AdapterDataObserver() {
-        override fun onChanged() = schedulePendingReturnRestore()
-        override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = schedulePendingReturnRestore()
-        override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = schedulePendingReturnRestore()
-        override fun onItemRangeChanged(positionStart: Int, itemCount: Int) = schedulePendingReturnRestore()
-        override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) = schedulePendingReturnRestore()
+        override fun onChanged() = onAdapterDataChangedForFocus(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
+        override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = onAdapterDataChangedForFocus(TvDataChangeReason.APPEND)
+        override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = onAdapterDataChangedForFocus(TvDataChangeReason.REMOVE_ITEM)
+        override fun onItemRangeChanged(positionStart: Int, itemCount: Int) = onAdapterDataChangedForFocus(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
+        override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) = onAdapterDataChangedForFocus(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
     }
 
     abstract fun createAdapter(): BaseAdapter<MODEL, *>
@@ -79,6 +82,7 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
                 }
             }
         }
+        installTvListFocusControllerIfNeeded()
         recyclerView?.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
@@ -99,7 +103,7 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
                 }
             }
         })
-        if (enableLoadMoreFocusController) {
+        if (enableLoadMoreFocusController && !enableTvListFocusController) {
             installLoadMoreFocusController()
         }
         if (enableSwipeRefresh) {
@@ -120,7 +124,7 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
 
     override fun onResume() {
         super.onResume()
-        schedulePendingReturnRestore()
+        tvFocusController?.restoreCapturedAnchor()
     }
 
     private fun setupSwipeRefresh() {
@@ -153,6 +157,10 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
         return WrapContentGridLayoutManager(requireContext(), getSpanCount())
     }
 
+    protected open fun createTvFocusStrategy(): TvFocusStrategy {
+        return GridTvFocusStrategy { getSpanCount() }
+    }
+
     open fun refresh() {
         currentPage = 1
         loadData(1)
@@ -170,6 +178,7 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
     }
 
     open fun scrollToTop() {
+        tvFocusController?.clearAnchorForUserRefresh()
         recyclerView?.scrollToPosition(0)
     }
 
@@ -227,30 +236,11 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
         if (TabContentFocusHelper.requestVisibleFocus(buttonRetry, viewError)) {
             return true
         }
+        if (tvFocusController?.focusPrimary() == true) {
+            return true
+        }
         val rv = recyclerView ?: return false
         val adp = adapter ?: return false
-
-        adp.focusedView?.let { fv ->
-            if (fv.isAttachedToWindow && fv.visibility == View.VISIBLE) {
-                val handled = fv.requestFocus()
-                val pos = findRecyclerViewChild(rv, fv)?.let { rv.getChildAdapterPosition(it) }
-                    ?: RecyclerView.NO_POSITION
-                return handled
-            }
-        }
-
-        val rememberedPosition = adp.getRememberedPosition()
-        if (rememberedPosition != RecyclerView.NO_POSITION && adp.contentCount() > 0) {
-            val boundedPosition = rememberedPosition.coerceIn(0, adp.contentCount() - 1)
-            val restoreResult = RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
-                recyclerView = rv,
-                position = boundedPosition,
-                scrollIfMissing = false
-            )
-            if (restoreResult.handled || restoreResult.deferred) {
-                return true
-            }
-        }
 
         val focusResult = TabContentFocusHelper.requestRecyclerPrimaryFocus(
             recyclerView = rv,
@@ -284,53 +274,21 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
         if (!hidden) {
-            val rv = recyclerView ?: return
-            val currentFocusedView = activity?.currentFocus
-            if (currentFocusedView != null && !currentFocusedView.isDescendantOf(rv)) {
-                return
-            }
-            val fv = adapter?.focusedView
-            if (fv != null && fv.isAttachedToWindow && fv.visibility == View.VISIBLE) {
-                val lm = layoutManager ?: return
-                val itemView = findRecyclerViewChild(rv, fv) ?: return
-                val position = rv.getChildAdapterPosition(itemView)
-                if (position == RecyclerView.NO_POSITION) return
-                val first = lm.findFirstVisibleItemPosition()
-                val last = lm.findLastVisibleItemPosition()
-                if (position in first..last) {
-                    RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
-                        recyclerView = rv,
-                        position = position,
-                        scrollIfMissing = false
-                    )
-                }
-            }
+            tvFocusController?.restoreCapturedAnchor()
         }
-    }
-
-    private fun findRecyclerViewChild(rv: RecyclerView, view: View): View? {
-        var current: View? = view
-        while (current != null) {
-            val parent = current.parent
-            if (parent === rv) return current
-            if (parent !is View) return null
-            current = parent
-        }
-        return null
     }
 
     override fun onDestroyView() {
         loadMoreFocusController?.release()
         loadMoreFocusController = null
+        tvFocusController?.release()
+        tvFocusController = null
         adapter?.unregisterAdapterDataObserver(restoreObserver)
         adapter?.clear()
         adapter = null
         layoutManager = null
         swipeRefreshLayout = null
         recyclerView = null
-        pendingReturnRestoreAttempts = 0
-        pendingLayoutState = null
-        restorePosted = false
         pendingRecyclerIdleAction = null
         super.onDestroyView()
     }
@@ -365,85 +323,43 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
         return false
     }
 
-    protected fun isPendingReturnRestore(): Boolean = pendingReturnRestoreAttempts > 0
+    protected fun isPendingReturnRestore(): Boolean = false
+
+    protected fun notifyTvListDataChanged(reason: TvDataChangeReason) {
+        tvFocusController?.onDataChanged(reason)
+    }
+
+    protected fun clearTvFocusAnchorForUserRefresh() {
+        tvFocusController?.clearAnchorForUserRefresh()
+    }
+
+    protected fun isTvListFocusEnabled(): Boolean = tvFocusController != null
+
+    private fun onAdapterDataChangedForFocus(reason: TvDataChangeReason) {
+        tvFocusController?.onDataChanged(reason)
+    }
+
+    private fun installTvListFocusControllerIfNeeded() {
+        if (!enableTvListFocusController) {
+            return
+        }
+        val rv = recyclerView ?: return
+        val focusableAdapter = adapter as? TvFocusableAdapter ?: return
+        tvFocusController = TvListFocusController(
+            recyclerView = rv,
+            adapter = focusableAdapter,
+            strategy = createTvFocusStrategy(),
+            canLoadMore = { hasMore && !isLoading },
+            loadMore = {
+                if (!isLoading && hasMore) {
+                    currentPage++
+                    loadData(currentPage)
+                }
+            }
+        )
+    }
 
     private fun captureListStateForReturnRestore() {
-        val rv = recyclerView ?: return
-        val lm = layoutManager ?: return
-        val adp = adapter ?: return
-        if (!isAdded || view == null || adp.contentCount() == 0) {
-            return
-        }
-        pendingLayoutState = lm.onSaveInstanceState()
-        pendingReturnRestoreAttempts = 2
-
-        val currentFocusedView = activity?.currentFocus
-        val currentFocusedChild = currentFocusedView?.let { findRecyclerViewChild(rv, it) }
-        val focusedPosition = currentFocusedChild?.let(rv::getChildAdapterPosition)
-        if (currentFocusedView != null && focusedPosition != null && focusedPosition != RecyclerView.NO_POSITION) {
-            adp.rememberItemInteraction(currentFocusedView, focusedPosition)
-            return
-        }
-
-        if (adp.getRememberedPosition() != RecyclerView.NO_POSITION) {
-            return
-        }
-        val anchorPosition = lm.findFirstVisibleItemPosition()
-        if (anchorPosition == RecyclerView.NO_POSITION) {
-            return
-        }
-        rv.findViewHolderForAdapterPosition(anchorPosition)?.itemView?.let { anchorView ->
-            adp.rememberItemInteraction(anchorView, anchorPosition)
-        }
-    }
-
-    private fun schedulePendingReturnRestore() {
-        val rv = recyclerView ?: return
-        if (pendingReturnRestoreAttempts <= 0 || restorePosted || !isAdded || view == null) {
-            return
-        }
-        restorePosted = true
-        rv.post {
-            restorePosted = false
-            restorePendingReturnState()
-        }
-    }
-
-    private fun restorePendingReturnState() {
-        val rv = recyclerView ?: return
-        val adp = adapter ?: return
-        if (pendingReturnRestoreAttempts <= 0 || !isAdded || view == null) {
-            return
-        }
-        pendingReturnRestoreAttempts--
-        pendingLayoutState?.let { state ->
-            rv.layoutManager?.onRestoreInstanceState(state)
-        }
-
-        val currentFocus = activity?.currentFocus
-        if (currentFocus == null || !currentFocus.isDescendantOf(rv)) {
-            if (pendingReturnRestoreAttempts <= 0) {
-                pendingLayoutState = null
-            }
-            return
-        }
-
-        val focusedView = adp.focusedView
-        if (focusedView != null && focusedView.isAttachedToWindow && focusedView.visibility == View.VISIBLE) {
-            focusedView.requestFocus()
-        } else {
-            val rememberedPosition = adp.getRememberedPosition()
-            if (rememberedPosition != RecyclerView.NO_POSITION && adp.contentCount() > 0) {
-                RecyclerViewFocusRestoreHelper.requestFocusAtPosition(
-                    recyclerView = rv,
-                    position = rememberedPosition.coerceIn(0, adp.contentCount() - 1),
-                    scrollIfMissing = false
-                )
-            }
-        }
-
-        if (pendingReturnRestoreAttempts <= 0) {
-            pendingLayoutState = null
-        }
+        tvFocusController?.captureCurrentAnchor()
     }
 }

@@ -29,8 +29,7 @@ class SeriesAdapter(
     private val cardWidth: Int = 0
 ) : ListAdapter<SeriesModel, SeriesAdapter.SeriesViewHolder>(DIFF_CALLBACK) {
 
-    var focusedView: View? = null
-        private set
+    private var focusedPosition = RecyclerView.NO_POSITION
 
     companion object {
         private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<SeriesModel>() {
@@ -48,7 +47,9 @@ class SeriesAdapter(
 
     fun setData(newItems: List<SeriesModel>) {
         if (rememberFocusedItem) {
-            focusedView = null
+            focusedPosition = focusedPosition
+                .takeIf { it != RecyclerView.NO_POSITION && it < newItems.size }
+                ?: RecyclerView.NO_POSITION
         }
         submitList(newItems)
     }
@@ -57,12 +58,16 @@ class SeriesAdapter(
         submitList(currentList + newItems)
     }
 
-    fun requestFocusedView(): Boolean {
+    fun requestStoredItemFocus(recyclerView: RecyclerView): Boolean {
         if (!rememberFocusedItem) {
             return false
         }
-        val view = focusedView ?: return false
-        return view.requestFocus()
+        val position = focusedPosition
+        if (position == RecyclerView.NO_POSITION) {
+            return false
+        }
+        return (recyclerView.findViewHolderForAdapterPosition(position) as? SeriesViewHolder)
+            ?.requestFocus() == true
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SeriesViewHolder {
@@ -79,7 +84,7 @@ class SeriesAdapter(
             onVerticalKey = onVerticalKey,
             onFocused = { view ->
                 if (rememberFocusedItem) {
-                    focusedView = view
+                    focusedPosition = recyclerPositionOf(view)
                 }
                 onItemFocused?.invoke()
             },
@@ -89,6 +94,10 @@ class SeriesAdapter(
 
     override fun onBindViewHolder(holder: SeriesViewHolder, position: Int) {
         holder.bind(getItem(position))
+    }
+
+    private fun recyclerPositionOf(view: View): Int {
+        return (view.parent as? RecyclerView)?.getChildAdapterPosition(view) ?: RecyclerView.NO_POSITION
     }
 
     class SeriesViewHolder(
@@ -213,5 +222,7 @@ class SeriesAdapter(
                 view.layoutParams = layoutParams
             }
         }
+
+        fun requestFocus(): Boolean = binding.clickView.requestFocus()
     }
 }

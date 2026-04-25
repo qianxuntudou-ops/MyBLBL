@@ -1,7 +1,6 @@
 package com.tutu.myblbl.feature.favorite
 
 import android.os.Bundle
-import android.os.Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -22,7 +21,9 @@ import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
 import com.tutu.myblbl.core.common.content.ContentFilter
-import com.tutu.myblbl.core.ui.focus.RecyclerViewLoadMoreFocusController
+import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
+import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
+import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -58,8 +59,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
     private var lastFocusedPosition = RecyclerView.NO_POSITION
     private var pendingRestoreFocus = false
     private var hasRequestedInitialFocus = false
-    private var pendingListLayoutState: Parcelable? = null
-    private var loadMoreFocusController: RecyclerViewLoadMoreFocusController? = null
+    private var tvFocusController: TvListFocusController? = null
 
     override fun getViewBinding(inflater: LayoutInflater, container: ViewGroup?): FragmentFavoriteDetailBinding {
         return FragmentFavoriteDetailBinding.inflate(inflater, container, false)
@@ -79,7 +79,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
                 if (video.aid != 0L || video.bvid.isNotEmpty()) {
                     lastFocusedPosition = favoriteAdapter.getFocusedPosition()
                     pendingRestoreFocus = true
-                    pendingListLayoutState = binding.recyclerViewVideos.layoutManager?.onSaveInstanceState()
+                    tvFocusController?.captureCurrentAnchor()
                     VideoRouteNavigator.openHistory(
                         context = requireContext(),
                         historyVideo = item,
@@ -98,6 +98,15 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
                 if (favoriteAdapter.itemCount <= 1) {
                     parentFragmentManager.popBackStack()
                 }
+            },
+            onItemFocusedWithView = { view, position ->
+                tvFocusController?.onItemFocused(view, position)
+            },
+            onItemDpad = { view, keyCode, event ->
+                tvFocusController?.handleKey(view, keyCode, event) == true
+            },
+            onItemsChanged = {
+                tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
             }
         )
         binding.recyclerViewVideos.layoutManager = WrapContentGridLayoutManager(requireContext(), 4)
@@ -119,7 +128,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
                 }
             }
         })
-        installLoadMoreFocusController()
+        installTvFocusController()
 
         binding.buttonBack.setOnClickListener {
             parentFragmentManager.popBackStack()
@@ -178,6 +187,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
         if (!sessionGateway.isLoggedIn()) {
             hasMore = false
             favoriteAdapter.setData(emptyList())
+            tvFocusController?.onDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
             showEmpty(getString(R.string.need_sign_in))
             requestBackFocus()
             return
@@ -212,10 +222,11 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
                         val filtered = medias.filter { !ContentFilter.isVideoBlocked(requireContext(), it.tagName, it.title, authorName = it.authorName) }
                         if (currentPage == 1) {
                             favoriteAdapter.setData(filtered)
+                            tvFocusController?.onDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
                         } else if (filtered.isNotEmpty()) {
                             favoriteAdapter.addData(filtered)
+                            tvFocusController?.onDataChanged(TvDataChangeReason.APPEND)
                         }
-                        loadMoreFocusController?.consumePendingFocusAfterLoadMore()
                         if (!hasRequestedInitialFocus && currentPage == 1) {
                             hasRequestedInitialFocus = true
                             requestBackFocus()
@@ -225,12 +236,10 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
                     }
                 } else {
                     rollbackPage()
-                    loadMoreFocusController?.clearPendingFocusAfterLoadMore()
                     handleLoadError(response.errorMessage)
                 }
             }.onFailure { e ->
                 rollbackPage()
-                loadMoreFocusController?.clearPendingFocusAfterLoadMore()
                 handleLoadError("加载失败: ${e.message}")
             }
         }
@@ -266,14 +275,9 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
         if (!isAdded) return
         binding.recyclerViewVideos.post {
             if (!isAdded) return@post
-            pendingListLayoutState?.let { state ->
-                binding.recyclerViewVideos.layoutManager?.onRestoreInstanceState(state)
-                pendingListLayoutState = null
-            }
             if (binding.recyclerViewVideos.isVisible && favoriteAdapter.itemCount > 0 && lastFocusedPosition != RecyclerView.NO_POSITION) {
                 val targetPosition = lastFocusedPosition.coerceIn(0, favoriteAdapter.itemCount - 1)
-                binding.recyclerViewVideos.scrollToPosition(targetPosition)
-                requestItemFocus(targetPosition)
+                tvFocusController?.requestFocusPosition(targetPosition)
             } else {
                 requestBackFocus()
             }
@@ -299,27 +303,25 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
         }
     }
 
-    private fun installLoadMoreFocusController() {
-        loadMoreFocusController?.release()
-        loadMoreFocusController = RecyclerViewLoadMoreFocusController(
+    private fun installTvFocusController() {
+        tvFocusController?.release()
+        tvFocusController = TvListFocusController(
             recyclerView = binding.recyclerViewVideos,
-            callbacks = object : RecyclerViewLoadMoreFocusController.Callbacks {
-                override fun canLoadMore(): Boolean = !isLoading && hasMore
-
-                override fun loadMore() {
-                    if (!canLoadMore()) {
-                        return
-                    }
+            adapter = favoriteAdapter,
+            strategy = GridTvFocusStrategy { 4 },
+            canLoadMore = { !isLoading && hasMore },
+            loadMore = {
+                if (!isLoading && hasMore) {
                     currentPage++
                     loadFavoriteVideos()
                 }
             }
-        ).also { it.install() }
+        )
     }
 
     override fun onDestroyView() {
-        loadMoreFocusController?.release()
-        loadMoreFocusController = null
+        tvFocusController?.release()
+        tvFocusController = null
         super.onDestroyView()
     }
 }

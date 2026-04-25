@@ -19,17 +19,19 @@ import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.common.format.NumberUtils
 import com.tutu.myblbl.core.common.time.TimeUtils
 import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
+import com.tutu.myblbl.core.ui.focus.tv.TvFocusableAdapter
 import com.tutu.myblbl.ui.dialog.VideoCardMenuDialog
 
 class HistoryVideoAdapter(
     private val onItemClick: (HistoryVideoModel) -> Unit,
     private val onTopEdgeUp: (() -> Boolean)? = null,
-    private val onItemFocused: ((Int) -> Unit)? = null
-) : ListAdapter<HistoryVideoModel, HistoryVideoAdapter.ViewHolder>(DiffCallback) {
+    private val onItemFocused: ((Int) -> Unit)? = null,
+    private val onItemFocusedWithView: ((View, Int) -> Unit)? = null,
+    private val onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null,
+    private val onItemsChanged: (() -> Unit)? = null
+) : ListAdapter<HistoryVideoModel, HistoryVideoAdapter.ViewHolder>(DiffCallback), TvFocusableAdapter {
 
     private var focusedPosition = RecyclerView.NO_POSITION
-    var focusedView: View? = null
-        private set
 
     init {
         setHasStableIds(true)
@@ -41,7 +43,7 @@ class HistoryVideoAdapter(
     ) {
         val deduplicated = newItems.distinctBy(::itemKey)
         focusedPosition = focusedPosition
-            .takeIf { it != RecyclerView.NO_POSITION && it < deduplicated.size && hasActiveFocus() }
+            .takeIf { it != RecyclerView.NO_POSITION && it < deduplicated.size }
             ?: RecyclerView.NO_POSITION
         submitList(deduplicated) {
             onCommitted?.invoke()
@@ -62,10 +64,24 @@ class HistoryVideoAdapter(
 
     fun findPositionByKey(key: String): Int = currentList.indexOfFirst { itemKey(it) == key }
 
+    override fun focusableItemCount(): Int = itemCount
+
+    override fun stableKeyAt(position: Int): String? {
+        return currentList.getOrNull(position)?.let(::itemKey)
+    }
+
+    override fun findPositionByStableKey(key: String): Int {
+        return currentList.indexOfFirst { itemKey(it) == key }
+            .takeIf { it >= 0 }
+            ?: RecyclerView.NO_POSITION
+    }
+
     fun clearFocusMemory() {
-        setFocusedState(focusedView, false)
-        focusedView = null
+        val previous = focusedPosition
         focusedPosition = RecyclerView.NO_POSITION
+        if (previous != RecyclerView.NO_POSITION) {
+            notifyItemChanged(previous)
+        }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -76,25 +92,25 @@ class HistoryVideoAdapter(
             onTopEdgeUp = onTopEdgeUp,
             onItemFocused = onItemFocused,
             updateFocusedState = { view, position ->
-                setFocusedState(focusedView, false)
-                focusedView = view
+                val previous = focusedPosition
                 focusedPosition = position
+                if (previous != RecyclerView.NO_POSITION && previous != position) {
+                    notifyItemChanged(previous)
+                }
                 setFocusedState(view, true)
+                onItemFocusedWithView?.invoke(view, position)
             },
             clearFocusedState = { view ->
-                if (focusedView === view) {
-                    focusedView = null
-                    focusedPosition = RecyclerView.NO_POSITION
-                }
                 setFocusedState(view, false)
             },
             onItemDisliked = { item -> removeDislikedItem(item) },
-            onUpDisliked = { upName -> removeBlockedItems(upName) }
+            onUpDisliked = { upName -> removeBlockedItems(upName) },
+            onItemDpad = onItemDpad,
         )
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(getItem(position), position == focusedPosition && hasActiveFocus())
+        holder.bind(getItem(position), position == focusedPosition)
     }
 
     override fun getItemId(position: Int): Long = itemKey(getItem(position)).hashCode().toLong()
@@ -102,29 +118,27 @@ class HistoryVideoAdapter(
     private fun removeBlockedItems(blockedName: String) {
         val filtered = currentList.filter { !it.authorName.equals(blockedName, ignoreCase = true) }
         if (filtered.size == currentList.size) return
-        submitList(filtered)
-        focusedView?.requestFocus()
+        submitList(filtered) {
+            onItemsChanged?.invoke()
+        }
     }
 
     private fun removeDislikedItem(item: HistoryVideoModel) {
         val key = itemKey(item)
         val filtered = currentList.filter { itemKey(it) != key }
         if (filtered.size == currentList.size) return
-        submitList(filtered)
-        focusedView?.requestFocus()
+        submitList(filtered) {
+            onItemsChanged?.invoke()
+        }
     }
 
     override fun onDetachedFromRecyclerView(recyclerView: RecyclerView) {
-        focusedView = null
         focusedPosition = RecyclerView.NO_POSITION
         super.onDetachedFromRecyclerView(recyclerView)
     }
 
     override fun onViewRecycled(holder: ViewHolder) {
-        if (focusedView === holder.itemView) {
-            focusedView = null
-            focusedPosition = RecyclerView.NO_POSITION
-        }
+        setFocusedState(holder.itemView, false)
         super.onViewRecycled(holder)
     }
 
@@ -134,8 +148,6 @@ class HistoryVideoAdapter(
         view.findViewById<AppCompatTextView>(com.tutu.myblbl.R.id.textView)?.isSelected = focused
     }
 
-    private fun hasActiveFocus(): Boolean = focusedView?.hasFocus() == true
-
     class ViewHolder(
         private val binding: CellVideoBinding,
         private val onItemClick: (HistoryVideoModel) -> Unit,
@@ -144,7 +156,8 @@ class HistoryVideoAdapter(
         private val updateFocusedState: (View, Int) -> Unit,
         private val clearFocusedState: (View) -> Unit,
         private val onItemDisliked: ((HistoryVideoModel) -> Unit)? = null,
-        private val onUpDisliked: ((String) -> Unit)? = null
+        private val onUpDisliked: ((String) -> Unit)? = null,
+        private val onItemDpad: ((View, Int, KeyEvent) -> Boolean)? = null
     ) : RecyclerView.ViewHolder(binding.root) {
 
         private var currentItem: HistoryVideoModel? = null
@@ -152,7 +165,7 @@ class HistoryVideoAdapter(
         private var longPressRunnable: Runnable? = null
         private var longPressTriggered = false
 
-        private val keyListener = View.OnKeyListener { _, keyCode, event ->
+        private val keyListener = View.OnKeyListener { view, keyCode, event ->
             if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
                 when (event.action) {
                     KeyEvent.ACTION_DOWN -> {
@@ -166,7 +179,7 @@ class HistoryVideoAdapter(
                 }
                 false
             } else {
-                false
+                onItemDpad?.invoke(view, keyCode, event) == true
             }
         }
 
@@ -232,6 +245,7 @@ class HistoryVideoAdapter(
             VideoCardFocusHelper.bindSidebarExit(
                 view = binding.root,
                 onTopEdgeUp = onTopEdgeUp,
+                handleListDpadDown = false,
                 chainedListener = keyListener
             )
             binding.imageAvatar.visibility = View.GONE

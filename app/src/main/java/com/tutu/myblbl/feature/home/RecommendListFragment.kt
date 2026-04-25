@@ -24,6 +24,7 @@ class RecommendListFragment : VideoFeedFragment() {
         get() = viewModel
     override val secondaryTabPosition: Int = 0
     override val dispatchHomeContentReady: Boolean = true
+    override val enableTvListFocusController: Boolean = true
 
     override fun initObserver() {
         super.initObserver()

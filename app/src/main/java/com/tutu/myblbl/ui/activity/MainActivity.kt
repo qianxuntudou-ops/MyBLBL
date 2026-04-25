@@ -504,10 +504,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         addToBackStack: Boolean
     ) {
         if (addToBackStack) {
-            currentFocus?.let { focusedView ->
+            currentFocus?.let { activeFocus ->
                 focusRestoreAnchors.addLast(
                     FocusRestoreAnchor(
-                        viewRef = WeakReference(focusedView)
+                        viewRef = WeakReference(activeFocus)
                     )
                 )
             }

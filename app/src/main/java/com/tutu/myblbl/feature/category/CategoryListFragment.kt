@@ -12,6 +12,7 @@ import com.tutu.myblbl.ui.adapter.VideoAdapter
 import com.tutu.myblbl.core.ui.base.BaseListFragment
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.content.ContentFilter
+import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -38,7 +39,8 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
     private var categoryId: Int = 0
     override val enableSwipeRefresh: Boolean = false
     override val autoLoad: Boolean = false
-    override val enableLoadMoreFocusController: Boolean = true
+    override val enableLoadMoreFocusController: Boolean = false
+    override val enableTvListFocusController: Boolean = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,7 +51,16 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
         return VideoAdapter(
             onItemClick = ::onVideoClick,
             onTopEdgeUp = ::focusTopTab,
-            onBottomEdgeDown = ::keepCurrentFocus
+            onBottomEdgeDown = ::keepCurrentFocus,
+            onItemFocusedWithView = { view, position ->
+                tvFocusController?.onItemFocused(view, position)
+            },
+            onItemDpad = { view, keyCode, event ->
+                tvFocusController?.handleKey(view, keyCode, event) == true
+            },
+            onItemsChanged = {
+                notifyTvListDataChanged(TvDataChangeReason.REMOVE_ITEM)
+            }
         )
     }
 
@@ -95,7 +106,6 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
     override fun initView() {
         super.initView()
         adapter?.showLoadMore = false
-        installFocusProtection()
     }
 
     private var childDetachListener: RecyclerView.OnChildAttachStateChangeListener? = null
@@ -165,6 +175,7 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
                         return@collectLatest
                     }
                     adapter?.setData(videos)
+                    notifyTvListDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
                     if (videos.isEmpty() && viewModel.hasLoaded.value && !viewModel.loading.value) {
                         showEmpty()
                     } else {

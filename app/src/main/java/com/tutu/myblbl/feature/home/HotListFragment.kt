@@ -16,4 +16,5 @@ class HotListFragment : VideoFeedFragment() {
         get() = viewModel
     override val secondaryTabPosition: Int = 1
     override val toastNonEmptyError: Boolean = true
+    override val enableTvListFocusController: Boolean = true
 }

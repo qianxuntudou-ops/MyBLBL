@@ -66,7 +66,7 @@ internal class PlayerControlFocusCoordinator(
         this.isHostVisible = isHostVisible
         this.onVisibleFocusSettled = onVisibleFocusSettled
         views.forEach { view ->
-            view.setOnFocusChangeListener { focusedView, hasFocus ->
+            view.setOnFocusChangeListener { _, hasFocus ->
                 handler.removeCallbacks(focusStabilizeRunnable)
                 if (hasFocus && isHostVisible()) {
                     handler.postDelayed(focusStabilizeRunnable, 80)

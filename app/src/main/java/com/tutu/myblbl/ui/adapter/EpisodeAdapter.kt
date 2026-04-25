@@ -23,8 +23,7 @@ class EpisodeAdapter(
     private val onVerticalKey: ((View, Int) -> Boolean)? = null
 ) : ListAdapter<EpisodeModel, EpisodeAdapter.EpisodeViewHolder>(DIFF_CALLBACK) {
 
-    var focusedView: View? = null
-        private set
+    private var focusedPosition = RecyclerView.NO_POSITION
 
     companion object {
         private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<EpisodeModel>() {
@@ -53,7 +52,7 @@ class EpisodeAdapter(
             binding = binding,
             onFocused = { view ->
             if (rememberFocusedItem) {
-                focusedView = view
+                focusedPosition = recyclerPositionOf(view)
             }
             onEpisodeFocused?.invoke()
             },
@@ -64,7 +63,9 @@ class EpisodeAdapter(
     }
 
     override fun submitList(list: List<EpisodeModel>?) {
-        focusedView = null
+        focusedPosition = focusedPosition
+            .takeIf { it != RecyclerView.NO_POSITION && it < (list?.size ?: 0) }
+            ?: RecyclerView.NO_POSITION
         super.submitList(list)
     }
 
@@ -72,16 +73,24 @@ class EpisodeAdapter(
         super.submitList(currentList.reversed())
     }
 
-    fun requestFocusedView(): Boolean {
+    fun requestStoredItemFocus(recyclerView: RecyclerView): Boolean {
         if (!rememberFocusedItem) {
             return false
         }
-        val view = focusedView ?: return false
-        return view.requestFocus()
+        val position = focusedPosition
+        if (position == RecyclerView.NO_POSITION) {
+            return false
+        }
+        return (recyclerView.findViewHolderForAdapterPosition(position) as? EpisodeViewHolder)
+            ?.requestFocus() == true
     }
 
     override fun onBindViewHolder(holder: EpisodeViewHolder, position: Int) {
         holder.bind(getItem(position), onEpisodeClick)
+    }
+
+    private fun recyclerPositionOf(view: View): Int {
+        return (view.parent as? RecyclerView)?.getChildAdapterPosition(view) ?: RecyclerView.NO_POSITION
     }
 
     class EpisodeViewHolder(
@@ -91,6 +100,8 @@ class EpisodeAdapter(
     ) : RecyclerView.ViewHolder(binding.root) {
 
         var nextFocusUpId: Int? = null
+
+        fun requestFocus(): Boolean = binding.clickView.requestFocus()
 
         fun bind(episode: EpisodeModel, onClick: (EpisodeModel) -> Unit) {
             applyDetailCardWidth(binding.clickView)

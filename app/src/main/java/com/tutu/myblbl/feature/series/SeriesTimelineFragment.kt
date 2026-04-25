@@ -293,7 +293,7 @@ class SeriesTimelineFragment : BaseFragment<FragmentSeriesTimelineBinding>() {
         if (binding.recyclerView.visibility != View.VISIBLE) {
             return false
         }
-        return adapter.requestFocusedView() || requestFirstTimelineCardFocus()
+        return adapter.requestStoredItemFocus(binding.recyclerView) || requestFirstTimelineCardFocus()
     }
 
     private fun requestFirstTimelineCardFocus(): Boolean {

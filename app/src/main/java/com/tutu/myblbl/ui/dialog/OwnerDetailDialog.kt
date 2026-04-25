@@ -21,7 +21,9 @@ import com.tutu.myblbl.ui.adapter.VideoAdapter
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
 import com.tutu.myblbl.core.common.content.ContentFilter
-import com.tutu.myblbl.core.ui.focus.RecyclerViewLoadMoreFocusController
+import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
+import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
+import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,13 +47,20 @@ class OwnerDetailDialog(
     private val sessionGateway: NetworkSessionGateway by inject()
     private val appEventHub: AppEventHub by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private val videoAdapter = VideoAdapter()
+    private val videoAdapter = VideoAdapter(
+        onItemFocusedWithView = { view, position ->
+            tvFocusController?.onItemFocused(view, position)
+        },
+        onItemDpad = { view, keyCode, event ->
+            tvFocusController?.handleKey(view, keyCode, event) == true
+        }
+    )
 
     private var relationAttribute = 0
     private var currentPage = 1
     private var hasMore = true
     private var isLoading = false
-    private var loadMoreFocusController: RecyclerViewLoadMoreFocusController? = null
+    private var tvFocusController: TvListFocusController? = null
 
     init {
         supportRequestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -95,7 +104,7 @@ class OwnerDetailDialog(
                 }
             }
         })
-        installLoadMoreFocusController()
+        installTvListFocusController()
     }
 
     private fun bindOwnerHeader() {
@@ -178,24 +187,24 @@ class OwnerDetailDialog(
                     val videos = ContentFilter.filterVideos(binding.root.context, response.data?.archives.orEmpty())
                     hasMore = response.data?.hasMore ?: false
                     if (currentPage == 1) {
-                        videoAdapter.setData(videos)
-                        scrollToCurrentVideo(videos)
+                        videoAdapter.setData(videos) {
+                            tvFocusController?.onDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
+                            scrollToCurrentVideo(videos)
+                        }
                     } else {
                         videoAdapter.addData(videos)
+                        tvFocusController?.onDataChanged(TvDataChangeReason.APPEND)
                     }
-                    loadMoreFocusController?.consumePendingFocusAfterLoadMore()
                     if (!hasMore) {
                         videoAdapter.setShowLoadMore(false)
                     }
                 } else {
-                    loadMoreFocusController?.clearPendingFocusAfterLoadMore()
                     toast(response.message)
                 }
             }.onFailure {
                 binding.progressBar.isVisible = false
                 isLoading = false
                 currentPage--
-                loadMoreFocusController?.clearPendingFocusAfterLoadMore()
                 toast(it.message ?: "加载失败")
             }
         }
@@ -217,15 +226,13 @@ class OwnerDetailDialog(
             if (binding.buttonFollow.isVisible) {
                 binding.buttonFollow.requestFocus()
             } else {
-                binding.recyclerView.requestFocus()
+                tvFocusController?.focusPrimary()
             }
         }
     }
 
     private fun focusVideoAt(targetIndex: Int, retries: Int = 6) {
-        val holder = binding.recyclerView.findViewHolderForAdapterPosition(targetIndex)
-        if (holder?.itemView != null) {
-            holder.itemView.requestFocus()
+        if (tvFocusController?.requestFocusPosition(targetIndex) == true) {
             return
         }
         if (retries > 0) {
@@ -284,27 +291,25 @@ class OwnerDetailDialog(
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 
-    private fun installLoadMoreFocusController() {
-        loadMoreFocusController?.release()
-        loadMoreFocusController = RecyclerViewLoadMoreFocusController(
+    private fun installTvListFocusController() {
+        tvFocusController?.release()
+        tvFocusController = TvListFocusController(
             recyclerView = binding.recyclerView,
-            callbacks = object : RecyclerViewLoadMoreFocusController.Callbacks {
-                override fun canLoadMore(): Boolean = !isLoading && hasMore
-
-                override fun loadMore() {
-                    if (!canLoadMore()) {
-                        return
-                    }
+            adapter = videoAdapter,
+            strategy = GridTvFocusStrategy { 3 },
+            canLoadMore = { !isLoading && hasMore },
+            loadMore = {
+                if (!isLoading && hasMore) {
                     currentPage++
                     loadOwnerVideos()
                 }
             }
-        ).also { it.install() }
+        )
     }
 
     override fun dismiss() {
-        loadMoreFocusController?.release()
-        loadMoreFocusController = null
+        tvFocusController?.release()
+        tvFocusController = null
         scope.cancel()
         super.dismiss()
     }

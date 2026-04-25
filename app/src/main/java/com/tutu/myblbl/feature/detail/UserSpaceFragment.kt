@@ -27,7 +27,10 @@ import com.tutu.myblbl.feature.user.FollowUserListFragment
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.ui.decoration.GridSpacingItemDecoration
 import com.tutu.myblbl.core.common.content.ContentFilter
-import com.tutu.myblbl.core.ui.focus.RecyclerViewLoadMoreFocusController
+import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
+import com.tutu.myblbl.core.ui.focus.tv.OffsetTvFocusableAdapter
+import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
+import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -71,7 +74,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
     private var lastFocusedArea = FocusArea.BACK
     private var lastFocusedVideoPosition = RecyclerView.NO_POSITION
     private var hasRequestedInitialFocus = false
-    private var loadMoreFocusController: RecyclerViewLoadMoreFocusController? = null
+    private var tvFocusController: TvListFocusController? = null
 
     override fun onResume() {
         super.onResume()
@@ -107,6 +110,15 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
             onItemFocused = { position ->
                 lastFocusedArea = FocusArea.CONTENT
                 lastFocusedVideoPosition = position
+            },
+            onItemFocusedWithView = { view, position ->
+                tvFocusController?.onItemFocused(view, headerAdapter.itemCount + position)
+            },
+            onItemDpad = { view, keyCode, event ->
+                tvFocusController?.handleKey(view, keyCode, event) == true
+            },
+            onItemsChanged = {
+                tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
             }
         )
         concatAdapter = ConcatAdapter(
@@ -150,7 +162,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
                 }
             }
         })
-        installLoadMoreFocusController()
+        installTvFocusController()
 
         videoAdapter.setOnItemClickListener { _, item ->
             if (item.aid != 0L || item.bvid.isNotBlank()) {
@@ -252,10 +264,11 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
                         hasMore = page.hasMore
                         if (currentPage == 1) {
                             videoAdapter.setData(items)
+                            tvFocusController?.onDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
                         } else {
                             videoAdapter.addData(items)
+                            tvFocusController?.onDataChanged(TvDataChangeReason.APPEND)
                         }
-                        loadMoreFocusController?.consumePendingFocusAfterLoadMore()
                         headerAdapter.updateVideoCount(page.totalCount)
                         if (!hasRequestedInitialFocus && currentPage == 1) {
                             hasRequestedInitialFocus = true
@@ -268,14 +281,12 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
                     }
                 } else {
                     rollbackPage()
-                    loadMoreFocusController?.clearPendingFocusAfterLoadMore()
                     Toast.makeText(requireContext(), response.message, Toast.LENGTH_SHORT).show()
                 }
             }.onFailure { e ->
                 binding.progressBar.visibility = View.GONE
                 isLoading = false
                 rollbackPage()
-                loadMoreFocusController?.clearPendingFocusAfterLoadMore()
                 Toast.makeText(requireContext(), "加载失败: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
@@ -475,15 +486,10 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
             ?.coerceIn(0, itemCount - 1)
             ?: 0
 
-        videoAdapter.focusedView
-            ?.takeIf { it.isAttachedToWindow }
-            ?.let { focusedView ->
-                if (focusedView.requestFocus()) {
-                    return true
-                }
-            }
-
         val absolutePosition = headerAdapter.itemCount + targetPosition
+        if (tvFocusController?.requestFocusPosition(absolutePosition) == true) {
+            return true
+        }
         val holder = binding.recyclerViewVideos.findViewHolderForAdapterPosition(absolutePosition)
         if (holder?.itemView?.requestFocus() == true) {
             return true
@@ -496,27 +502,25 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
         return false
     }
 
-    private fun installLoadMoreFocusController() {
-        loadMoreFocusController?.release()
-        loadMoreFocusController = RecyclerViewLoadMoreFocusController(
+    private fun installTvFocusController() {
+        tvFocusController?.release()
+        tvFocusController = TvListFocusController(
             recyclerView = binding.recyclerViewVideos,
-            callbacks = object : RecyclerViewLoadMoreFocusController.Callbacks {
-                override fun canLoadMore(): Boolean = !isLoading && hasMore
-
-                override fun loadMore() {
-                    if (!canLoadMore()) {
-                        return
-                    }
+            adapter = OffsetTvFocusableAdapter(videoAdapter) { headerAdapter.itemCount },
+            strategy = GridTvFocusStrategy { SPAN_COUNT },
+            canLoadMore = { !isLoading && hasMore },
+            loadMore = {
+                if (!isLoading && hasMore) {
                     currentPage++
                     loadUserVideos()
                 }
             }
-        ).also { it.install() }
+        )
     }
 
     override fun onDestroyView() {
-        loadMoreFocusController?.release()
-        loadMoreFocusController = null
+        tvFocusController?.release()
+        tvFocusController = null
         super.onDestroyView()
     }
 }

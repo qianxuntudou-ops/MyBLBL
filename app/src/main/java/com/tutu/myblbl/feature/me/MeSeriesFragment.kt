@@ -316,7 +316,7 @@ class MeSeriesFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             if (!isAdded || binding.recyclerView.visibility != View.VISIBLE) {
                 return@post
             }
-            if (!adapter.requestFocusedView()) {
+            if (!adapter.requestStoredItemFocus(binding.recyclerView)) {
                 focusPrimaryContent()
             }
         }

@@ -257,10 +257,6 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
             return true
         }
         val recycler = recyclerView ?: return false
-        val restored = laneAdapter?.requestFocusedView() == true
-        if (restored) {
-            return true
-        }
         if ((adapter?.contentCount() ?: 0) == 0) {
             return false
         }

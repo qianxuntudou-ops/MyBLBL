@@ -22,8 +22,7 @@ class SeriesTimelineAdapter(
     private val onBottomEdgeDown: (() -> Boolean)? = null
 ) : ListAdapter<SeriesTimeLineModel, SeriesTimelineAdapter.SeriesTimelineViewHolder>(DIFF_CALLBACK) {
 
-    var focusedView: View? = null
-        private set
+    private var focusedPosition = RecyclerView.NO_POSITION
 
     companion object {
         private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<SeriesTimeLineModel>() {
@@ -44,17 +43,23 @@ class SeriesTimelineAdapter(
 
     fun setData(newItems: List<SeriesTimeLineModel>) {
         if (trackFocusedView) {
-            focusedView = null
+            focusedPosition = focusedPosition
+                .takeIf { it != RecyclerView.NO_POSITION && it < newItems.size }
+                ?: RecyclerView.NO_POSITION
         }
         submitList(newItems)
     }
 
-    fun requestFocusedView(): Boolean {
+    fun requestStoredItemFocus(recyclerView: RecyclerView): Boolean {
         if (!trackFocusedView) {
             return false
         }
-        val fv = focusedView ?: return false
-        return fv.requestFocus()
+        val position = focusedPosition
+        if (position == RecyclerView.NO_POSITION) {
+            return false
+        }
+        return (recyclerView.findViewHolderForAdapterPosition(position) as? SeriesTimelineViewHolder)
+            ?.requestFocus() == true
     }
 
     fun requestFirstItemFocus(recyclerView: RecyclerView): Boolean {
@@ -74,10 +79,14 @@ class SeriesTimelineAdapter(
             onBottomEdgeDown = onBottomEdgeDown
         ) { view ->
             if (trackFocusedView) {
-                focusedView = view
+                focusedPosition = recyclerPositionOf(view)
             }
             onItemFocused?.invoke(view)
         }
+    }
+
+    private fun recyclerPositionOf(view: View): Int {
+        return (view.parent as? RecyclerView)?.getChildAdapterPosition(view) ?: RecyclerView.NO_POSITION
     }
 
     override fun onBindViewHolder(holder: SeriesTimelineViewHolder, position: Int) {

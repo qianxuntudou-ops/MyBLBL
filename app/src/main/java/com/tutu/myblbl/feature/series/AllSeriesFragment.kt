@@ -421,12 +421,12 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
             binding.recyclerView.post {
                 if (!isAdded || view == null) return@post
                 if (!focusNearestContentCard(anchorCenterY)) {
-                    adapter.requestFocusedView() || requestFirstContentCardFocus()
+                    adapter.requestStoredItemFocus(binding.recyclerView) || requestFirstContentCardFocus()
                 }
             }
             return true
         }
-        val handled = adapter.requestFocusedView() || requestFirstContentCardFocus()
+        val handled = adapter.requestStoredItemFocus(binding.recyclerView) || requestFirstContentCardFocus()
         return handled
     }
 

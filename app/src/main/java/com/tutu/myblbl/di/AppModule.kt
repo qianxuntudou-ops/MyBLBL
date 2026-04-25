@@ -24,6 +24,10 @@ import com.tutu.myblbl.repository.VideoRepository
 import com.tutu.myblbl.feature.category.CategoryViewModel
 import com.tutu.myblbl.feature.dynamic.DynamicViewModel
 import com.tutu.myblbl.feature.home.HotViewModel
+import com.tutu.myblbl.feature.home.HotFeedRepository
+import com.tutu.myblbl.feature.home.HomeLaneFeedRepository
+import com.tutu.myblbl.feature.home.HomeLaneViewModel
+import com.tutu.myblbl.feature.home.RecommendFeedRepository
 import com.tutu.myblbl.feature.home.RecommendViewModel
 import com.tutu.myblbl.feature.live.LiveListViewModel
 import com.tutu.myblbl.feature.live.LiveRecommendViewModel
@@ -73,12 +77,16 @@ val repositoryModule = module {
     single { SeriesRepository(get()) }
     single { VideoRepository(get(), get()) }
     single { UserRepository(get(), get()) }
+    single { RecommendFeedRepository(get()) }
+    single { HotFeedRepository(get()) }
+    single { HomeLaneFeedRepository(get()) }
 }
 
 @OptIn(UnstableApi::class)
 val viewModelModule = module {
-    viewModel { RecommendViewModel(get()) }
-    viewModel { HotViewModel(get(), get()) }
+    viewModel { RecommendViewModel(get(), androidContext()) }
+    viewModel { HotViewModel(get(), get(), androidContext()) }
+    viewModel { (type: Int) -> HomeLaneViewModel(type, get()) }
     viewModel { MainNavigationViewModel(get()) }
     viewModel { VideoPlayerViewModel(get(), get(), get(), get(), get(), get(), get(named("noCookie")), androidContext(), get()) }
     viewModel { CategoryViewModel(get()) }

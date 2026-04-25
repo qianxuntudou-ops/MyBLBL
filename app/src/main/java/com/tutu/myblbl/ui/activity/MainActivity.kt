@@ -354,19 +354,19 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         startupTasksScheduled = true
         binding.root.post {
             lifecycleScope.launch {
-                delay(300L)
+                delay(2000L)
                 refreshAvatar(allowNetworkFetch = true)
             }
             lifecycleScope.launch {
-                delay(3000L)
+                delay(10000L)
                 PlayerInstancePool.prewarm(this@MainActivity)
             }
             lifecycleScope.launch {
-                delay(1000L)
+                delay(5000L)
                 MyBLBLApplication.instance.scheduleDeferredSessionPrewarm(delayMillis = 0L)
             }
             lifecycleScope.launch {
-                delay(2000L)
+                delay(7000L)
                 runCatching { sessionGateway.ensureWbiKeys() }
             }
         }

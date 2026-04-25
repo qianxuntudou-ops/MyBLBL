@@ -28,7 +28,8 @@ class VideoAdapter(
     private val onItemClick: (VideoModel) -> Unit = {},
     private val onTopEdgeUp: (() -> Boolean)? = null,
     private val onBottomEdgeDown: (() -> Boolean)? = null,
-    private val onItemFocused: ((Int) -> Unit)? = null
+    private val onItemFocused: ((Int) -> Unit)? = null,
+    private val detectPortraitFromCover: Boolean = true
 ) : BaseAdapter<VideoModel, VideoAdapter.VideoViewHolder>() {
 
     var currentPlayingAid: Long = 0
@@ -111,7 +112,8 @@ class VideoAdapter(
                 onItemFocused?.invoke(position)
             },
             { video -> removeDislikedItem(video) },
-            { upName -> removeDislikedUpItems(upName) }
+            { upName -> removeDislikedUpItems(upName) },
+            detectPortraitFromCover
         )
     }
 
@@ -174,7 +176,8 @@ class VideoAdapter(
         onFocusChange: ((View, Int, Boolean) -> Unit)? = null,
         private val onItemInteracted: ((View, Int) -> Unit)? = null,
         private val onItemDisliked: ((VideoModel) -> Unit)? = null,
-        private val onUpDisliked: ((String) -> Unit)? = null
+        private val onUpDisliked: ((String) -> Unit)? = null,
+        private val detectPortraitFromCover: Boolean = true
     ) : androidx.recyclerview.widget.RecyclerView.ViewHolder(binding.root) {
 
         private var currentVideo: VideoModel? = null
@@ -294,7 +297,9 @@ class VideoAdapter(
             }
 
             val coverUrl = resolveCoverUrl(video)
-            val needPortraitDetect = displayStyle == DisplayStyle.DEFAULT && !video.isPortrait
+            val needPortraitDetect = detectPortraitFromCover &&
+                displayStyle == DisplayStyle.DEFAULT &&
+                !video.isPortrait
             ImageLoader.loadVideoCover(
                 imageView = binding.imageView,
                 url = coverUrl,

@@ -1,36 +1,17 @@
 package com.tutu.myblbl.feature.home
 
-import android.os.Bundle
-import android.view.View
-import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.tutu.myblbl.R
 import com.tutu.myblbl.event.AppEventHub
-import com.tutu.myblbl.model.video.VideoModel
-import com.tutu.myblbl.repository.cache.HomeCacheStore
-import com.tutu.myblbl.ui.adapter.VideoAdapter
-import com.tutu.myblbl.core.ui.base.BaseListFragment
-import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
-import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.core.common.content.ContentFilter
-import com.tutu.myblbl.core.navigation.VideoRouteNavigator
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
-class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
+class RecommendListFragment : VideoFeedFragment() {
 
     companion object {
-        private const val TAG = "RecommendListFragment"
-        private const val CACHE_KEY = "recommendCacheList"
-        private const val MAX_CACHED_RECOMMEND_ITEMS = 100
-
         fun newInstance(): RecommendListFragment {
             return RecommendListFragment()
         }
@@ -38,242 +19,14 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
 
     private val appEventHub: AppEventHub by inject()
     private val viewModel: RecommendViewModel by viewModel()
-    private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
-    private var loadingPage = 1
-    private var waitingForFirstLoad = true
-    private var cacheRestoreJob: Job? = null
-    private var pendingScrollToTopAfterRefresh = false
-    private var initialCacheReadCompleted = false
-    private var restoredInitialCache = false
 
-    override val autoLoad: Boolean = false
-    override val enableLoadMoreFocusController: Boolean = true
-
-    override fun createAdapter(): VideoAdapter {
-        return VideoAdapter(
-            onItemClick = ::onVideoClick,
-            onTopEdgeUp = ::focusTopTab
-        )
-    }
-
-    override fun getSpanCount(): Int = 4
-
-    private fun focusTopTab(): Boolean {
-        return (parentFragment as? HomeFragment)?.focusCurrentTab() == true
-    }
-
-    private fun onVideoClick(video: VideoModel) {
-        val ctx = context ?: return
-        VideoRouteNavigator.openVideo(
-            context = ctx,
-            video = video,
-            playQueue = com.tutu.myblbl.ui.activity.PlayerActivity.buildPlayQueue(
-                (adapter as? VideoAdapter)?.getItemsSnapshot().orEmpty(),
-                video
-            )
-        )
-    }
-
-    override fun loadData(page: Int) {
-        isLoading = true
-        loadingPage = page
-        viewModel.loadRecommendList(page, if (page == 1) 12 else 24)
-    }
-
-    override fun refresh() {
-        cacheRestoreJob?.cancel()
-        currentPage = 1
-        hasMore = true
-        waitingForFirstLoad = true
-        pendingScrollToTopAfterRefresh = true
-        loadData(1)
-    }
-
-    override fun initView() {
-        super.initView()
-        adapter?.setShowLoadMore(true)
-    }
-
-    override fun initData() {
-        showLoading(true)
-        restoreCacheThenLoad()
-    }
-
-    private fun restoreCacheThenLoad() {
-        cacheRestoreJob?.cancel()
-        cacheRestoreJob = viewLifecycleOwner.lifecycleScope.launch {
-            val startMs = android.os.SystemClock.elapsedRealtime()
-            AppLog.i(TAG, "APP_STARTUP recommend cache read start")
-            val cached = readCachedVideos()
-            initialCacheReadCompleted = true
-            AppLog.i(
-                TAG,
-                "APP_STARTUP recommend cache read end elapsed=${android.os.SystemClock.elapsedRealtime() - startMs}ms count=${cached.items.size} ageMs=${formatCacheAge(cached.savedAtMs)} schema=${cached.schemaVersion}"
-            )
-            if (cached.items.isNotEmpty() && waitingForFirstLoad) {
-                val filtered = withContext(Dispatchers.Default) {
-                    ContentFilter.filterVideos(requireContext(), cached.items)
-                }
-                if (filtered.isNotEmpty()) {
-                    restoredInitialCache = true
-                    waitingForFirstLoad = false
-                    currentPage = 1
-                    adapter?.setData(filtered)
-                    adapter?.setShowLoadMore(true)
-                    showContent()
-                    showLoading(false)
-                    mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.HomeContentReady)
-                    return@launch
-                }
-            }
-            AppLog.i(TAG, "APP_STARTUP recommend cache miss, request first page")
-            loadData(1)
-        }
-    }
-
-    private fun applyLoadedVideos(page: Int, videos: List<VideoModel>) {
-        isLoading = false
-        setRefreshing(false)
-        if (page == 1 || (adapter as? VideoAdapter)?.items.isNullOrEmpty()) {
-            val shouldPreserveScroll = page == 1 &&
-                (adapter?.contentCount() ?: 0) > 0 &&
-                !pendingScrollToTopAfterRefresh
-            setAdapterData(videos, preserveScrollOffset = shouldPreserveScroll)
-        } else {
-            (adapter as? VideoAdapter)?.addData(videos)
-        }
-        loadMoreFocusController?.consumePendingFocusAfterLoadMore()
-        if (videos.isNotEmpty()) {
-            showContent()
-            showLoading(false)
-            mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.HomeContentReady)
-            if (page == 1) {
-                cacheVideos(videos)
-                if (pendingScrollToTopAfterRefresh && !isPendingReturnRestore()) {
-                    scrollToTop()
-                }
-                pendingScrollToTopAfterRefresh = false
-            } else {
-                cacheCurrentItems()
-            }
-        } else if (page == 1) {
-            pendingScrollToTopAfterRefresh = false
-            showEmpty()
-        }
-    }
+    override val feedViewModel: VideoFeedViewModel
+        get() = viewModel
+    override val secondaryTabPosition: Int = 0
+    override val dispatchHomeContentReady: Boolean = true
 
     override fun initObserver() {
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.videos.collectLatest { rawVideos ->
-                    val videos = withContext(Dispatchers.Default) {
-                        ContentFilter.filterVideos(requireContext(), rawVideos)
-                    }
-                    if (videos.isEmpty() && (adapter?.contentCount() ?: 0) > 0) {
-                        return@collectLatest
-                    }
-                    if (waitingForFirstLoad && videos.isEmpty()) {
-                        return@collectLatest
-                    }
-                    waitingForFirstLoad = false
-                    val resultPage = loadingPage
-                    val shouldDeferApply = resultPage == 1 &&
-                        (adapter?.contentCount() ?: 0) > 0 &&
-                        !pendingScrollToTopAfterRefresh &&
-                        !isRecyclerIdle()
-                    if (shouldDeferApply) {
-                        runWhenRecyclerIdle {
-                            if (!isAdded || view == null) {
-                                return@runWhenRecyclerIdle
-                            }
-                            applyLoadedVideos(resultPage, videos)
-                        }
-                        return@collectLatest
-                    }
-                    applyLoadedVideos(resultPage, videos)
-                }
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.hasMore.collectLatest { canLoadMore ->
-                    hasMore = canLoadMore
-                    adapter?.setShowLoadMore(canLoadMore)
-                }
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.loading.collectLatest { loading ->
-                    if (loading && adapter?.contentCount() == 0) {
-                        showLoading(true)
-                    }
-                }
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.error.collectLatest { error ->
-                    error?.let {
-                        waitingForFirstLoad = false
-                        isLoading = false
-                        setRefreshing(false)
-                        if (adapter?.contentCount() == 0) {
-                            if (initialCacheReadCompleted && !restoredInitialCache) {
-                                showError(it.ifBlank { getString(R.string.net_error) })
-                            } else {
-                                restoreCachedVideos(
-                                    onMiss = {
-                                        showError(it.ifBlank { getString(R.string.net_error) })
-                                    }
-                                )
-                            }
-                        } else {
-                            loadMoreFocusController?.clearPendingFocusAfterLoadMore()
-                        }
-                    }
-                }
-            }
-        }
-
-        viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                mainNavigationViewModel.events.collectLatest { event ->
-                    if (!isResumed || view == null) {
-                        return@collectLatest
-                    }
-                    when (event) {
-                        is MainNavigationViewModel.Event.MainTabReselected -> {
-                            if (event.index == 0 && !isLoading) {
-                                refresh()
-                            }
-                        }
-
-                        is MainNavigationViewModel.Event.SecondaryTabReselected -> {
-                            if (event.host == MainNavigationViewModel.SecondaryTabHost.HOME &&
-                                event.position == 0 &&
-                                !isLoading
-                            ) {
-                                refresh()
-                            }
-                        }
-
-                        MainNavigationViewModel.Event.MenuPressed -> {
-                            if (!isLoading) {
-                                refresh()
-                            }
-                        }
-
-                        MainNavigationViewModel.Event.BackPressed -> scrollToTop()
-                        else -> Unit
-                    }
-                }
-            }
-        }
-
+        super.initObserver()
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 appEventHub.events.collectLatest { event ->
@@ -284,74 +37,4 @@ class RecommendListFragment : BaseListFragment<VideoModel>(), HomeTabPage {
             }
         }
     }
-
-    override fun onRetryClick() {
-        refresh()
-    }
-
-    override fun focusPrimaryContent(): Boolean {
-        if (!isAdded || view == null) {
-            return false
-        }
-        if (viewError?.visibility == View.VISIBLE && buttonRetry?.isShown == true) {
-            return buttonRetry?.requestFocus() == true
-        }
-        return super<BaseListFragment>.focusPrimaryContent()
-    }
-
-    override fun focusPrimaryContent(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
-        return super<BaseListFragment>.focusPrimaryContent(anchorView, preferSpatialEntry)
-    }
-
-    private fun cacheVideos(videos: List<VideoModel>) {
-        viewLifecycleOwner.lifecycleScope.launch {
-            runCatching {
-                HomeCacheStore.writeVideos(CACHE_KEY, videos.take(MAX_CACHED_RECOMMEND_ITEMS))
-            }.onFailure { throwable ->
-                AppLog.e(TAG, "cacheVideos failure: ${throwable.message}", throwable)
-            }
-        }
-    }
-
-    private fun cacheCurrentItems() {
-        val snapshot = (adapter as? VideoAdapter)
-            ?.getItemsSnapshot()
-            .orEmpty()
-            .take(MAX_CACHED_RECOMMEND_ITEMS)
-        if (snapshot.isNotEmpty()) {
-            cacheVideos(snapshot)
-        }
-    }
-
-    private suspend fun restoreCachedVideos(onMiss: (() -> Unit)? = null): Boolean {
-        val cachedVideos = readCachedVideos().items
-        if (cachedVideos.isEmpty()) {
-            onMiss?.invoke()
-            return false
-        }
-        adapter?.setData(ContentFilter.filterVideos(requireContext(), cachedVideos))
-        adapter?.setShowLoadMore(true)
-        showContent()
-        showLoading(false)
-        mainNavigationViewModel.dispatch(MainNavigationViewModel.Event.HomeContentReady)
-        return true
-    }
-
-    private suspend fun readCachedVideos(): HomeCacheStore.CachedVideos {
-        return runCatching {
-            HomeCacheStore.readCachedVideos(CACHE_KEY)
-        }.getOrElse { throwable ->
-            AppLog.e(TAG, "restoreCachedVideos failure: ${throwable.message}", throwable)
-            HomeCacheStore.CachedVideos(emptyList())
-        }
-    }
-
-    private fun formatCacheAge(savedAtMs: Long): Long {
-        return if (savedAtMs > 0L) {
-            System.currentTimeMillis() - savedAtMs
-        } else {
-            -1L
-        }
-    }
-
 }

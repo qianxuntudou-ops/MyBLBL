@@ -9,6 +9,7 @@ import com.tutu.myblbl.core.common.cache.FileCacheManager
 object HomeCacheStore {
 
     private const val VIDEO_CACHE_SCHEMA_VERSION = 1
+    private const val SECTION_CACHE_SCHEMA_VERSION = 1
 
     data class CachedVideos(
         val items: List<VideoModel>,
@@ -20,6 +21,18 @@ object HomeCacheStore {
         val schemaVersion: Int = VIDEO_CACHE_SCHEMA_VERSION,
         val savedAtMs: Long = System.currentTimeMillis(),
         val items: List<VideoModel> = emptyList()
+    )
+
+    data class CachedSections(
+        val items: List<HomeLaneSection>,
+        val savedAtMs: Long = 0L,
+        val schemaVersion: Int = 0
+    )
+
+    private data class SectionCacheEnvelope(
+        val schemaVersion: Int = SECTION_CACHE_SCHEMA_VERSION,
+        val savedAtMs: Long = System.currentTimeMillis(),
+        val items: List<HomeLaneSection> = emptyList()
     )
 
     suspend fun readVideos(cacheKey: String): List<VideoModel> {
@@ -65,13 +78,40 @@ object HomeCacheStore {
     }
 
     suspend fun readSections(cacheKey: String): List<HomeLaneSection> {
+        return readCachedSections(cacheKey).items
+    }
+
+    suspend fun readCachedSections(cacheKey: String): CachedSections {
+        val envelopeType = object : TypeToken<SectionCacheEnvelope>() {}.type
+        val envelope = FileCacheManager.getAsync<SectionCacheEnvelope>(cacheKey, envelopeType)
+        if (envelope != null && envelope.schemaVersion == SECTION_CACHE_SCHEMA_VERSION) {
+            return CachedSections(
+                items = filterSectionCache(envelope.items),
+                savedAtMs = envelope.savedAtMs,
+                schemaVersion = envelope.schemaVersion
+            )
+        }
+
         val type = object : TypeToken<List<HomeLaneSection>>() {}.type
-        return FileCacheManager.getAsync<List<HomeLaneSection>>(cacheKey, type)
-            .orEmpty()
-            .filter { it.items.isNotEmpty() }
+        val cachedSections = FileCacheManager.getAsync<List<HomeLaneSection>>(cacheKey, type).orEmpty()
+        return CachedSections(
+            items = filterSectionCache(cachedSections),
+            savedAtMs = 0L,
+            schemaVersion = 0
+        )
     }
 
     suspend fun writeSections(cacheKey: String, sections: List<HomeLaneSection>) {
-        FileCacheManager.putAsync(cacheKey, sections)
+        FileCacheManager.putAsync(
+            cacheKey,
+            SectionCacheEnvelope(
+                savedAtMs = System.currentTimeMillis(),
+                items = sections
+            )
+        )
+    }
+
+    private fun filterSectionCache(sections: List<HomeLaneSection>): List<HomeLaneSection> {
+        return sections.filter { it.items.isNotEmpty() || it.timelineDays.isNotEmpty() }
     }
 }

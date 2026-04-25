@@ -156,13 +156,14 @@ object ImageLoader {
             return
         }
         val optimizedUrl = buildOptimizedVideoCoverUrl(imageView, url)
-        AppLog.d(TAG, "loadVideoCover: raw=$url, optimized=$optimizedUrl")
-        Glide.with(imageView)
+        val request = Glide.with(imageView)
             .load(buildImageModel(optimizedUrl))
             .placeholder(placeholder)
             .error(error)
             .apply(getCoverRequestOptions(imageView.context))
-            .listener(object : RequestListener<Drawable> {
+
+        if (onPortraitDetected != null) {
+            request.listener(object : RequestListener<Drawable> {
                 override fun onResourceReady(
                     resource: Drawable,
                     model: Any,
@@ -170,12 +171,9 @@ object ImageLoader {
                     dataSource: DataSource,
                     isFirstResource: Boolean
                 ): Boolean {
-                    AppLog.d(TAG, "loadVideoCover OK: url=$optimizedUrl")
-                    if (onPortraitDetected != null) {
-                        val w = resource.intrinsicWidth
-                        val h = resource.intrinsicHeight
-                        onPortraitDetected(w > 0 && h > 0 && h > w)
-                    }
+                    val w = resource.intrinsicWidth
+                    val h = resource.intrinsicHeight
+                    onPortraitDetected(w > 0 && h > 0 && h > w)
                     return false
                 }
 
@@ -189,7 +187,9 @@ object ImageLoader {
                     return false
                 }
             })
-            .into(imageView)
+        }
+
+        request.into(imageView)
     }
 
     fun loadSeriesCover(

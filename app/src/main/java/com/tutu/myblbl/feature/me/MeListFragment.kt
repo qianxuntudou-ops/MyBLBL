@@ -365,7 +365,7 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
             strategy = GridTvFocusStrategy { 4 },
             canLoadMore = {
                 when (type) {
-                    TYPE_HISTORY -> !viewModel.loading.value && viewModel.hasMore.value
+                    TYPE_HISTORY -> viewModel.hasMore.value
                     TYPE_LATER -> false
                     else -> false
                 }

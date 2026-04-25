@@ -286,7 +286,7 @@ class SearchResultPagerAdapter(
                 strategy = GridTvFocusStrategy { currentSpanCount },
                 canLoadMore = {
                     val page = currentPage
-                    page != null && page.hasMore && !page.loading
+                    page != null && page.hasMore
                 },
                 loadMore = loadMore@{
                     val type = currentType ?: return@loadMore

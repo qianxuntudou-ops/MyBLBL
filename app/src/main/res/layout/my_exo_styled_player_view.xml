@@ -17,10 +17,10 @@
         <ImageView
             android:layout_gravity="center|top"
             android:id="@+id/exo_buffering"
-            android:layout_marginTop="@dimen/px350"
+            android:layout_marginTop="175dp"
             android:visibility="gone"
-            android:layout_width="@dimen/px100"
-            android:layout_height="@dimen/px100"/>
+            android:layout_width="50dp"
+            android:layout_height="50dp"/>
         <TextView
             android:textSize="@dimen/exo_error_message_text_size"
             android:textColor="@color/exo_white"
@@ -50,11 +50,11 @@
         android:id="@+id/image_pause_indicator"
         android:src="@drawable/ic_pause_new"
         android:visibility="gone"
-        android:layout_width="@dimen/px120"
-        android:layout_height="@dimen/px120"
-        android:layout_marginBottom="@dimen/px150"
-        android:layout_marginRight="@dimen/px80"
-        android:layout_marginEnd="@dimen/px80"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:layout_marginBottom="75dp"
+        android:layout_marginRight="40dp"
+        android:layout_marginEnd="40dp"
         android:alpha="0.9"/>
     <View
         android:id="@+id/exo_controller_placeholder"

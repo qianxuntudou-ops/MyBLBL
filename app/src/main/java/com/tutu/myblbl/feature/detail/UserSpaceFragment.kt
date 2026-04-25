@@ -508,7 +508,7 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
             recyclerView = binding.recyclerViewVideos,
             adapter = OffsetTvFocusableAdapter(videoAdapter) { headerAdapter.itemCount },
             strategy = GridTvFocusStrategy { SPAN_COUNT },
-            canLoadMore = { !isLoading && hasMore },
+            canLoadMore = { hasMore },
             loadMore = {
                 if (!isLoading && hasMore) {
                     currentPage++

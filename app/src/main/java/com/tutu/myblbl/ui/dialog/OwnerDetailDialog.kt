@@ -297,7 +297,7 @@ class OwnerDetailDialog(
             recyclerView = binding.recyclerView,
             adapter = videoAdapter,
             strategy = GridTvFocusStrategy { 3 },
-            canLoadMore = { !isLoading && hasMore },
+            canLoadMore = { hasMore },
             loadMore = {
                 if (!isLoading && hasMore) {
                     currentPage++

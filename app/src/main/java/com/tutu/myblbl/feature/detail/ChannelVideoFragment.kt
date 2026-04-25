@@ -158,7 +158,7 @@ class ChannelVideoFragment : BaseFragment<FragmentBaseListBinding>() {
             recyclerView = rv,
             adapter = videoAdapter,
             strategy = GridTvFocusStrategy { 4 },
-            canLoadMore = { !isLoading && hasMore },
+            canLoadMore = { hasMore },
             loadMore = {
                 if (!isLoading && hasMore) {
                     loadMore()

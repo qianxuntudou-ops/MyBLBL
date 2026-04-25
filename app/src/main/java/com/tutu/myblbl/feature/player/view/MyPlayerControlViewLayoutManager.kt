@@ -503,6 +503,7 @@ class MyPlayerControlViewLayoutManager(
         val basicButtons = visibleButtons.filterNot { it.id in movedIds }
         val extraButtons = visibleButtons.filter { it.id in movedIds }
         val focusedExtraHidden = !isOverflowVisible && extraButtons.any { it.isFocused }
+        val previouslyFocusedButton = orderedButtons.firstOrNull { it.isFocused }
 
         basicControls.removeAllViews()
         extraControls.removeAllViews()
@@ -540,6 +541,8 @@ class MyPlayerControlViewLayoutManager(
                     playerControlView.requestPlayPauseFocus()
                 }
             }
+        } else if (previouslyFocusedButton != null && previouslyFocusedButton.visibility == View.VISIBLE) {
+            previouslyFocusedButton.requestFocus()
         }
     }
 

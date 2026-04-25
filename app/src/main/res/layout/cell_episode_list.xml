@@ -12,9 +12,9 @@
     android:layout_height="wrap_content">
     <androidx.appcompat.widget.AppCompatImageView
         android:id="@+id/icon_playing"
-        android:layout_width="@dimen/px25"
-        android:layout_height="@dimen/px25"
-        android:layout_marginStart="@dimen/px25"
+        android:layout_width="13dp"
+        android:layout_height="13dp"
+        android:layout_marginStart="13dp"
         app:srcCompat="@drawable/ic_play"/>
     <androidx.appcompat.widget.AppCompatTextView
         android:textSize="@dimen/px30"

@@ -309,7 +309,7 @@ class FavoriteDetailFragment : BaseFragment<FragmentFavoriteDetailBinding>() {
             recyclerView = binding.recyclerViewVideos,
             adapter = favoriteAdapter,
             strategy = GridTvFocusStrategy { 4 },
-            canLoadMore = { !isLoading && hasMore },
+            canLoadMore = { hasMore },
             loadMore = {
                 if (!isLoading && hasMore) {
                     currentPage++

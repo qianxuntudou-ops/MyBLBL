@@ -473,6 +473,14 @@ class VideoPlayerFragment : Fragment() {
                         "decode_render=${if (videoDecoderDelta > 0) trace.firstFrameMs - trace.videoDecoderInitMs else -1}ms")
                     playerPerfTrace = null
                 }
+                if (!activeStartupFirstFrameLogged) {
+                    activeStartupFirstFrameLogged = true
+                    PlaybackStartupTrace.log(
+                        traceId = activeStartupTraceId,
+                        startElapsedMs = activeStartupTraceStartElapsedMs,
+                        step = "first_frame"
+                    )
+                }
                 viewModel.onPlaybackFirstFrame()
                 startupTrace
                     ?.takeIf { !it.firstFrameLogged }
@@ -695,6 +703,7 @@ class VideoPlayerFragment : Fragment() {
                 )
                 activeStartupTraceId = playbackRequest.startupTraceId
                 activeStartupTraceStartElapsedMs = playbackRequest.startupTraceStartElapsedMs
+                activeStartupFirstFrameLogged = false
                 playerPerfTrace = PlayerPerfTrace(prepareMs = System.currentTimeMillis())
                 AppLog.i("VideoPlayerViewModel", "PLAYER_PERF trace created prepareMs=${playerPerfTrace!!.prepareMs}")
                 suppressPlaybackEnvironmentSync = true
@@ -702,7 +711,19 @@ class VideoPlayerFragment : Fragment() {
                     currentPlayer.playWhenReady = false
                     currentPlayer.stop()
                     currentPlayer.setMediaSource(playbackRequest.mediaSource, playbackRequest.seekPositionMs)
+                    PlaybackStartupTrace.log(
+                        traceId = activeStartupTraceId,
+                        startElapsedMs = activeStartupTraceStartElapsedMs,
+                        step = "media_source_set",
+                        message = "seek=${playbackRequest.seekPositionMs}"
+                    )
                     currentPlayer.prepare()
+                    PlaybackStartupTrace.log(
+                        traceId = activeStartupTraceId,
+                        startElapsedMs = activeStartupTraceStartElapsedMs,
+                        step = "player_prepare_called",
+                        message = "playWhenReady=${playbackRequest.playWhenReady}"
+                    )
                     currentPlayer.playWhenReady = playbackRequest.playWhenReady
                 } finally {
                     suppressPlaybackEnvironmentSync = false
@@ -1397,6 +1418,7 @@ class VideoPlayerFragment : Fragment() {
     private var playerPerfTrace: PlayerPerfTrace? = null
     private var activeStartupTraceId: String = PlaybackStartupTrace.NO_TRACE
     private var activeStartupTraceStartElapsedMs: Long = 0L
+    private var activeStartupFirstFrameLogged: Boolean = false
 
     private data class PlayerPerfTrace(
         val prepareMs: Long,       // prepare() 被调用的时间

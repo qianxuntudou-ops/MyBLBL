@@ -1587,6 +1587,7 @@ class VideoPlayerViewModel(
         if (!preparedPlayback.replaceInPlace) {
             sessionStartTimestampMs = System.currentTimeMillis()
             lastReportedHeartbeatPositionSec = -1L
+            hasReachedFirstFrame = false
         }
 
         if (resetFallbackAttempts) {
@@ -2417,6 +2418,12 @@ class VideoPlayerViewModel(
             val initialSegment = resolveDanmakuSegmentIndex(pendingSeekPositionMs)
                 .takeIf { it > 0 } ?: 1
             currentDanmakuSegmentIndex = initialSegment
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "danmaku_initial_segment_selected",
+                message = "cid=$cid seekMs=$pendingSeekPositionMs segment=$initialSegment total=$segmentCount"
+            )
 
             // 3. 当前段先发布；特殊弹幕和下一段后台补，避免首段弹幕被额外请求拖慢。
             val currentPayload = consumePreloadedDanmakuSegment(
@@ -2472,6 +2479,12 @@ class VideoPlayerViewModel(
             if (initialSegment < segmentCount) {
                 launch(Dispatchers.IO) {
                     val nextSegment = initialSegment + 1
+                    PlaybackStartupTrace.log(
+                        traceId = currentStartupTraceId,
+                        startElapsedMs = currentStartupTraceStartElapsedMs,
+                        step = "danmaku_segment_preload_started",
+                        message = "cid=$cid segment=$nextSegment"
+                    )
                     val nextPayload = loadDanmakuSegmentPayload(
                         cid = cid,
                         aid = aid,
@@ -2479,6 +2492,12 @@ class VideoPlayerViewModel(
                     )
                     if (isActiveDanmakuRequest(loadGeneration)) {
                         danmakuSegmentPayloads[nextSegment] = nextPayload
+                        PlaybackStartupTrace.log(
+                            traceId = currentStartupTraceId,
+                            startElapsedMs = currentStartupTraceStartElapsedMs,
+                            step = "danmaku_segment_preload_ready",
+                            message = "cid=$cid segment=$nextSegment regular=${nextPayload.regularItems.size} special=${nextPayload.specialItems.size}"
+                        )
                     }
                 }
             }
@@ -2878,7 +2897,23 @@ class VideoPlayerViewModel(
     private fun onDanmakuSegmentChanged(positionMs: Long) {
         val newIndex = resolveDanmakuSegmentIndex(positionMs)
         if (newIndex <= 0 || newIndex == currentDanmakuSegmentIndex) return
+        if (!hasReachedFirstFrame && currentDanmakuSegmentIndex > 1 && newIndex == 1 && positionMs < 1_000L) {
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "danmaku_segment_change_ignored",
+                message = "positionMs=$positionMs from=$currentDanmakuSegmentIndex to=$newIndex reason=startup_zero_before_first_frame"
+            )
+            return
+        }
+        val previousIndex = currentDanmakuSegmentIndex
         currentDanmakuSegmentIndex = newIndex
+        PlaybackStartupTrace.log(
+            traceId = currentStartupTraceId,
+            startElapsedMs = currentStartupTraceStartElapsedMs,
+            step = "danmaku_segment_changed",
+            message = "positionMs=$positionMs from=$previousIndex to=$newIndex total=$danmakuTotalSegments"
+        )
         trimDistantDanmakuSegments()
         // 动态加载新段
         loadDanmakuSegmentIfNeeded(newIndex)
@@ -2892,18 +2927,46 @@ class VideoPlayerViewModel(
      * 按需加载指定弹幕片段（如果尚未加载）
      */
     private fun loadDanmakuSegmentIfNeeded(segmentIndex: Int) {
-        if (danmakuLoadedSegments.contains(segmentIndex)) return
-        if (danmakuLoadingSegments.contains(segmentIndex)) return
+        if (danmakuLoadedSegments.contains(segmentIndex)) {
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "danmaku_segment_load_skip",
+                message = "segment=$segmentIndex reason=loaded"
+            )
+            return
+        }
+        if (danmakuLoadingSegments.contains(segmentIndex)) {
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "danmaku_segment_load_skip",
+                message = "segment=$segmentIndex reason=loading"
+            )
+            return
+        }
         val cid = currentCid
         val aid = currentAid ?: 0L
         if (cid <= 0L || aid <= 0L) return
         danmakuSegmentPayloads[segmentIndex]?.let { cachedPayload ->
             danmakuLoadedSegments.add(segmentIndex)
+            PlaybackStartupTrace.log(
+                traceId = currentStartupTraceId,
+                startElapsedMs = currentStartupTraceStartElapsedMs,
+                step = "danmaku_segment_cache_hit",
+                message = "cid=$cid segment=$segmentIndex regular=${cachedPayload.regularItems.size} special=${cachedPayload.specialItems.size}"
+            )
             publishDanmakuSegmentPayload(cachedPayload)
             return
         }
         danmakuLoadingSegments.add(segmentIndex)
         val loadGeneration = danmakuLoadGeneration
+        PlaybackStartupTrace.log(
+            traceId = currentStartupTraceId,
+            startElapsedMs = currentStartupTraceStartElapsedMs,
+            step = "danmaku_segment_load_started",
+            message = "cid=$cid segment=$segmentIndex"
+        )
         viewModelScope.launch(Dispatchers.IO) {
             val payload = runCatching {
                 loadDanmakuSegmentPayload(
@@ -2915,19 +2978,43 @@ class VideoPlayerViewModel(
             withContext(Dispatchers.Main) {
                 danmakuLoadingSegments.remove(segmentIndex)
                 if (!isActiveDanmakuRequest(loadGeneration) || currentCid != cid) {
+                    PlaybackStartupTrace.log(
+                        traceId = currentStartupTraceId,
+                        startElapsedMs = currentStartupTraceStartElapsedMs,
+                        step = "danmaku_segment_load_discarded",
+                        message = "cid=$cid segment=$segmentIndex currentCid=$currentCid active=${isActiveDanmakuRequest(loadGeneration)}"
+                    )
                     return@withContext
                 }
                 if (payload == null) {
+                    PlaybackStartupTrace.log(
+                        traceId = currentStartupTraceId,
+                        startElapsedMs = currentStartupTraceStartElapsedMs,
+                        step = "danmaku_segment_load_failed",
+                        message = "cid=$cid segment=$segmentIndex"
+                    )
                     return@withContext
                 }
                 danmakuSegmentPayloads[segmentIndex] = payload
                 danmakuLoadedSegments.add(segmentIndex)
+                PlaybackStartupTrace.log(
+                    traceId = currentStartupTraceId,
+                    startElapsedMs = currentStartupTraceStartElapsedMs,
+                    step = "danmaku_segment_load_ready",
+                    message = "cid=$cid segment=$segmentIndex regular=${payload.regularItems.size} special=${payload.specialItems.size}"
+                )
                 publishDanmakuSegmentPayload(payload)
             }
         }
     }
 
     private fun publishDanmakuSegmentPayload(payload: SpecialDanmakuPayload) {
+        PlaybackStartupTrace.log(
+            traceId = currentStartupTraceId,
+            startElapsedMs = currentStartupTraceStartElapsedMs,
+            step = "danmaku_segment_published",
+            message = "regular=${payload.regularItems.size} special=${payload.specialItems.size}"
+        )
         if (payload.regularItems.isNotEmpty()) {
             publishDanmaku(payload.regularItems, replace = false)
         }

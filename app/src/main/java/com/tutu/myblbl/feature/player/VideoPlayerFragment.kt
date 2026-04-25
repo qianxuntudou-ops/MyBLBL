@@ -847,6 +847,12 @@ class VideoPlayerFragment : Fragment() {
                                 startupTraceStartElapsedMs = activeStartupTraceStartElapsedMs
                             )
                         } else {
+                            PlaybackStartupTrace.log(
+                                traceId = activeStartupTraceId,
+                                startElapsedMs = activeStartupTraceStartElapsedMs,
+                                step = "danmaku_ui_submitted",
+                                message = "replace=false count=${update.items.size}"
+                            )
                             playerView.appendDanmakuData(update.items)
                         }
                     }
@@ -860,6 +866,12 @@ class VideoPlayerFragment : Fragment() {
 
                 launch {
                     viewModel.specialDanmaku.collect { data ->
+                        PlaybackStartupTrace.log(
+                            traceId = activeStartupTraceId,
+                            startElapsedMs = activeStartupTraceStartElapsedMs,
+                            step = "special_danmaku_ui_submitted",
+                            message = "count=${data.size}"
+                        )
                         playerView.setSpecialDanmakuData(data)
                         updateDanmakuSwitchVisibility()
                     }

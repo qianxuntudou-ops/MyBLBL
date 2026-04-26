@@ -79,15 +79,12 @@ class TvListFocusController(
         }
 
         if (reason == TvDataChangeReason.APPEND) {
-            val pending = pendingMoveAfterLoadMore
+            // Clear the pending flag. Don't auto-move focus — let the user's next DOWN press
+            // navigate into the newly loaded items naturally.
+            // Fall through to the common anchor-restore logic below: if focus is still valid
+            // inside the RV we return immediately; if it was lost (e.g. ViewHolder recycled
+            // during fast scroll) we restore it to the anchor so it doesn't stay stranded.
             pendingMoveAfterLoadMore = null
-            if (pending != null) {
-                val target = strategy.nextPosition(pending, View.FOCUS_DOWN, adapter.focusableItemCount())
-                if (target != null) {
-                    focusPosition(target, pending.offsetTop, "append")
-                }
-            }
-            return
         }
 
         if (hasValidFocusedItem()) {

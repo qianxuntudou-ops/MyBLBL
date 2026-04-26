@@ -249,6 +249,10 @@
     <string name="toast_dislike_up_failed">操作失败，请重试</string>
     <string name="toast_watch_later_full">稍后观看列表已满（上限100个）</string>
     <string name="toast_need_login">请先登录</string>
+    <string name="toast_follow_animation_success">追番成功</string>
+    <string name="toast_follow_series_success">追剧成功</string>
+    <string name="toast_cancel_follow_animation_success">取消追番成功</string>
+    <string name="toast_cancel_follow_series_success">取消追剧成功</string>
     <string name="live_quality">直播画质</string>
     <string name="loading">正在加载..</string>
     <string name="m3_exceed_max_badge_text_suffix">%1$s%2$s</string>

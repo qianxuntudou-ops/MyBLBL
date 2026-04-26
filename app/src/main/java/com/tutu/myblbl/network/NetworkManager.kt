@@ -224,6 +224,10 @@ object NetworkManager {
         securityCoordinator.ensureHealthyForPlay()
     }
 
+    suspend fun forceCookieRefresh() {
+        securityCoordinator.forceCookieRefresh()
+    }
+
     suspend fun prewarmWebSession(forceUaRefresh: Boolean = false): Boolean {
         return securityCoordinator.prewarmWebSession(forceUaRefresh)
     }

@@ -245,6 +245,12 @@ class BiliSecurityCoordinator(
         cookieRefreshCheckedDay = 0L
     }
 
+    suspend fun forceCookieRefresh() {
+        cookieRefreshCheckedDay = 0L
+        lastEnsureHealthyForPlayMs = 0L
+        ensureHealthyForPlay()
+    }
+
     private suspend fun ensureWebFingerprintCookies() {
         withContext(Dispatchers.IO) {
             val hasBuvid3 = !cookieManager.getCookieValue("buvid3").isNullOrBlank()

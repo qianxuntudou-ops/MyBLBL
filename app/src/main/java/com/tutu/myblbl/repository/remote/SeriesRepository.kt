@@ -17,6 +17,7 @@ class SeriesRepository(
 
     suspend fun getSeriesDetail(seasonId: Long, epId: Long = 0): Result<EpisodesDetailModel> {
         return runCatching {
+            securityGateway.ensureHealthyForPlay()
             val response = apiService.getVideoEpisodes(
                 if (seasonId > 0) seasonId else null,
                 if (epId > 0) epId else null
@@ -50,18 +51,26 @@ class SeriesRepository(
             securityGateway.ensureHealthyForPlay()
             val csrf = sessionGateway.requireCsrfToken()
                 ?: throw IllegalStateException("csrf token is blank")
-            val response = sessionGateway.syncAuthState(
-                apiService.followSeries(seasonId, csrf),
+            var response = apiService.followSeries(seasonId, csrf)
+            if (response.code == -101) {
+                sessionGateway.forceCookieRefresh()
+                val newCsrf = sessionGateway.requireCsrfToken()
+                if (!newCsrf.isNullOrBlank()) {
+                    response = apiService.followSeries(seasonId, newCsrf)
+                }
+            }
+            val finalResponse = sessionGateway.syncAuthState(
+                response,
                 source = "series.followSeries"
             )
-            if (response.isSuccess) {
+            if (finalResponse.isSuccess) {
                 FollowSeriesResult(
                     relation = true,
                     status = 1,
-                    toast = response.errorMessage.ifBlank { "追番成功" }
+                    toast = ""
                 )
             } else {
-                throw IllegalStateException(response.errorMessage.ifBlank { "追番失败" })
+                throw IllegalStateException(finalResponse.errorMessage.ifBlank { "追番失败" })
             }
         }
     }
@@ -71,18 +80,26 @@ class SeriesRepository(
             securityGateway.ensureHealthyForPlay()
             val csrf = sessionGateway.requireCsrfToken()
                 ?: throw IllegalStateException("csrf token is blank")
-            val response = sessionGateway.syncAuthState(
-                apiService.cancelFollowSeries(seasonId, csrf),
+            var response = apiService.cancelFollowSeries(seasonId, csrf)
+            if (response.code == -101) {
+                sessionGateway.forceCookieRefresh()
+                val newCsrf = sessionGateway.requireCsrfToken()
+                if (!newCsrf.isNullOrBlank()) {
+                    response = apiService.cancelFollowSeries(seasonId, newCsrf)
+                }
+            }
+            val finalResponse = sessionGateway.syncAuthState(
+                response,
                 source = "series.cancelFollowSeries"
             )
-            if (response.isSuccess) {
+            if (finalResponse.isSuccess) {
                 FollowSeriesResult(
                     relation = false,
                     status = 0,
-                    toast = response.errorMessage.ifBlank { "已取消追番" }
+                    toast = ""
                 )
             } else {
-                throw IllegalStateException(response.errorMessage.ifBlank { "取消追番失败" })
+                throw IllegalStateException(finalResponse.errorMessage.ifBlank { "取消追番失败" })
             }
         }
     }

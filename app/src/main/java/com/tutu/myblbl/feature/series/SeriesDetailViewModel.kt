@@ -57,12 +57,32 @@ class SeriesDetailViewModel(
             
             repository.getSeriesDetail(seasonId, epId).fold(
                 onSuccess = { detail ->
-                    _seriesDetail.value = detail
                     currentSeasonId = detail.seasonId.takeIf { it > 0 } ?: currentSeasonId
-                    detail.userStatus?.let { status ->
-                        _isFollowed.value = status.follow == 1
+                    val userStatus = detail.userStatus
+                    if (userStatus != null) {
+                        _isFollowed.value = userStatus.isFollowed
+                        _seriesDetail.value = detail
+                        loadRecommend(currentSeasonId)
+                    } else if (sessionGateway.isLoggedIn()) {
+                        sessionGateway.forceCookieRefresh()
+                        repository.getSeriesDetail(currentSeasonId, epId).fold(
+                            onSuccess = { retryDetail ->
+                                currentSeasonId = retryDetail.seasonId.takeIf { it > 0 } ?: currentSeasonId
+                                retryDetail.userStatus?.let { status ->
+                                    _isFollowed.value = status.isFollowed
+                                }
+                                _seriesDetail.value = retryDetail
+                                loadRecommend(currentSeasonId)
+                            },
+                            onFailure = {
+                                _seriesDetail.value = detail
+                                loadRecommend(currentSeasonId)
+                            }
+                        )
+                    } else {
+                        _seriesDetail.value = detail
+                        loadRecommend(currentSeasonId)
                     }
-                    loadRecommend(currentSeasonId)
                 },
                 onFailure = { e ->
                     _error.value = e.message ?: "加载番剧详情失败"
@@ -77,11 +97,15 @@ class SeriesDetailViewModel(
     fun toggleFollow() {
         if (currentSeasonId <= 0 || isFollowActionRunning) return
         if (!sessionGateway.isLoggedIn()) {
+            viewModelScope.launch {
+                _messages.emit(UiMessage.Res(R.string.toast_need_login))
+            }
             return
         }
         
         viewModelScope.launch {
             isFollowActionRunning = true
+            val nowFollowed = !_isFollowed.value
             val result: Result<FollowSeriesResult> = if (_isFollowed.value) {
                 repository.cancelFollowSeries(currentSeasonId)
             } else {
@@ -90,15 +114,11 @@ class SeriesDetailViewModel(
             
             result.fold(
                 onSuccess = { followResult ->
-                    _isFollowed.value = !_isFollowed.value
+                    _isFollowed.value = nowFollowed
                     if (followResult.toast.isNotBlank()) {
                         _messages.emit(UiMessage.Text(followResult.toast))
                     } else {
-                        _messages.emit(
-                            UiMessage.Res(
-                                if (_isFollowed.value) R.string.followed_series else R.string.follow_series
-                            )
-                        )
+                        _messages.emit(UiMessage.Res(followSuccessMessage(nowFollowed)))
                     }
                 },
                 onFailure = { e ->
@@ -107,6 +127,17 @@ class SeriesDetailViewModel(
                 }
             )
             isFollowActionRunning = false
+        }
+    }
+
+    private fun followSuccessMessage(nowFollowed: Boolean): Int {
+        val isAnimation = _seriesDetail.value?.type.let { it == 1 || it == 4 }
+        return if (nowFollowed) {
+            if (isAnimation) R.string.toast_follow_animation_success
+            else R.string.toast_follow_series_success
+        } else {
+            if (isAnimation) R.string.toast_cancel_follow_animation_success
+            else R.string.toast_cancel_follow_series_success
         }
     }
 

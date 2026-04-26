@@ -430,7 +430,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
                 val selected = panelState.liveQualities[itemId]
                 updateState { it.copy(currentLiveQualityQn = selected.qn) }
                 onPlayerSettingChange?.onLiveQualityChange(selected.qn)
-                goBackToMainMenu()
+                showHide(false)
             }
         }
     }

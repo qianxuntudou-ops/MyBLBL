@@ -243,6 +243,7 @@ class LiveRepository(
         val playUrl = data.objectOrNull("playurl_info")
             ?.objectOrNull("playurl")
             ?: return null
+        val acceptQn = extractAcceptQn(playUrl.arrayOrNull("stream"))
         val qualityDescription = playUrl.arrayOrNull("g_qn_desc")
             ?.mapNotNull { element ->
                 element.asJsonObjectOrNull()?.let { obj ->
@@ -253,6 +254,7 @@ class LiveRepository(
                 }
             }
             .orEmpty()
+            .filter { acceptQn.isEmpty() || it.qn in acceptQn }
         val candidates = buildStreamCandidates(playUrl.arrayOrNull("stream")).sortedWith(
             compareByDescending<LiveStreamCandidate> { it.priority }
                 .thenByDescending { it.currentQn }
@@ -348,6 +350,20 @@ class LiveRepository(
             }
         }
         return score
+    }
+
+    private fun extractAcceptQn(streams: JsonArray?): Set<Int> {
+        val codec = streams?.firstOrNull()
+            ?.asJsonObjectOrNull()
+            ?.arrayOrNull("format")?.firstOrNull()
+            ?.asJsonObjectOrNull()
+            ?.arrayOrNull("codec")?.firstOrNull()
+            ?.asJsonObjectOrNull()
+            ?: return emptySet()
+        return codec.arrayOrNull("accept_qn")
+            ?.mapNotNull { runCatching { it.asInt }.getOrNull() }
+            ?.toSet()
+            .orEmpty()
     }
 
     private fun parseExtraParams(extra: String): Map<String, String> {

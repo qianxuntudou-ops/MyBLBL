@@ -1,7 +1,6 @@
 package com.tutu.myblbl.network.interceptor
 
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.network.cookie.CookieManager
 import okhttp3.Interceptor
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.Response
@@ -10,19 +9,11 @@ import java.io.ByteArrayOutputStream
 import java.util.zip.Inflater
 import java.util.zip.InflaterInputStream
 
-class HttpCacheInterceptor(
-    private val cookieManager: CookieManager
-) : Interceptor {
+class HttpCacheInterceptor : Interceptor {
     
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val response = chain.proceed(request)
-        
-        val cookies = response.headers("Set-Cookie")
-        if (cookies.isNotEmpty()) {
-            cookieManager.saveCookies(cookies)
-        }
-        
         return processDeflateResponse(response)
     }
     

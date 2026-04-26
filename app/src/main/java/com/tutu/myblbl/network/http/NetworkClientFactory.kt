@@ -42,7 +42,7 @@ object NetworkClientFactory {
                     acceptLanguageProvider = acceptLanguageProvider
                 )
             )
-            .addInterceptor(HttpCacheInterceptor(cookieManager))
+            .addInterceptor(HttpCacheInterceptor())
             .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
             .retryOnConnectionFailure(true)
             .connectTimeout(10, TimeUnit.SECONDS)

@@ -194,12 +194,16 @@ object NetworkManager {
         }
         return try {
             securityCoordinator.forceCookieRefresh()
-            val navResponse = noCookieApiService.getUserDetailInfo()
+            val navResponse = apiService.getUserDetailInfo()
             if (navResponse.isSuccess && navResponse.data != null) {
                 sessionStore.updateUserSession(navResponse.data)
                 AppLog.i(TAG, "tryRecoverExpiredSession: session recovered successfully")
                 notifySessionChanged()
                 true
+            } else if (navResponse.code == -101) {
+                AppLog.w(TAG, "tryRecoverExpiredSession: still -101 after refresh, session truly expired")
+                hardClearAndNotify("recovery_still_expired")
+                false
             } else {
                 AppLog.w(TAG, "tryRecoverExpiredSession: nav check failed after refresh, code=${navResponse.code}")
                 hardClearAndNotify("recovery_nav_failed")

@@ -7,6 +7,7 @@ import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 import org.koin.mp.KoinPlatform
 
 class CookieManager : CookieJar {
@@ -18,7 +19,7 @@ class CookieManager : CookieJar {
     }
     
     private val appSettings: AppSettingsDataStore get() = KoinPlatform.getKoin().get()
-    private val cookieCache = ConcurrentHashMap<String, MutableList<Cookie>>()
+    private val cookieCache = ConcurrentHashMap<String, CopyOnWriteArrayList<Cookie>>()
 
     @Volatile
     private var lastCookieCleanupTime = 0L
@@ -109,6 +110,9 @@ class CookieManager : CookieJar {
     }
 
     fun syncFromWebView() {
+        val protectedValues = PROTECTED_COOKIE_NAMES.mapNotNull { name ->
+            findCookie(name)?.let { name to it.value }
+        }.toMap()
         knownCookieUrls.forEach { targetUrl ->
             val rawCookies = runCatching {
                 webCookieManager.getCookie(targetUrl)
@@ -121,7 +125,14 @@ class CookieManager : CookieJar {
                 .map { it.trim() }
                 .filter { it.isNotBlank() && it.contains('=') }
                 .forEach { cookiePair ->
-                    parseWebViewCookie(host, cookiePair)?.let(::upsertCookie)
+                    val parsed = parseWebViewCookie(host, cookiePair) ?: return@forEach
+                    if (parsed.name in PROTECTED_COOKIE_NAMES) {
+                        val currentValue = protectedValues[parsed.name]
+                        if (currentValue != null && currentValue != parsed.value) {
+                            return@forEach
+                        }
+                    }
+                    upsertCookie(parsed)
                 }
         }
         persistCookieCache()
@@ -246,7 +257,7 @@ class CookieManager : CookieJar {
         if (isProtectedCookieBeingCleared(cookie)) {
             return
         }
-        val cookies = cookieCache.getOrPut(domain) { mutableListOf() }
+        val cookies = cookieCache.getOrPut(domain) { CopyOnWriteArrayList() }
         val existingIndex = cookies.indexOfFirst {
             it.name == cookie.name && it.path == cookie.path
         }

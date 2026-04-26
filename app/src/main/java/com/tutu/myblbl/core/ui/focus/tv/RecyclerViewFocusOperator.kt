@@ -1,6 +1,7 @@
 package com.tutu.myblbl.core.ui.focus.tv
 
 import android.view.View
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.core.common.log.AppLog
@@ -92,7 +93,12 @@ class RecyclerViewFocusOperator(
                 scheduleAttachRetry(position, offsetTop, token, retryLeft - 1, onFocused)
                 return@post
             }
-            AppLog.w(TAG, "focusPosition post: direct focus failed, trying nearestVisible for pos=$position")
+            AppLog.w(TAG, "focusPosition post: direct focus failed, trying sameColumn then nearestVisible for pos=$position")
+            val spanCount = (recyclerView.layoutManager as? GridLayoutManager)?.spanCount ?: 0
+            if (spanCount > 0 && focusSameColumnVisible(position, spanCount, onFocused)) {
+                pendingFocusPosition = RecyclerView.NO_POSITION
+                return@post
+            }
             focusNearestVisible(position, onFocused)
             pendingFocusPosition = RecyclerView.NO_POSITION
         }
@@ -138,6 +144,29 @@ class RecyclerViewFocusOperator(
         for (candidate in candidates) {
             if (requestAttachedPositionFocus(candidate, onFocused)) {
                 return true
+            }
+        }
+        return false
+    }
+
+    fun focusSameColumnVisible(
+        preferredPosition: Int,
+        spanCount: Int,
+        onFocused: ((Int) -> Unit)? = null
+    ): Boolean {
+        val layoutManager = recyclerView.layoutManager as? LinearLayoutManager ?: return false
+        if (layoutManager !is GridLayoutManager) return false
+        val itemCount = adapter.focusableItemCount()
+        if (itemCount <= 0 || spanCount <= 0) return false
+        val first = layoutManager.findFirstVisibleItemPosition()
+        val last = layoutManager.findLastVisibleItemPosition()
+        if (first == RecyclerView.NO_POSITION || last == RecyclerView.NO_POSITION) return false
+        val column = layoutManager.spanSizeLookup.getSpanIndex(preferredPosition, spanCount)
+        for (pos in last downTo first.coerceAtLeast(0)) {
+            if (pos >= itemCount) continue
+            val posColumn = layoutManager.spanSizeLookup.getSpanIndex(pos, spanCount)
+            if (posColumn == column) {
+                if (requestAttachedPositionFocus(pos, onFocused)) return true
             }
         }
         return false

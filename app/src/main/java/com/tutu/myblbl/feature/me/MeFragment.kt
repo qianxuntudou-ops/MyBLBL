@@ -221,6 +221,7 @@ class MeFragment : BaseFragment<FragmentMeBinding>(), MainTabFocusTarget {
         if (!viewModel.isLoggedIn.value) {
             return false
         }
+        if (preferSpatialEntry && focusCurrentTab(anchorView)) return true
         val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
             focusCurrentTab(anchorView)
         return handled

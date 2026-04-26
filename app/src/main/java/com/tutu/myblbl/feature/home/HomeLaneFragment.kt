@@ -268,24 +268,18 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
         viewModel.consumeListChange()
     }
 
-    private fun applyAppendedSections(items: List<HomeLaneSection>) {
+    private fun applyAppendedSections(sections: List<HomeLaneSection>) {
         isLoading = false
         setRefreshing(false)
         showLoading(false)
-        val currentCount = adapter?.contentCount() ?: 0
-        val newItems = items.drop(currentCount)
-        val added = if (newItems.isNotEmpty()) {
-            laneAdapter?.addData(newItems) == true
-        } else {
-            false
-        }
-        if (!added) {
+        viewModel.consumeListChange()
+        if (sections.isEmpty()) {
             hasMore = false
             laneAdapter?.setShowLoadMore(false)
-        } else {
-            showContent()
+            return
         }
-        viewModel.consumeListChange()
+        showContent()
+        adapter?.setData(sections)
     }
 
     override fun onRetryClick() {

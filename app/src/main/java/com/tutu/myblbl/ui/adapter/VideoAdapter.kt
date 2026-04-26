@@ -113,9 +113,7 @@ class VideoAdapter(
         if (deduplicated.isEmpty()) {
             return
         }
-        val startPosition = items.size
-        items.addAll(deduplicated)
-        notifyItemRangeInserted(startPosition, deduplicated.size)
+        addAll(deduplicated)
     }
 
     override fun onCreateContentViewHolder(parent: ViewGroup, viewType: Int): VideoViewHolder {
@@ -336,10 +334,13 @@ class VideoAdapter(
                     width = iconSize
                     height = iconSize
                 }
-                com.bumptech.glide.Glide.with(binding.root.context)
-                    .asGif()
-                    .load(R.drawable.playing)
-                    .into(binding.iconPlaying)
+                val loadCtx = binding.root.context
+                if (loadCtx !is android.app.Activity || !loadCtx.isDestroyed) {
+                    com.bumptech.glide.Glide.with(loadCtx)
+                        .asGif()
+                        .load(R.drawable.playing)
+                        .into(binding.iconPlaying)
+                }
                 val accentColor = ContextCompat.getColor(binding.root.context, R.color.colorAccent)
                 binding.textView.setTextColor(accentColor)
                 binding.textOverflow.setTextColor(accentColor)
@@ -365,7 +366,10 @@ class VideoAdapter(
                 binding.textView.post(split)
             } else {
                 binding.iconPlaying.visibility = View.GONE
-                com.bumptech.glide.Glide.with(binding.root.context).clear(binding.iconPlaying)
+                val clearCtx = binding.root.context
+                if (clearCtx !is android.app.Activity || !clearCtx.isDestroyed) {
+                    com.bumptech.glide.Glide.with(clearCtx).clear(binding.iconPlaying)
+                }
                 binding.textView.setTextColor(defaultTextColor)
                 binding.textView.text = title
                 binding.textView.maxLines = 2

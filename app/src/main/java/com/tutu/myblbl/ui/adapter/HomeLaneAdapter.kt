@@ -160,12 +160,16 @@ class HomeLaneAdapter(
             else -> RecyclerView.NO_POSITION
         }
         AppLog.d(TAG, "focusNextSection: section=$currentPosition → $targetPosition childCol=$preferredChildPosition")
+
+        // Try immediate focus if target section is already attached
         if (requestChildFocusAt(outerRV, targetPosition, preferredChildPosition) ||
             requestHeaderFocusAt(outerRV, targetPosition) ||
             requestPrimaryFocusAt(outerRV, targetPosition)
         ) {
             return true
         }
+
+        // Target not attached - scroll to it, then post focus
         outerRV.scrollToPosition(targetPosition)
         outerRV.post {
             requestChildFocusAt(outerRV, targetPosition, preferredChildPosition) ||
@@ -204,12 +208,15 @@ class HomeLaneAdapter(
         }
     }
 
-    fun requestFirstCardFocus(outerRV: RecyclerView): Boolean {
-        val holder = outerRV.findViewHolderForAdapterPosition(0) ?: return false
-        return when (holder) {
-            is ScrollableViewHolder -> holder.requestFirstCardFocusPublic()
-            is TimelineViewHolder -> holder.requestFirstCardFocusPublic()
-            else -> false
+    fun requestFirstCardFocus(outerRV: RecyclerView) {
+        for (i in 0 until items.size) {
+            val holder = outerRV.findViewHolderForAdapterPosition(i) ?: continue
+            val focused = when (holder) {
+                is ScrollableViewHolder -> holder.requestFirstCardFocusPublic()
+                is TimelineViewHolder -> holder.requestFirstCardFocusPublic()
+                else -> false
+            }
+            if (focused) return
         }
     }
 
@@ -306,6 +313,7 @@ class HomeLaneAdapter(
                 binding.topTitle.setCompoundDrawablesRelative(null, null, null, null)
             }
             adapter.setData(item.items)
+            binding.recyclerView.scrollToPosition(0)
         }
 
         fun requestPrimaryFocus(): Boolean {
@@ -515,6 +523,7 @@ class HomeLaneAdapter(
             binding.imageEmpty.visibility = View.GONE
             binding.recyclerView.visibility = View.VISIBLE
             adapter.setData(episodes)
+            binding.recyclerView.scrollToPosition(0)
         }
 
         private fun showEmpty() {

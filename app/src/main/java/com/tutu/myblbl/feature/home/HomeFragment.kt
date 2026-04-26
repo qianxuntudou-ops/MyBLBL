@@ -149,6 +149,7 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
         if (preferSpatialEntry && anchorView != null) {
             val currentBinding = _binding ?: return false
+            if (focusCurrentTab(anchorView)) return true
             val handled = SpatialFocusNavigator.requestBestDescendant(
                 anchorView = anchorView,
                 root = currentBinding.root,

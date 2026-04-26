@@ -65,6 +65,20 @@ object VideoCardFocusHelper {
                 val first = lm.findFirstVisibleItemPosition()
                 val last = lm.findLastVisibleItemPosition()
                 if (first == RecyclerView.NO_POSITION) return
+                val detachedPos = rv.getChildAdapterPosition(detached)
+                if (lm is GridLayoutManager && detachedPos != RecyclerView.NO_POSITION) {
+                    val spanCount = lm.spanCount
+                    val column = lm.spanSizeLookup.getSpanIndex(detachedPos, spanCount)
+                    for (pos in last downTo first) {
+                        val holder = rv.findViewHolderForAdapterPosition(pos)
+                        if (holder != null && holder.itemView !== detached) {
+                            val posColumn = lm.spanSizeLookup.getSpanIndex(pos, spanCount)
+                            if (posColumn == column && holder.itemView.requestFocus()) {
+                                return
+                            }
+                        }
+                    }
+                }
                 var pos = last
                 while (pos >= first) {
                     val holder = rv.findViewHolderForAdapterPosition(pos)

@@ -200,6 +200,10 @@ class TvListFocusController(
             AppLog.d(TAG, "move: DOWN pending loadMore, consuming key")
             return true
         }
+        if (direction == View.FOCUS_DOWN) {
+            AppLog.d(TAG, "move: DOWN at edge with no more data, consuming key")
+            return true
+        }
         AppLog.d(TAG, "move: $dirName at edge, returning false (not handled)")
         return false
     }

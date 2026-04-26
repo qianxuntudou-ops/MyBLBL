@@ -11,7 +11,9 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.core.ui.focus.tv.TvFocusableAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -22,6 +24,7 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
 
     private val adapterScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var pendingSetDataJob: Job? = null
 
     protected open fun areItemsSame(old: MODEL, new: MODEL): Boolean = old == new
     protected open fun areContentsSame(old: MODEL, new: MODEL): Boolean = old == new
@@ -46,6 +49,10 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
             return
         }
         showLoadMore = show
+        // When items is empty, getItemCount() returns 0 regardless of showLoadMore
+        // (see getItemCount: "items.isNotEmpty()"). Emitting insert/remove against an
+        // empty list would cause RecyclerView to disagree with getItemCount() → crash.
+        if (items.isEmpty()) return
         if (show) {
             notifyItemInserted(items.size)
         } else {
@@ -54,12 +61,18 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
     }
 
     fun addAll(list: List<MODEL>) {
+        pendingSetDataJob?.cancel()
+        pendingSetDataJob = null
+        val wasEmpty = items.isEmpty()
         val size = items.size
         items.addAll(list)
         if (list.size == 1) {
             notifyItemInserted(size)
         } else {
             notifyItemRangeInserted(size, list.size)
+        }
+        if (showLoadMore && wasEmpty && items.isNotEmpty()) {
+            notifyItemInserted(items.size)
         }
     }
 
@@ -72,8 +85,9 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
     abstract fun onCreateContentViewHolder(parent: ViewGroup, viewType: Int): VH
 
     fun setData(data: List<MODEL>, onComplete: (() -> Unit)? = null) {
+        pendingSetDataJob?.cancel()
         val oldItems = items.toList()
-        adapterScope.launch {
+        pendingSetDataJob = adapterScope.launch {
             val diffResult = withContext(Dispatchers.Default) {
                 DiffUtil.calculateDiff(object : DiffUtil.Callback() {
                     override fun getOldListSize() = oldItems.size
@@ -84,9 +98,21 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
                         areContentsSame(oldItems[oldPos], data[newPos])
                 })
             }
+            if (!isActive) return@launch
+            val oldEmpty = oldItems.isEmpty()
             items.clear()
             items.addAll(data)
             diffResult.dispatchUpdatesTo(this@BaseAdapter)
+            // When showLoadMore is true, getItemCount() adds +1 only when items is non-empty.
+            // DiffUtil only covers content items. We must notify the load more item
+            // appearing or disappearing when crossing the empty/non-empty boundary.
+            if (showLoadMore) {
+                if (oldEmpty && items.isNotEmpty()) {
+                    notifyItemInserted(items.size)
+                } else if (!oldEmpty && items.isEmpty()) {
+                    notifyItemRemoved(0)
+                }
+            }
             onComplete?.invoke()
         }
     }
@@ -100,8 +126,9 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
         areContentsTheSame: (old: MODEL, new: MODEL) -> Boolean,
         onComplete: (() -> Unit)? = null
     ) {
+        pendingSetDataJob?.cancel()
         val oldItems = items.toList()
-        adapterScope.launch {
+        pendingSetDataJob = adapterScope.launch {
             val diffResult = withContext(Dispatchers.Default) {
                 DiffUtil.calculateDiff(object : DiffUtil.Callback() {
                     override fun getOldListSize() = oldItems.size
@@ -112,9 +139,18 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
                         areContentsTheSame(oldItems[oldPos], newItems[newPos])
                 })
             }
+            if (!isActive) return@launch
+            val oldEmpty = oldItems.isEmpty()
             items.clear()
             items.addAll(newItems)
             diffResult.dispatchUpdatesTo(this@BaseAdapter)
+            if (showLoadMore) {
+                if (oldEmpty && items.isNotEmpty()) {
+                    notifyItemInserted(items.size)
+                } else if (!oldEmpty && items.isEmpty()) {
+                    notifyItemRemoved(0)
+                }
+            }
             onComplete?.invoke()
         }
     }

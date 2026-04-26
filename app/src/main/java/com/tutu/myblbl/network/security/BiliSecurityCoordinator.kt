@@ -134,13 +134,7 @@ class BiliSecurityCoordinator(
                         } else {
                             if (navResponse.code == -101 && cookieManager.hasSessionCookie()) {
                                 AppLog.w(tag, "prewarmWebSession: session expired (code=-101), triggering cookie refresh")
-                                if (cookieRefreshMutex.tryLock()) {
-                                    try {
-                                        doCookieRefresh()
-                                    } finally {
-                                        cookieRefreshMutex.unlock()
-                                    }
-                                }
+                                runCatching { doCookieRefresh() }
                             }
                             AppLog.w(tag, "prewarmWebSession nav failed: code=${navResponse.code} msg=${navResponse.message}")
                             false
@@ -464,13 +458,20 @@ class BiliSecurityCoordinator(
 
                 val needRefresh = infoJson.optJSONObject("data")?.optBoolean("refresh", false) ?: false
                 lastCookieInfoCheckMs = System.currentTimeMillis()
-                if (!needRefresh) {
-                    AppLog.d(tag, "refreshCookie: server says no refresh needed")
+                if (needRefresh) {
+                    AppLog.i(tag, "refreshCookie: server says refresh needed, starting cookie refresh")
+                    doCookieRefresh()
                     return@runCatching
                 }
 
-                AppLog.i(tag, "refreshCookie: server says refresh needed, starting cookie refresh")
-                doCookieRefresh()
+                val navResponse = apiService.getUserDetailInfo()
+                if (navResponse.code == -101) {
+                    AppLog.w(tag, "refreshCookie: cookie/info says OK but nav returns -101, forcing cookie refresh")
+                    doCookieRefresh()
+                } else if (navResponse.isSuccess && navResponse.data != null) {
+                    syncUserSession(navResponse, "$tag/refreshCookieCheck")
+                    AppLog.d(tag, "refreshCookie: session validated OK, mid=${navResponse.data.mid}")
+                }
             }.onFailure {
                 AppLog.w(tag, "refreshCookie info check failed: ${it.message}")
             }

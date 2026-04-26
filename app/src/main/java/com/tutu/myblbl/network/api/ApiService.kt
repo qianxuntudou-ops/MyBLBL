@@ -488,6 +488,13 @@ interface ApiService {
         @Query("ep_id") epId: Long
     ): BaseResponse<JsonObject>
 
+    @GET("pgc/view/web/season/user/status")
+    suspend fun getSeriesUserStatus(
+        @Query("season_id") seasonId: Long?,
+        @Query("ep_id") epId: Long?,
+        @Query("ts") ts: Long = System.currentTimeMillis()
+    ): Base2Response<CheckUserSeriesResult>
+
     @GET("pgc/web/season/section")
     suspend fun getVideoEpisodeSections(
         @Query("season_id") seasonId: Long

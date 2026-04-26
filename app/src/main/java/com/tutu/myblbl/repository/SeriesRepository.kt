@@ -1,5 +1,6 @@
 package com.tutu.myblbl.repository
 
+import com.tutu.myblbl.model.series.CheckUserSeriesResult
 import com.tutu.myblbl.model.series.FollowSeriesResult
 import com.tutu.myblbl.model.series.RelatedRecommendResult
 import com.tutu.myblbl.repository.remote.SeriesRepository as NetworkSeriesRepository
@@ -9,6 +10,9 @@ class SeriesRepository(
 ) {
     suspend fun getSeriesDetail(seasonId: Long, epId: Long = 0) =
         delegate.getSeriesDetail(seasonId, epId)
+
+    suspend fun checkUserFollowStatus(seasonId: Long, epId: Long = 0): Result<CheckUserSeriesResult> =
+        delegate.checkUserFollowStatus(seasonId, epId)
 
     suspend fun followSeries(seasonId: Long): Result<FollowSeriesResult> =
         delegate.followSeries(seasonId)

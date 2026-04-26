@@ -7,6 +7,7 @@ import com.tutu.myblbl.model.series.EpisodesDetailModel
 import com.tutu.myblbl.model.series.FollowSeriesResult
 import com.tutu.myblbl.model.series.SeriesModel
 import com.tutu.myblbl.R
+import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.repository.SeriesRepository
 import androidx.annotation.StringRes
@@ -58,30 +59,14 @@ class SeriesDetailViewModel(
             repository.getSeriesDetail(seasonId, epId).fold(
                 onSuccess = { detail ->
                     currentSeasonId = detail.seasonId.takeIf { it > 0 } ?: currentSeasonId
-                    val userStatus = detail.userStatus
-                    if (userStatus != null) {
-                        _isFollowed.value = userStatus.isFollowed
-                        _seriesDetail.value = detail
-                        loadRecommend(currentSeasonId)
-                    } else if (sessionGateway.isLoggedIn()) {
-                        sessionGateway.tryRecoverExpiredSession()
-                        repository.getSeriesDetail(currentSeasonId, epId).fold(
-                            onSuccess = { retryDetail ->
-                                currentSeasonId = retryDetail.seasonId.takeIf { it > 0 } ?: currentSeasonId
-                                retryDetail.userStatus?.let { status ->
-                                    _isFollowed.value = status.isFollowed
-                                }
-                                _seriesDetail.value = retryDetail
-                                loadRecommend(currentSeasonId)
-                            },
-                            onFailure = {
-                                _seriesDetail.value = detail
-                                loadRecommend(currentSeasonId)
-                            }
-                        )
+                    _seriesDetail.value = detail
+                    loadRecommend(currentSeasonId)
+                    if (sessionGateway.isLoggedIn()) {
+                        checkFollowStatusFromApi(currentSeasonId, epId)
                     } else {
-                        _seriesDetail.value = detail
-                        loadRecommend(currentSeasonId)
+                        val userStatus = detail.userStatus
+                        AppLog.d("SeriesDetail", "loadSeriesDetail: not logged in, using userStatus from detail")
+                        _isFollowed.value = userStatus?.isFollowed ?: false
                     }
                 },
                 onFailure = { e ->
@@ -94,9 +79,26 @@ class SeriesDetailViewModel(
         }
     }
 
+    private fun checkFollowStatusFromApi(seasonId: Long, epId: Long) {
+        viewModelScope.launch {
+            repository.checkUserFollowStatus(seasonId, epId).fold(
+                onSuccess = { statusResult ->
+                    AppLog.d("SeriesDetail", "checkFollowStatusFromApi: follow=${statusResult.follow} login=${statusResult.login} isFollowed=${statusResult.isFollowed}")
+                    _isFollowed.value = statusResult.isFollowed
+                },
+                onFailure = { e ->
+                    AppLog.w("SeriesDetail", "checkFollowStatusFromApi failed: ${e.message}, falling back to userStatus from detail")
+                    val userStatus = _seriesDetail.value?.userStatus
+                    _isFollowed.value = userStatus?.isFollowed ?: false
+                }
+            )
+        }
+    }
+
     fun toggleFollow() {
         if (currentSeasonId <= 0 || isFollowActionRunning) return
         if (!sessionGateway.isLoggedIn()) {
+            AppLog.w("SeriesDetail", "toggleFollow: not logged in")
             viewModelScope.launch {
                 _messages.emit(UiMessage.Res(R.string.toast_need_login))
             }
@@ -106,6 +108,7 @@ class SeriesDetailViewModel(
         viewModelScope.launch {
             isFollowActionRunning = true
             val nowFollowed = !_isFollowed.value
+            AppLog.d("SeriesDetail", "toggleFollow: seasonId=$currentSeasonId nowFollowed=$nowFollowed currentIsFollowed=${_isFollowed.value}")
             val result: Result<FollowSeriesResult> = if (_isFollowed.value) {
                 repository.cancelFollowSeries(currentSeasonId)
             } else {
@@ -114,6 +117,7 @@ class SeriesDetailViewModel(
             
             result.fold(
                 onSuccess = { followResult ->
+                    AppLog.d("SeriesDetail", "toggleFollow success: relation=${followResult.relation} status=${followResult.status}")
                     _isFollowed.value = nowFollowed
                     if (followResult.toast.isNotBlank()) {
                         _messages.emit(UiMessage.Text(followResult.toast))
@@ -122,6 +126,7 @@ class SeriesDetailViewModel(
                     }
                 },
                 onFailure = { e ->
+                    AppLog.e("SeriesDetail", "toggleFollow failed: ${e.message}")
                     _error.value = e.message ?: "操作失败"
                     _messages.emit(UiMessage.Text(_error.value.orEmpty()))
                 }

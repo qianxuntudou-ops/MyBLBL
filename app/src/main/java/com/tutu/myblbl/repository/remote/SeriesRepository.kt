@@ -1,5 +1,6 @@
 package com.tutu.myblbl.repository.remote
 
+import com.tutu.myblbl.model.series.CheckUserSeriesResult
 import com.tutu.myblbl.model.series.EpisodesDetailModel
 import com.tutu.myblbl.model.series.FollowSeriesResult
 import com.tutu.myblbl.model.series.MyFollowingResponseWrapper
@@ -42,6 +43,23 @@ class SeriesRepository(
                 mergedDetail
             } else {
                 throw IllegalStateException(response.errorMessage)
+            }
+        }
+    }
+
+    suspend fun checkUserFollowStatus(seasonId: Long, epId: Long = 0): Result<CheckUserSeriesResult> {
+        return runCatching {
+            val response = apiService.getSeriesUserStatus(
+                if (seasonId > 0) seasonId else null,
+                if (epId > 0) epId else null
+            ).let {
+                sessionGateway.syncAuthState(it, source = "series.checkUserFollowStatus")
+            }
+            val result = response.result
+            if (response.isSuccess && result != null) {
+                result
+            } else {
+                throw IllegalStateException(response.errorMessage.ifBlank { "获取追番状态失败" })
             }
         }
     }

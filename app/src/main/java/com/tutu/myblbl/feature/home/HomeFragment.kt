@@ -1,5 +1,6 @@
 package com.tutu.myblbl.feature.home
 
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -149,7 +150,9 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
         if (preferSpatialEntry && anchorView != null) {
             val currentBinding = _binding ?: return false
-            if (focusCurrentTab(anchorView)) return true
+            if (isVerticallyAlignedWith(anchorView, currentBinding.tabLayout)) {
+                if (focusCurrentTab(anchorView)) return true
+            }
             val handled = SpatialFocusNavigator.requestBestDescendant(
                 anchorView = anchorView,
                 root = currentBinding.root,
@@ -161,6 +164,14 @@ class HomeFragment : Fragment(), MainTabFocusTarget {
         val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
             focusCurrentTab(anchorView)
         return handled
+    }
+
+    private fun isVerticallyAlignedWith(anchor: View, target: View): Boolean {
+        val anchorRect = Rect()
+        val targetRect = Rect()
+        if (!anchor.getGlobalVisibleRect(anchorRect)) return false
+        if (!target.getGlobalVisibleRect(targetRect)) return false
+        return maxOf(anchorRect.top, targetRect.top) < minOf(anchorRect.bottom, targetRect.bottom)
     }
 
     private fun focusCurrentPagePrimaryContent(anchorView: View? = null, preferSpatialEntry: Boolean = false): Boolean {

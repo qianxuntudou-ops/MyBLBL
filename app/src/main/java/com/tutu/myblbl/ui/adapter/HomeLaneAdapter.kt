@@ -169,14 +169,29 @@ class HomeLaneAdapter(
             return true
         }
 
-        // Target not attached - scroll to it, then post focus
+        // Target not attached - scroll to it, then post focus with retry
         outerRV.scrollToPosition(targetPosition)
+        postSectionFocus(outerRV, targetPosition, preferredChildPosition, retryCount = 0)
+        return true
+    }
+
+    private fun postSectionFocus(
+        outerRV: RecyclerView,
+        targetPosition: Int,
+        preferredChildPosition: Int,
+        retryCount: Int
+    ) {
         outerRV.post {
-            requestChildFocusAt(outerRV, targetPosition, preferredChildPosition) ||
+            val success = requestChildFocusAt(outerRV, targetPosition, preferredChildPosition) ||
                 requestHeaderFocusAt(outerRV, targetPosition) ||
                 requestPrimaryFocusAt(outerRV, targetPosition)
+            if (!success && retryCount < 3) {
+                AppLog.d(TAG, "focusNextSection retry: section→$targetPosition attempt=${retryCount + 1}")
+                outerRV.postDelayed({
+                    postSectionFocus(outerRV, targetPosition, preferredChildPosition, retryCount + 1)
+                }, 80L)
+            }
         }
-        return true
     }
 
     private fun restoreFocusToVisibleLane(rv: RecyclerView): Boolean {
@@ -313,7 +328,6 @@ class HomeLaneAdapter(
                 binding.topTitle.setCompoundDrawablesRelative(null, null, null, null)
             }
             adapter.setData(item.items)
-            binding.recyclerView.scrollToPosition(0)
         }
 
         fun requestPrimaryFocus(): Boolean {
@@ -523,7 +537,6 @@ class HomeLaneAdapter(
             binding.imageEmpty.visibility = View.GONE
             binding.recyclerView.visibility = View.VISIBLE
             adapter.setData(episodes)
-            binding.recyclerView.scrollToPosition(0)
         }
 
         private fun showEmpty() {

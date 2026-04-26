@@ -257,7 +257,10 @@ class HomeLaneFragment : BaseListFragment<HomeLaneSection>(), HomeTabPage {
                     scrollToTop()
                     val rv = recyclerView ?: return@post
                     val adp = laneAdapter ?: return@post
-                    adp.requestFirstCardFocus(rv)
+                    val focused = activity?.currentFocus
+                    if (focused != null && rv.findContainingItemView(focused) != null) {
+                        adp.requestFirstCardFocus(rv)
+                    }
                 }
             }
         } else {

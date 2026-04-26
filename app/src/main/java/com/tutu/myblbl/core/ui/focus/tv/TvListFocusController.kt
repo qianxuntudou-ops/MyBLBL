@@ -94,6 +94,12 @@ class TvListFocusController(
             return
         }
 
+        // Don't steal focus if something outside the RecyclerView currently has focus
+        val focused = recyclerView.rootView?.findFocus()
+        if (focused != null && !isDescendantOf(focused, recyclerView)) {
+            return
+        }
+
         val anchor = currentAnchor ?: capturedAnchor
         if (anchor != null) {
             val resolved = resolveAnchorPosition(anchor)
@@ -287,6 +293,15 @@ class TvListFocusController(
             ?: holder.bindingAdapterPosition.takeIf { it != RecyclerView.NO_POSITION }
             ?: holder.layoutPosition.takeIf { it != RecyclerView.NO_POSITION }
             ?: recyclerView.getChildAdapterPosition(itemView)
+    }
+
+    private fun isDescendantOf(view: View, ancestor: View): Boolean {
+        var current: View? = view
+        while (current != null) {
+            if (current === ancestor) return true
+            current = current.parent as? View
+        }
+        return false
     }
 
     private fun directionName(direction: Int): String = when (direction) {

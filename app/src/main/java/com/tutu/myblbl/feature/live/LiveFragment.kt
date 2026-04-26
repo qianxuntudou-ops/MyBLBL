@@ -1,5 +1,6 @@
 package com.tutu.myblbl.feature.live
 
+import android.graphics.Rect
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -156,7 +157,9 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
     }
 
     override fun focusEntryFromMainTab(anchorView: View?, preferSpatialEntry: Boolean): Boolean {
-        if (preferSpatialEntry && focusCurrentTab(anchorView)) return true
+        if (preferSpatialEntry && anchorView != null && isVerticallyAlignedWith(anchorView, tabLayout)) {
+            if (focusCurrentTab(anchorView)) return true
+        }
         val handled = focusCurrentPagePrimaryContent(anchorView, preferSpatialEntry) ||
             focusCurrentTab(anchorView)
         return handled
@@ -171,5 +174,13 @@ class LiveFragment : BaseFragment<FragmentLiveBinding>(), MainTabFocusTarget {
         tabSelectedListener = null
         binding.viewPager.adapter = null
         super.onDestroyView()
+    }
+
+    private fun isVerticallyAlignedWith(anchor: View, target: View): Boolean {
+        val anchorRect = Rect()
+        val targetRect = Rect()
+        if (!anchor.getGlobalVisibleRect(anchorRect)) return false
+        if (!target.getGlobalVisibleRect(targetRect)) return false
+        return maxOf(anchorRect.top, targetRect.top) < minOf(anchorRect.bottom, targetRect.bottom)
     }
 }

@@ -111,7 +111,7 @@
                 <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/button_refresh"
                     android:background="@drawable/cell_background"
-                    android:padding="14dp"
+                    android:padding="11dp"
                     android:focusable="true"
                     android:clickable="true"
                     android:nextFocusUp="@id/exo_progress"
@@ -322,6 +322,19 @@
                         android:contentDescription="@string/exo_controls_overflow_hide_description"/>
                 </androidx.appcompat.widget.LinearLayoutCompat>
             </HorizontalScrollView>
+            <TextView
+                android:id="@+id/text_live_duration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="@dimen/px20"
+                android:textSize="@dimen/px35"
+                android:textColor="@color/white"
+                android:shadowColor="@color/black"
+                android:shadowRadius="3"
+                android:visibility="gone"
+                android:focusable="false"
+                android:clickable="false"/>
         </FrameLayout>
         <ProgressBar
             android:id="@+id/loading_progress_bar"

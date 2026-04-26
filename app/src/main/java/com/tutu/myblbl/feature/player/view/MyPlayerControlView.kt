@@ -19,6 +19,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.TimeBar
 import com.tutu.myblbl.R
+import com.tutu.myblbl.core.common.log.AppLog
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.LazyThreadSafetyMode
 
@@ -90,6 +91,7 @@ class MyPlayerControlView @JvmOverloads constructor(
     private lateinit var buttonLiveSettings: ImageView
     private lateinit var buttonRefresh: ImageView
     private lateinit var buttonClose: ImageView
+    private lateinit var textLiveDuration: TextView
     private lateinit var loadingProgressBar: ProgressBar
     private lateinit var titleContainer: View
     private lateinit var centerControls: ViewGroup
@@ -182,6 +184,7 @@ class MyPlayerControlView @JvmOverloads constructor(
         buttonLiveSettings = findViewById(R.id.button_live_settings)
         buttonRefresh = findViewById(R.id.button_refresh)
         buttonClose = findViewById(R.id.button_close)
+        textLiveDuration = findViewById(R.id.text_live_duration)
         loadingProgressBar = findViewById(R.id.loading_progress_bar)
         centerControls = findViewById(R.id.exo_center_controls)
         bottomBar = findViewById(R.id.exo_bottom_bar)
@@ -236,6 +239,7 @@ class MyPlayerControlView @JvmOverloads constructor(
         updateButtonEnabled(buttonPrevious, previousButtonEnabled)
         updateButtonEnabled(buttonNext, nextButtonEnabled)
         syncManagedButtonVisibility()
+        AppLog.d("LiveUI", "initViews: buttonRefresh id=${buttonRefresh.id} vis=${buttonRefresh.visibility}")
     }
 
     private fun setupClickListeners() {
@@ -569,20 +573,32 @@ class MyPlayerControlView @JvmOverloads constructor(
     }
 
     fun showHideRefreshButton(show: Boolean) {
+        AppLog.d("LiveUI", "showHideRefreshButton: show=$show, before vis=${buttonRefresh.visibility}")
         setButtonVisibility(buttonRefresh, show)
+        AppLog.d("LiveUI", "showHideRefreshButton: after vis=${buttonRefresh.visibility}")
     }
 
     fun showHideTimeBar(show: Boolean) {
         timeBar.visibility = if (show) VISIBLE else GONE
+        AppLog.d("LiveUI", "showHideTimeBar: show=$show vis=${timeBar.visibility}")
     }
 
     fun showHideTimeText(show: Boolean) {
-        val timeParent = exoPosition.parent as? View ?: return
-        timeParent.visibility = if (show) VISIBLE else GONE
+        controlViewLayoutManager.setTimeViewVisible(show)
+        AppLog.d("LiveUI", "showHideTimeText: show=$show vis=${(exoPosition.parent as? View)?.visibility}")
     }
 
     fun showSettingButton(show: Boolean) {
         setButtonVisibility(buttonSettings, show)
+    }
+
+    fun setLiveDuration(text: String) {
+        if (text.isNotEmpty()) {
+            textLiveDuration.text = text
+            textLiveDuration.visibility = VISIBLE
+        } else {
+            textLiveDuration.visibility = GONE
+        }
     }
 
     fun setShowHideOwnerButton(show: Boolean) {
@@ -813,8 +829,10 @@ class MyPlayerControlView @JvmOverloads constructor(
 
     private fun setButtonVisibility(button: View, show: Boolean) {
         if (controlViewLayoutManager.getShowButton(button) == show) {
+            AppLog.d("LiveUI", "setButtonVisibility: skip ${button.transitionName} show=$show (already set)")
             return
         }
+        AppLog.d("LiveUI", "setButtonVisibility: ${button.transitionName} show=$show")
         val needsFocusFallback = !show && button.isFocused
         controlViewLayoutManager.setShowButton(button, show)
         if (needsFocusFallback && isVisible()) {

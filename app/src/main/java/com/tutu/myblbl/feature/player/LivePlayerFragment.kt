@@ -1,6 +1,7 @@
 package com.tutu.myblbl.feature.player
 
 import android.os.Bundle
+import android.widget.Toast
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -79,6 +80,8 @@ class LivePlayerFragment : Fragment() {
         arguments?.let { args ->
             roomId = args.getLong(ARG_ROOM_ID, -1L)
         }
+        val textClock = binding.textClock
+        AppLog.d("LiveUI", "TextClock: vis=${textClock.visibility} text=${textClock.text}")
         setupPlayer()
         setupObservers()
         if (roomId > 0) {
@@ -136,6 +139,7 @@ class LivePlayerFragment : Fragment() {
 
             override fun onRefresh() {
                 if (roomId > 0) {
+                    Toast.makeText(requireContext(), "正在刷新", Toast.LENGTH_SHORT).show()
                     viewModel.refreshLiveStream(roomId)
                 }
             }
@@ -214,8 +218,26 @@ class LivePlayerFragment : Fragment() {
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.roomTitle.collect { title ->
+                binding.playerView.setTitle(title)
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.anchorName.collect { name ->
+                binding.playerView.setSubTitle(name)
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
             viewModel.liveDuration.collect { duration ->
-                binding.playerView.setTitle(if (duration.isNotEmpty()) "直播中 $duration" else "")
+                binding.playerView.setLiveDuration(if (duration.isNotEmpty()) "直播中：$duration" else "")
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.refreshEvent.collect { msg ->
+                Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
             }
         }
     }

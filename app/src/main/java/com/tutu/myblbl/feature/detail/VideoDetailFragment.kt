@@ -761,7 +761,7 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
         val currentAid = videoView?.aid ?: videoModel?.aid ?: return
         val currentBvid = videoView?.bvid ?: videoModel?.bvid
         lifecycleScope.launch {
-            runCatching { videoRepository.tripleAction(null, currentBvid) }
+            runCatching { videoRepository.tripleAction(currentAid, currentBvid) }
                 .onSuccess { response ->
                     if (response.isSuccess) {
                         isLiked = true

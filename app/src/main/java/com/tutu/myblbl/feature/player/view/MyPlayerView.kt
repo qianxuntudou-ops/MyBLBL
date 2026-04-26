@@ -1114,6 +1114,10 @@ class MyPlayerView @JvmOverloads constructor(
         controller?.setSubTitle(subTitle)
     }
 
+    fun setLiveDuration(text: String) {
+        controller?.setLiveDuration(text)
+    }
+
     fun setCustomErrorMessage(message: CharSequence?) {
         customErrorMessage = message
         updateErrorMessage()

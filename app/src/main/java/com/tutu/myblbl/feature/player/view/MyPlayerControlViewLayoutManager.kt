@@ -37,6 +37,7 @@ class MyPlayerControlViewLayoutManager(
     private val overflowHideButton: View = playerControlView.findViewById(R.id.exo_overflow_hide)
     private val orderedButtons: List<View> = listOf(
         playerControlView.findViewById(R.id.button_play),
+        playerControlView.findViewById(R.id.button_refresh),
         playerControlView.findViewById(R.id.button_previous),
         playerControlView.findViewById(R.id.button_next),
         playerControlView.findViewById(R.id.button_rewind),
@@ -60,6 +61,7 @@ class MyPlayerControlViewLayoutManager(
         R.id.button_up_info,
         R.id.button_more,
         R.id.button_choose_episode,
+        R.id.button_refresh,
         R.id.button_dm_switch,
         R.id.button_next,
         R.id.button_previous,
@@ -95,6 +97,7 @@ class MyPlayerControlViewLayoutManager(
     private var isOverflowVisible: Boolean = false
     private var isCompactMode: Boolean = false
     private var progressOnlyUiEnabled: Boolean = true
+    private var timeViewVisible: Boolean = true
 
     init {
         overflowShowButton.setOnClickListener { showOverflowControls() }
@@ -154,6 +157,11 @@ class MyPlayerControlViewLayoutManager(
 
     fun setProgressOnlyUiEnabled(enabled: Boolean) {
         progressOnlyUiEnabled = enabled
+    }
+
+    fun setTimeViewVisible(visible: Boolean) {
+        timeViewVisible = visible
+        timeView.visibility = if (visible) View.VISIBLE else View.GONE
     }
 
     fun getShowButton(button: View?): Boolean = button != null && shownButtons.contains(button)
@@ -384,7 +392,7 @@ class MyPlayerControlViewLayoutManager(
         playerControlView.visibility = View.VISIBLE
         controlsBackground.visibility = View.VISIBLE
         bottomBar.visibility = View.VISIBLE
-        timeView.visibility = View.VISIBLE
+        if (timeViewVisible) timeView.visibility = View.VISIBLE
         bottomBar.animate()
             .translationY(0f)
             .setDuration(ANIMATION_DURATION_MS)
@@ -693,7 +701,7 @@ class MyPlayerControlViewLayoutManager(
         bottomBar.translationY = 0f
         titleView.visibility = View.VISIBLE
         bottomBarController.visibility = View.VISIBLE
-        timeView.visibility = View.VISIBLE
+        if (timeViewVisible) timeView.visibility = View.VISIBLE
         titleView.alpha = initialAlpha
         bottomBarController.alpha = initialAlpha
         applyCompactMode(force = true)

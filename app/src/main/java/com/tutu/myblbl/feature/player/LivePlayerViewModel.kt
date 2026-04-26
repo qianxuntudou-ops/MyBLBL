@@ -5,12 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.repository.LiveRepository
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
 import java.util.Locale
 
 class LivePlayerViewModel(
@@ -39,6 +40,15 @@ class LivePlayerViewModel(
     private val _liveDuration = MutableStateFlow("")
     val liveDuration: StateFlow<String> = _liveDuration.asStateFlow()
 
+    private val _roomTitle = MutableStateFlow("")
+    val roomTitle: StateFlow<String> = _roomTitle.asStateFlow()
+
+    private val _anchorName = MutableStateFlow("")
+    val anchorName: StateFlow<String> = _anchorName.asStateFlow()
+
+    private val _refreshEvent = Channel<String>(Channel.BUFFERED)
+    val refreshEvent = _refreshEvent.receiveAsFlow()
+
     private var currentRoomId: Long = 0
     private var heartbeatJob: Job? = null
     private var durationJob: Job? = null
@@ -60,6 +70,9 @@ class LivePlayerViewModel(
                     if (!durl.isNullOrEmpty()) {
                         _playUrl.value = durl[0].url
 
+                        AppLog.d(TAG, "loadLiveStream: liveTime=${data.liveTime} title=${data.roomTitle} anchor=${data.anchorName} qualities=${data.qualityDescription?.size}")
+                        _roomTitle.value = data.roomTitle ?: ""
+                        _anchorName.value = data.anchorName ?: ""
                         data.liveTime?.let { startLiveDuration(it) }
 
                         data.qualityDescription?.let { qualities ->
@@ -129,8 +142,12 @@ class LivePlayerViewModel(
 
     private fun startLiveDuration(liveTime: String) {
         durationJob?.cancel()
-        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-        val startMs = runCatching { sdf.parse(liveTime)?.time }.getOrNull() ?: return
+        val startMs = liveTime.toLongOrNull()?.let { it * 1000L }
+        if (startMs == null) {
+            AppLog.w(TAG, "startLiveDuration: failed to parse liveTime=$liveTime")
+            return
+        }
+        AppLog.d(TAG, "startLiveDuration: liveTime=$liveTime startMs=$startMs")
         durationJob = viewModelScope.launch {
             while (true) {
                 val elapsed = (System.currentTimeMillis() - startMs) / 1000
@@ -173,6 +190,7 @@ class LivePlayerViewModel(
                     data.durl?.firstOrNull()?.let { durl ->
                         _playUrl.value = durl.url
                     }
+                    _refreshEvent.trySend("刷新成功")
                 },
                 onFailure = { e ->
                     _error.value = e.message ?: "刷新直播失败"

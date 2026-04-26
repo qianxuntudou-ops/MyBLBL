@@ -167,8 +167,7 @@ class PlayerActionDialog(
             if (!checkLogin()) return@setOnClickListener
             scope.launch {
                 runCatching {
-                    // 只传 bvid，不传 aid，避免大 aid 可能导致的问题
-                    videoRepository.tripleAction(null, safeBvid ?: bvid)
+                    videoRepository.tripleAction(aid, safeBvid ?: bvid)
                 }.onSuccess { response ->
                     if (response.isSuccess) {
                         isLiked = true

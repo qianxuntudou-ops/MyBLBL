@@ -52,7 +52,7 @@ class LiveRepository(
                 )
             )
             if (v2Response.code == 0 && v2Response.data != null) {
-                parseV2PlayInfo(v2Response.data, roomInfo.liveTime)?.let { playInfo ->
+                parseV2PlayInfo(v2Response.data, roomInfo.liveTime, roomInfo.roomTitle, roomInfo.anchorName)?.let { playInfo ->
                     return@runCatching playInfo
                 }
                 AppLog.e(
@@ -68,7 +68,11 @@ class LiveRepository(
 
             val legacyResponse = apiService.getLivePlayInfo(roomInfo.realRoomId, quality)
             if (legacyResponse.code == 0 && legacyResponse.data != null) {
-                legacyResponse.data.copy(liveTime = roomInfo.liveTime)
+                legacyResponse.data.copy(
+                    liveTime = roomInfo.liveTime,
+                    roomTitle = roomInfo.roomTitle,
+                    anchorName = roomInfo.anchorName
+                )
             } else {
                 AppLog.e(
                     TAG,
@@ -237,10 +241,19 @@ class LiveRepository(
             ?: data.objectOrNull("room_info")?.int("live_status")
             ?: 0
         val liveTime = data.string("live_time").takeIf { it.isNotBlank() }
-        return ResolvedRoomInfo(realRoomId, liveStatus, liveTime)
+        val roomInfo = data.objectOrNull("room_info")
+        val roomTitle = roomInfo?.string("title")?.takeIf { it.isNotBlank() }
+        val anchorName = data.objectOrNull("anchor_info")
+            ?.objectOrNull("base_info")?.string("uname")
+            ?: roomInfo?.string("uname")
+        AppLog.d(TAG, "resolveRoomInfo: title=$roomTitle, anchor=$anchorName, keys=${data.keySet()}")
+        if (roomInfo != null) {
+            AppLog.d(TAG, "resolveRoomInfo roomInfo keys=${roomInfo.keySet()}")
+        }
+        return ResolvedRoomInfo(realRoomId, liveStatus, liveTime, roomTitle, anchorName)
     }
 
-    private fun parseV2PlayInfo(data: JsonObject, liveTime: String?): LivePlayUrlDataModel? {
+    private fun parseV2PlayInfo(data: JsonObject, liveTime: String?, roomTitle: String?, anchorName: String?): LivePlayUrlDataModel? {
         val playUrl = data.objectOrNull("playurl_info")
             ?.objectOrNull("playurl")
             ?: return null
@@ -277,7 +290,9 @@ class LiveRepository(
                 currentQn = currentQn,
                 qualityDescription = qualityDescription,
                 durl = urls,
-                liveTime = liveTime
+                liveTime = liveTime,
+                roomTitle = roomTitle,
+                anchorName = anchorName
             )
         }
     }
@@ -425,7 +440,9 @@ class LiveRepository(
     private data class ResolvedRoomInfo(
         val realRoomId: Long,
         val liveStatus: Int,
-        val liveTime: String? = null
+        val liveTime: String? = null,
+        val roomTitle: String? = null,
+        val anchorName: String? = null
     )
 
     private data class LiveStreamCandidate(

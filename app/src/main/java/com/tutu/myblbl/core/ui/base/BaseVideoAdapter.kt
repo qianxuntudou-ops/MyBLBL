@@ -37,7 +37,16 @@ abstract class BaseVideoAdapter<T : Any, VH : RecyclerView.ViewHolder> : BaseAda
     fun setDataDeduplicated(list: List<T>, onCommitted: (() -> Unit)? = null) {
         val deduplicated = deduplicate(list)
         focusedPosition = RecyclerView.NO_POSITION
-        setData(deduplicated, onCommitted)
+        setDataDirect(deduplicated, onCommitted)
+    }
+
+    protected fun setDataDirect(newItems: List<T>, onCommitted: (() -> Unit)? = null) {
+        submitItemsInBackground(
+            newItems = newItems,
+            areItemsTheSame = { old, new -> itemKey(old) == itemKey(new) },
+            areContentsTheSame = { old, new -> areContentsSame(old, new) },
+            onComplete = { onItemsChanged?.invoke(); onCommitted?.invoke() }
+        )
     }
 
     protected fun removeItems(predicate: (T) -> Boolean) {

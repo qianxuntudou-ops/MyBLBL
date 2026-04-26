@@ -26,4 +26,18 @@
         android:textColor="@android:color/white"
         android:textSize="@dimen/px28"
         android:visibility="gone" />
+
+    <TextClock
+        android:textSize="@dimen/px50"
+        android:textStyle="bold"
+        android:textColor="@color/white"
+        android:layout_gravity="end|top"
+        android:id="@+id/text_clock"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/px30"
+        android:layout_marginRight="@dimen/px50"
+        android:shadowColor="@color/black"
+        android:shadowRadius="7"
+        android:layout_marginEnd="@dimen/px50" />
 </FrameLayout>

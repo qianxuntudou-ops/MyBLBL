@@ -122,17 +122,26 @@ class BiliSecurityCoordinator(
                 }
                 val navDeferred = async {
                     runCatching {
-                        // 使用无 cookie 的客户端，防止 -101 响应通过 Set-Cookie 头清除 bili_jct 等关键 cookie；
-                        // 同时不调用 syncUserSession，避免预热操作意外清除整个登录 session
-                        val navResponse = noCookieApiService.getUserDetailInfo()
+                        val navResponse = apiService.getUserDetailInfo()
                         if (navResponse.isSuccess && navResponse.data != null) {
                             val imgKey = navResponse.data.wbiImg?.imgUrl?.let(WbiGenerator::extractKeyFromUrl).orEmpty()
                             val subKey = navResponse.data.wbiImg?.subUrl?.let(WbiGenerator::extractKeyFromUrl).orEmpty()
                             if (imgKey.isNotBlank() && subKey.isNotBlank()) {
                                 updateWbiKeys(imgKey, subKey)
                             }
+                            syncUserSession(navResponse, "$tag/prewarmWebSession")
                             true
                         } else {
+                            if (navResponse.code == -101 && cookieManager.hasSessionCookie()) {
+                                AppLog.w(tag, "prewarmWebSession: session expired (code=-101), triggering cookie refresh")
+                                if (cookieRefreshMutex.tryLock()) {
+                                    try {
+                                        doCookieRefresh()
+                                    } finally {
+                                        cookieRefreshMutex.unlock()
+                                    }
+                                }
+                            }
                             AppLog.w(tag, "prewarmWebSession nav failed: code=${navResponse.code} msg=${navResponse.message}")
                             false
                         }
@@ -224,8 +233,7 @@ class BiliSecurityCoordinator(
 
     private suspend fun ensureWbiKeysFromNav() {
         runCatching {
-            // 使用无 cookie 的 API 服务，防止 -101 响应的 Set-Cookie 头清除 bili_jct 等关键 cookie
-            val navResponse = noCookieApiService.getUserDetailInfo()
+            val navResponse = apiService.getUserDetailInfo()
             if (navResponse.data != null) {
                 val imgKey = navResponse.data.wbiImg?.imgUrl?.let(WbiGenerator::extractKeyFromUrl).orEmpty()
                 val subKey = navResponse.data.wbiImg?.subUrl?.let(WbiGenerator::extractKeyFromUrl).orEmpty()

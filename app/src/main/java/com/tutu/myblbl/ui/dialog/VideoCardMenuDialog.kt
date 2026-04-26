@@ -420,11 +420,7 @@ class VideoCardMenuDialog(
                             onFavoriteRemoved?.invoke()
                         }
                     } else {
-                        if (sessionGateway.handleResponseAuthError(response.code, response.errorMessage)) {
-                            handleAuthExpired()
-                        } else {
-                            toast(response.errorMessage)
-                        }
+                        handleActionError(response.code, response.errorMessage)
                     }
                 }.onFailure { toast(it.message ?: "操作失败") }
             }
@@ -577,7 +573,7 @@ class VideoCardMenuDialog(
     private fun checkCsrfAndLogin(): Boolean {
         if (!checkLogin()) return false
         if (sessionGateway.requireCsrfToken() == null) {
-            handleAuthExpired()
+            toast("登录凭据异常，请稍后重试")
             return false
         }
         return true
@@ -589,7 +585,7 @@ class VideoCardMenuDialog(
             is NetworkSessionGateway.ActionError.CsrfMismatch -> toast("操作失败，请稍后重试")
             is NetworkSessionGateway.ActionError.RiskControl -> toast("账号被风控了，请到B站官方App或网页端完成验证后再试")
             is NetworkSessionGateway.ActionError.Other -> toast(error.message)
-            is NetworkSessionGateway.ActionError.CsrfMissing -> handleAuthExpired()
+            is NetworkSessionGateway.ActionError.CsrfMissing -> toast("登录凭据异常，请稍后重试")
         }
     }
 

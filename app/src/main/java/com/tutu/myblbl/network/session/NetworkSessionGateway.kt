@@ -163,10 +163,7 @@ class NetworkManagerSessionGateway : NetworkSessionGateway {
 
     @Deprecated("Use classifyActionError instead", ReplaceWith("classifyActionError(code, message)"))
     override fun handleResponseAuthError(code: Int, message: String?): Boolean {
-        if (!isCsrfError(code, message)) return false
-        NetworkManager.clearUserSession(reason = "csrf_error")
-        dispatchSessionChanged()
-        return true
+        return classifyActionError(code, message) is NetworkSessionGateway.ActionError.SessionExpired
     }
 
     // ========== Context-aware 实现 ==========

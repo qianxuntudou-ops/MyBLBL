@@ -384,11 +384,7 @@ class PlayerActionDialog(
                             }
                         )
                     } else {
-                        if (sessionGateway.handleResponseAuthError(response.code, response.errorMessage)) {
-                            toast(context.getString(R.string.login_expired))
-                        } else {
-                            toast(response.errorMessage)
-                        }
+                        handleActionError(response.code, response.errorMessage)
                     }
                 }.onFailure { toast(it.message ?: "操作失败") }
             }
@@ -477,8 +473,7 @@ class PlayerActionDialog(
             }
             is NetworkSessionGateway.ActionError.Other -> toast(error.message)
             is NetworkSessionGateway.ActionError.CsrfMissing -> {
-                toast(context.getString(R.string.login_expired))
-                dismiss()
+                toast("登录凭据异常，请稍后重试")
             }
         }
     }

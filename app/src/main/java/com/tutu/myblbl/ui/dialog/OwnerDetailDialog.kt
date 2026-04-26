@@ -255,9 +255,8 @@ class OwnerDetailDialog(
     }
 
     private fun toggleFollow() {
-        val csrf = sessionGateway.getCsrfToken()
-        if (csrf.isBlank()) {
-            toast(context.getString(R.string.login_expired))
+        if (sessionGateway.requireCsrfToken() == null) {
+            toast("登录凭据异常，请稍后重试")
             return
         }
         val action = if (isFollowing()) 2 else 1

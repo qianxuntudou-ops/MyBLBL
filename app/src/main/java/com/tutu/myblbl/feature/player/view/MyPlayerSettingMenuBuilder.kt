@@ -2,6 +2,7 @@ package com.tutu.myblbl.feature.player.view
 
 import android.content.Context
 import com.tutu.myblbl.R
+import com.tutu.myblbl.feature.player.LiveQualityInfo
 import com.tutu.myblbl.model.dm.DmScreenArea
 import com.tutu.myblbl.model.subtitle.SubtitleInfoModel
 import com.tutu.myblbl.model.video.quality.AudioQuality
@@ -34,7 +35,9 @@ internal class MyPlayerSettingMenuBuilder(
         val dmArea: Int = DmScreenArea.Half.area,
         val dmAllowTop: Boolean = false,
         val dmAllowBottom: Boolean = false,
-        val dmMergeDuplicate: Boolean = true
+        val dmMergeDuplicate: Boolean = true,
+        val liveQualities: List<LiveQualityInfo> = emptyList(),
+        val currentLiveQualityQn: Int? = null
     )
 
     data class DmChoiceMenu(
@@ -186,6 +189,21 @@ internal class MyPlayerSettingMenuBuilder(
                 id = index,
                 title = title,
                 checked = index == state.currentScreenRatio,
+                showArrow = false
+            )
+        }
+        return rows
+    }
+
+    fun buildLiveQualityMenu(state: PanelState): List<PlayerSettingRow> {
+        val rows = mutableListOf<PlayerSettingRow>(
+            PlayerSettingRow.Header(title = context.getString(R.string.live_quality))
+        )
+        rows += state.liveQualities.mapIndexed { index, quality ->
+            PlayerSettingRow.Item(
+                id = index,
+                title = quality.desc,
+                checked = quality.qn == state.currentLiveQualityQn,
                 showArrow = false
             )
         }

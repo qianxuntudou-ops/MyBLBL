@@ -1177,7 +1177,7 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     fun setLiveQualities(qualities: List<LiveQualityInfo>) {
-        controller?.setLiveQualities(qualities)
+        settingView?.setLiveQualities(qualities)
     }
 
     fun setSubtitles(models: List<SubtitleInfoModel>) {
@@ -1189,7 +1189,12 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     fun selectLiveQuality(qn: Int) {
-        controller?.selectLiveQuality(qn)
+        settingView?.selectLiveQuality(qn)
+    }
+
+    fun showLiveQualityMenu() {
+        controller?.rememberCurrentFocusTarget()
+        settingView?.showLiveQualityMenu()
     }
 
     fun setAudiosSelect(qualities: List<AudioQuality>) {

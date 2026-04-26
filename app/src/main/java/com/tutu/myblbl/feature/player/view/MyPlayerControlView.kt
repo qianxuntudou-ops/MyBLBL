@@ -1,7 +1,6 @@
 package com.tutu.myblbl.feature.player.view
 
 import android.content.Context
-import android.graphics.drawable.ColorDrawable
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
@@ -12,7 +11,6 @@ import android.view.ViewGroup
 import android.graphics.Rect
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.PopupWindow
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.annotation.OptIn
@@ -20,10 +18,7 @@ import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.TimeBar
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
-import com.tutu.myblbl.feature.player.LiveQualityInfo
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.LazyThreadSafetyMode
 
@@ -98,34 +93,11 @@ class MyPlayerControlView @JvmOverloads constructor(
     private lateinit var titleContainer: View
     private lateinit var centerControls: ViewGroup
     private lateinit var bottomBar: ViewGroup
-    private val settingsWindowMargin by lazy { resources.getDimensionPixelSize(R.dimen.px430) }
-    private val settingsView: RecyclerView by lazy {
-        (LayoutInflater.from(context).inflate(R.layout.exo_styled_settings_list, this, false) as RecyclerView).apply {
-            layoutManager = LinearLayoutManager(context, RecyclerView.VERTICAL, false)
-            isFocusable = true
-            descendantFocusability = FOCUS_AFTER_DESCENDANTS
-        }
-    }
-    private val settingsWindow: PopupWindow by lazy {
-        PopupWindow(settingsView, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
-            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) {
-                setBackgroundDrawable(ColorDrawable(0))
-            }
-            setOnDismissListener {
-                if (needToHideBars) {
-                    resetHideCallbacks()
-                }
-            }
-        }
-    }
-    private val liveQualityAdapter = LiveQualitySelectionAdapter()
-    
+
     private var dmEnabled: Boolean = true
     private var ffDuration: Long = DEFAULT_FAST_FORWARD_MS
     private var needToHideBars: Boolean = true
     private var isScrubbing: Boolean = false
-    private var liveQualities: List<LiveQualityInfo> = emptyList()
-    private var selectedLiveQualityQn: Int? = null
     private var timeBarMinUpdateIntervalMs: Int = DEFAULT_TIME_BAR_MIN_UPDATE_INTERVAL_MS
     private var showMultiWindowTimeBar: Boolean = false
     private var seekPreviewListener: SeekPreviewListener? = null
@@ -335,11 +307,7 @@ class MyPlayerControlView @JvmOverloads constructor(
 
         buttonLiveSettings.setOnClickListener {
             removeHideCallbacks()
-            if (liveQualities.isNotEmpty()) {
-                displaySettingsWindow(liveQualityAdapter)
-            } else {
-                onVideoSettingChangeListener?.onLiveSettings()
-            }
+            onVideoSettingChangeListener?.onLiveSettings()
         }
 
         buttonClose.setOnClickListener {
@@ -589,20 +557,6 @@ class MyPlayerControlView @JvmOverloads constructor(
 
     fun showHideLiveSettingButton(show: Boolean) {
         setButtonVisibility(buttonLiveSettings, show)
-    }
-
-    fun setLiveQualities(qualities: List<LiveQualityInfo>) {
-        liveQualities = qualities
-        liveQualityAdapter.submit(qualities)
-        if (selectedLiveQualityQn !in qualities.map { it.qn }) {
-            selectedLiveQualityQn = qualities.firstOrNull()?.qn
-        }
-        liveQualityAdapter.select(selectedLiveQualityQn)
-    }
-
-    fun selectLiveQuality(qn: Int) {
-        selectedLiveQualityQn = qn
-        liveQualityAdapter.select(qn)
     }
 
     fun showSettingButton(show: Boolean) {
@@ -901,22 +855,6 @@ class MyPlayerControlView @JvmOverloads constructor(
         return bounds.contains(x.toInt(), y.toInt())
     }
 
-    private fun displaySettingsWindow(adapter: RecyclerView.Adapter<*>) {
-        settingsView.adapter = adapter
-        updateSettingsWindowSize()
-        needToHideBars = false
-        settingsWindow.dismiss()
-        needToHideBars = true
-        settingsWindow.showAsDropDown(this, settingsWindowMargin, -settingsWindow.height)
-        settingsView.post { settingsView.requestFocus() }
-    }
-
-    private fun updateSettingsWindowSize() {
-        settingsView.measure(0, 0)
-        settingsWindow.width = minOf(width, settingsView.measuredWidth)
-        settingsWindow.height = minOf(height, settingsView.measuredHeight)
-    }
-
     fun hideInfoOnlyLeftTimeBar() {
         controlViewLayoutManager.hideInfoOnlyLeftTimeBar()
     }
@@ -986,16 +924,6 @@ class MyPlayerControlView @JvmOverloads constructor(
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        if (settingsWindow.isShowing) {
-            updateSettingsWindowSize()
-            settingsWindow.update(
-                this,
-                (width - settingsWindow.width) - settingsWindowMargin,
-                -settingsWindow.height - settingsWindowMargin,
-                -1,
-                -1
-            )
-        }
         controlViewLayoutManager.onLayout(changed, left, top, right, bottom)
     }
 
@@ -1006,7 +934,6 @@ class MyPlayerControlView @JvmOverloads constructor(
         handler.removeCallbacks(progressRunnable)
         focusCoordinator.clearPendingFocusStabilization(handler)
         removeHideCallbacks()
-        settingsWindow.dismiss()
     }
 
     internal fun startProgressUpdates() {
@@ -1023,51 +950,6 @@ class MyPlayerControlView @JvmOverloads constructor(
     }
 
     fun isVisible(): Boolean = visibility == VISIBLE
-
-    private inner class LiveQualitySelectionAdapter :
-        RecyclerView.Adapter<LiveQualitySelectionAdapter.SubSettingViewHolder>() {
-
-        private var items: List<LiveQualityInfo> = emptyList()
-        private var checkedQn: Int? = null
-
-        fun submit(qualities: List<LiveQualityInfo>) {
-            items = qualities
-            notifyDataSetChanged()
-        }
-
-        fun select(qn: Int?) {
-            checkedQn = qn
-            notifyDataSetChanged()
-        }
-
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SubSettingViewHolder {
-            val view = LayoutInflater.from(parent.context)
-                .inflate(R.layout.exo_styled_sub_settings_list_item, parent, false)
-            return SubSettingViewHolder(view)
-        }
-
-        override fun getItemCount(): Int = items.size
-
-        override fun onBindViewHolder(holder: SubSettingViewHolder, position: Int) {
-            val item = items[position]
-            holder.textView.text = item.desc
-            holder.checkView.visibility = if (item.qn == checkedQn) View.VISIBLE else View.INVISIBLE
-            holder.itemView.isFocusable = true
-            holder.itemView.setOnClickListener {
-                checkedQn = item.qn
-                selectedLiveQualityQn = item.qn
-                notifyDataSetChanged()
-                onVideoSettingChangeListener?.onLiveQualityChange(item.qn)
-            }
-        }
-
-        private inner class SubSettingViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-            val checkView: ImageView = view.findViewById(R.id.exo_check)
-            val textView: TextView = view.findViewById(R.id.exo_text)
-        }
-    }
 }
-
-
 
 

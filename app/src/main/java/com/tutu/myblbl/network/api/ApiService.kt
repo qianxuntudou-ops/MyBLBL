@@ -1,5 +1,6 @@
 package com.tutu.myblbl.network.api
 
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.tutu.myblbl.model.BaseResponse
 import com.tutu.myblbl.model.common.CollectionResultModel
@@ -436,6 +437,33 @@ interface ApiService {
     suspend fun getLiveChatRoomUrlWithWbi(
         @QueryMap params: Map<String, String>
     ): BaseResponse<ChatRoomWrapper>
+
+    @POST("https://api.live.bilibili.com/xlive/web-room/v1/index/roomEntryAction")
+    @FormUrlEncoded
+    suspend fun liveRoomEntryAction(
+        @Field("room_id") roomId: String,
+        @Field("csrf") csrf: String,
+        @Field("csrf_token") csrfToken: String
+    ): BaseResponse<String>
+
+    @GET("https://api.live.bilibili.com/xlive/data-interface/v1/x25Kn/E")
+    suspend fun getLiveHeartbeatKey(
+        @Query("id") id: Long
+    ): BaseResponse<JsonObject>
+
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getIpInfo")
+    suspend fun getLiveIpInfo(): BaseResponse<JsonObject>
+
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByUser")
+    suspend fun getLiveInfoByUser(
+        @Query("room_id") roomId: Long
+    ): BaseResponse<JsonObject>
+
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/dM/gethistory")
+    suspend fun getLiveDanmuHistory(
+        @Query("roomid") roomId: Long,
+        @Query("room_type") roomType: Int = 0
+    ): BaseResponse<JsonArray>
 
     // ==================== 互动视频 API ====================
     

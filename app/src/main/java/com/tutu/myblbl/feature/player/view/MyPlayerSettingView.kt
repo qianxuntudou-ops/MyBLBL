@@ -15,6 +15,7 @@ import android.widget.ImageView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
+import com.tutu.myblbl.feature.player.LiveQualityInfo
 import com.tutu.myblbl.model.dm.DmScreenArea
 import com.tutu.myblbl.model.subtitle.SubtitleInfoModel
 import com.tutu.myblbl.model.video.quality.AudioQuality
@@ -66,6 +67,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
         internal const val ITEM_AUDIO_QUALITY = 5
         internal const val ITEM_ASPECT_RATIO = 6
         internal const val ITEM_DM_SETTING = 7
+        internal const val ITEM_LIVE_QUALITY = 8
         internal const val ITEM_DM_ENABLE = 101
         internal const val ITEM_DM_ALPHA = 102
         internal const val ITEM_DM_TEXT_SIZE = 103
@@ -294,6 +296,39 @@ class MyPlayerSettingView @JvmOverloads constructor(
         }
     }
 
+    fun setLiveQualities(qualities: List<LiveQualityInfo>) {
+        updateState { state ->
+            val nextQn = if (state.currentLiveQualityQn == null ||
+                !qualities.any { it.qn == state.currentLiveQualityQn }
+            ) {
+                qualities.firstOrNull()?.qn
+            } else {
+                state.currentLiveQualityQn
+            }
+            state.copy(liveQualities = qualities, currentLiveQualityQn = nextQn)
+        }
+        refreshCurrentMenu()
+    }
+
+    fun selectLiveQuality(qn: Int) {
+        updateState { it.copy(currentLiveQualityQn = qn) }
+        refreshCurrentMenu()
+    }
+
+    fun showLiveQualityMenu() {
+        if (panelState.liveQualities.isEmpty()) return
+        if (!isShowing()) {
+            showHide(true)
+            post { showLiveQualitySubMenu() }
+        } else {
+            showLiveQualitySubMenu()
+        }
+    }
+
+    private fun showLiveQualitySubMenu() {
+        showSubMenu(ITEM_LIVE_QUALITY, menuBuilder.buildLiveQualityMenu(panelState))
+    }
+
     fun dmEnableClick() {
         updateState { it.copy(dmEnabled = !it.dmEnabled) }
         onPlayerSettingInnerChange?.onDmEnableChange(panelState.dmEnabled)
@@ -388,6 +423,13 @@ class MyPlayerSettingView @JvmOverloads constructor(
                 updateState { it.copy(currentScreenRatio = itemId) }
                 onPlayerSettingChange?.onAspectRatioChange(itemId)
                 onPlayerSettingInnerChange?.onAspectRatioChange(itemId)
+                goBackToMainMenu()
+            }
+
+            adapter.currentMenuKey == ITEM_LIVE_QUALITY && itemId in panelState.liveQualities.indices -> {
+                val selected = panelState.liveQualities[itemId]
+                updateState { it.copy(currentLiveQualityQn = selected.qn) }
+                onPlayerSettingChange?.onLiveQualityChange(selected.qn)
                 goBackToMainMenu()
             }
         }
@@ -591,6 +633,11 @@ class MyPlayerSettingView @JvmOverloads constructor(
                     animateTransition = false
                 )
                 ITEM_DM_SETTING -> showDmSettingMenu(animateTransition = false)
+                ITEM_LIVE_QUALITY -> showSubMenu(
+                    ITEM_LIVE_QUALITY,
+                    menuBuilder.buildLiveQualityMenu(panelState),
+                    animateTransition = false
+                )
             }
 
             LEVEL_DM -> showDmOptionSubMenu(adapter.currentMenuKey, animateTransition = false)

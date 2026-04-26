@@ -127,12 +127,23 @@ class LivePlayerFragment : Fragment() {
         binding.playerView.showSettingButton(false)
         binding.playerView.showHideLiveSettingButton(false)
         binding.playerView.setOnVideoSettingChangeListener(object : com.tutu.myblbl.feature.player.view.OnVideoSettingChangeListener {
-            override fun onLiveQualityChange(qn: Int) {
-                viewModel.switchQuality(qn)
+            override fun onLiveSettings() {
+                binding.playerView.showLiveQualityMenu()
             }
 
             override fun onClose() {
                 navigateBackFromUi()
+            }
+        })
+        binding.playerView.setOnPlayerSettingChange(object : com.tutu.myblbl.feature.player.view.OnPlayerSettingChange {
+            override fun onVideoQualityChange(quality: com.tutu.myblbl.model.video.quality.VideoQuality) {}
+            override fun onAudioQualityChange(quality: com.tutu.myblbl.model.video.quality.AudioQuality) {}
+            override fun onPlaybackSpeedChange(speed: Float) {}
+            override fun onSubtitleChange(position: Int) {}
+            override fun onVideoCodecChange(codec: com.tutu.myblbl.model.video.quality.VideoCodecEnum) {}
+            override fun onAspectRatioChange(ratio: Int) {}
+            override fun onLiveQualityChange(qn: Int) {
+                viewModel.switchQuality(qn)
             }
         })
         syncPlaybackEnvironment()

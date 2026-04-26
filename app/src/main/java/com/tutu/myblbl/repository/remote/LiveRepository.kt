@@ -28,6 +28,8 @@ class LiveRepository(
         private const val DEFAULT_LIVE_QN = 10000
     }
 
+    private var cachedIpInfo: Pair<String, String>? = null
+
     suspend fun getLivePlayInfo(roomId: Long, quality: Int = DEFAULT_LIVE_QN): Result<LivePlayUrlDataModel> {
         return runCatching {
             val roomInfo = resolveRoomInfo(roomId)
@@ -136,6 +138,86 @@ class LiveRepository(
         }
     }
 
+    suspend fun getIpInfo(): Result<JsonObject> {
+        return runCatching {
+            val response = apiService.getLiveIpInfo()
+            if (response.code == 0 && response.data != null) {
+                val data = response.data
+                val province = data.string("province")
+                val isp = data.string("isp")
+                if (province.isNotBlank() && isp.isNotBlank()) {
+                    cachedIpInfo = province to isp
+                    AppLog.d(TAG, "getIpInfo: province=$province, isp=$isp")
+                }
+                data
+            } else {
+                throw IllegalStateException(response.errorMessage.ifBlank { "获取IP信息失败" })
+            }
+        }
+    }
+
+    suspend fun reportRoomEntry(roomId: Long): Result<Unit> {
+        return runCatching {
+            val csrf = sessionGateway.getCsrfToken()
+            if (csrf.isBlank()) return@runCatching
+            val response = apiService.liveRoomEntryAction(
+                roomId = roomId.toString(),
+                csrf = csrf,
+                csrfToken = csrf
+            )
+            AppLog.d(TAG, "reportRoomEntry: roomId=$roomId, code=${response.code}")
+        }
+    }
+
+    suspend fun getHeartbeatKey(roomId: Long): Result<JsonObject> {
+        return runCatching {
+            val response = apiService.getLiveHeartbeatKey(roomId)
+            if (response.code == 0 && response.data != null) {
+                response.data
+            } else {
+                throw IllegalStateException(response.errorMessage.ifBlank { "获取心跳密钥失败" })
+            }
+        }
+    }
+
+    suspend fun getUserRoomInfo(roomId: Long): Result<JsonObject> {
+        return runCatching {
+            val response = apiService.getLiveInfoByUser(roomId)
+            if (response.code == 0 && response.data != null) {
+                response.data
+            } else {
+                throw IllegalStateException(response.errorMessage.ifBlank { "获取房间用户状态失败" })
+            }
+        }
+    }
+
+    suspend fun getDanmuHistory(roomId: Long): Result<JsonArray> {
+        return runCatching {
+            val response = apiService.getLiveDanmuHistory(roomId)
+            if (response.code == 0 && response.data != null) {
+                response.data
+            } else {
+                throw IllegalStateException(response.errorMessage.ifBlank { "获取历史弹幕失败" })
+            }
+        }
+    }
+
+    suspend fun sendLiveHeartbeat(roomId: Long): Result<Unit> {
+        return runCatching {
+            val csrf = sessionGateway.getCsrfToken()
+            apiService.playVideoHeartbeat(
+                mapOf(
+                    "aid" to "",
+                    "cid" to roomId.toString(),
+                    "played_time" to "0",
+                    "realtime" to "60",
+                    "csrf" to csrf
+                )
+            )
+            AppLog.d(TAG, "sendLiveHeartbeat: roomId=$roomId")
+        }
+    }
+
     private suspend fun resolveRoomInfo(roomId: Long): ResolvedRoomInfo? {
         val response = apiService.getLiveRoomPlayInfo(roomId)
         if (response.code != 0 || response.data == null) {
@@ -226,7 +308,7 @@ class LiveRepository(
                         candidates += LiveStreamCandidate(
                             url = url,
                             currentQn = currentQn,
-                            priority = streamPriority(protocolName, formatName, codecName),
+                            priority = streamPriority(protocolName, formatName, codecName, extra),
                             index = (((streamIndex * 10) + formatIndex) * 10 + codecIndex) * 10 + urlIndex
                         )
                     }
@@ -236,7 +318,7 @@ class LiveRepository(
         return candidates
     }
 
-    private fun streamPriority(protocolName: String, formatName: String, codecName: String): Int {
+    private fun streamPriority(protocolName: String, formatName: String, codecName: String, urlExtra: String): Int {
         var score = 0
         if (protocolName.contains("http_stream", ignoreCase = true)) {
             score += 100
@@ -253,7 +335,29 @@ class LiveRepository(
         } else if (codecName.equals("hevc", ignoreCase = true)) {
             score += 4
         }
+        cachedIpInfo?.let { (userProvince, userIsp) ->
+            val extraParams = parseExtraParams(urlExtra)
+            val cdnIsp = extraParams["isp"]
+            val cdnProvince = extraParams["pv"]
+            if (cdnIsp.equals(userIsp, ignoreCase = true)) {
+                score += if (cdnProvince.equals(userProvince, ignoreCase = true)) {
+                    200
+                } else {
+                    100
+                }
+            }
+        }
         return score
+    }
+
+    private fun parseExtraParams(extra: String): Map<String, String> {
+        if (extra.isBlank()) return emptyMap()
+        val query = extra.substringAfter('?', "")
+        if (query.isBlank()) return emptyMap()
+        return query.split("&").mapNotNull { pair ->
+            val parts = pair.split("=", limit = 2)
+            if (parts.size == 2) parts[0] to parts[1] else null
+        }.toMap()
     }
 
     private fun buildLiveUrl(host: String, baseUrl: String, extra: String): String {

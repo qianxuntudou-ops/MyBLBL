@@ -2,6 +2,7 @@ package com.tutu.myblbl.feature.player.danmaku
 
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.model.dm.DmModel
+import com.tutu.myblbl.model.live.ChatRoomWrapper
 import com.tutu.myblbl.network.WbiGenerator
 import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.network.session.NetworkSessionGateway
@@ -19,6 +20,7 @@ class LiveDanmakuManager(
         private const val TAG = "LiveDanmakuManager"
         private const val RECONNECT_DELAY_MS = 3_000L
         private const val MAX_RECONNECT_ATTEMPTS = 10
+        private const val WEB_LOCATION_LIVE_ROOM = "444.8"
     }
 
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
@@ -71,8 +73,9 @@ class LiveDanmakuManager(
     }
 
     private suspend fun connectOnce(roomId: Long) {
-        val token = getDanmuToken(roomId)
-        AppLog.d(TAG, "connectOnce: token=${token.take(10)}...")
+        val danmuConfig = getDanmuConfig(roomId)
+        val hostList = danmuConfig.hostList.orEmpty()
+        AppLog.d(TAG, "connectOnce: token=${danmuConfig.token.take(10)}... hosts=${hostList.size}")
 
         val uid = try {
             sessionGateway.getUserInfo()?.mid ?: 0L
@@ -109,7 +112,7 @@ class LiveDanmakuManager(
         }
 
         try {
-            client.connect(roomId, token, uid)
+            client.connect(roomId, danmuConfig.token, uid, hostList)
             // 等待 messageJob 结束（连接断开时会 cancel）
             messageJob.join()
         } finally {
@@ -118,30 +121,31 @@ class LiveDanmakuManager(
         }
     }
 
-    private suspend fun getDanmuToken(roomId: Long): String {
-        val response = apiService.getLiveChatRoomUrl(roomId)
-        if (response.code == 0 && response.data != null) {
-            val token = response.data.token
-            if (token.isNotBlank()) return token
-        }
-        AppLog.w(TAG, "getDanmuToken: unsigned call failed code=${response.code}, trying WBI signed")
-
+    private suspend fun getDanmuConfig(roomId: Long): ChatRoomWrapper {
         runCatching { sessionGateway.ensureWbiKeys() }
             .onFailure { AppLog.w(TAG, "ensureWbiKeys failed: ${it.message}") }
 
         val (imgKey, subKey) = sessionGateway.getWbiKeys()
         val unsignedParams = mapOf(
             "id" to roomId.toString(),
-            "type" to "0"
+            "type" to "0",
+            "web_location" to WEB_LOCATION_LIVE_ROOM
         )
         val signedParams = WbiGenerator.generateWbiParams(unsignedParams, imgKey, subKey)
 
         val wbiResponse = apiService.getLiveDanmuInfoSigned(signedParams)
         if (wbiResponse.code == 0 && wbiResponse.data != null) {
-            val token = wbiResponse.data.token
-            if (token.isNotBlank()) return token
+            val data = wbiResponse.data
+            if (data.token.isNotBlank()) return data
         }
-        AppLog.e(TAG, "getDanmuToken: WBI signed call also failed code=${wbiResponse.code} msg=${wbiResponse.message}")
+        AppLog.w(TAG, "getDanmuConfig: WBI call failed code=${wbiResponse.code}, trying unsigned")
+
+        val response = apiService.getLiveChatRoomUrl(roomId)
+        if (response.code == 0 && response.data != null) {
+            val data = response.data
+            if (data.token.isNotBlank()) return data
+        }
+        AppLog.e(TAG, "getDanmuConfig: unsigned call also failed code=${response.code} msg=${response.message}")
 
         throw IllegalStateException("获取弹幕服务器配置失败")
     }

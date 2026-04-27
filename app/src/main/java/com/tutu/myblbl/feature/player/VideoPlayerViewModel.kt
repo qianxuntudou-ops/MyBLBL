@@ -46,6 +46,7 @@ import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.network.security.NetworkSecurityGateway
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.network.response.Base2Response
+import com.tutu.myblbl.network.WbiGenerator
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.network.cookie.CookieManager
@@ -63,6 +64,7 @@ import java.net.URL
 import kotlinx.coroutines.withContext
 import org.koin.mp.KoinPlatform
 import java.util.concurrent.TimeUnit
+import java.util.UUID
 
 @UnstableApi
 class VideoPlayerViewModel(
@@ -87,6 +89,11 @@ class VideoPlayerViewModel(
         private const val TAG = "VideoPlayerViewModel"
         private const val MAX_FALLBACK_ATTEMPTS = 8
         private const val MAX_PLAYINFO_REFRESH_RETRY = 2
+        private const val WEB_LOCATION_PLAYER = "1315873"
+        private const val PLAYER_SPMID = "333.788.0.0"
+        private const val DEFAULT_FROM_SPMID = "333.1007.tianma.1-3-3.click"
+        private const val WEB_PLAYER_VERSION = "4.9.78"
+        private const val PLAY_TYPE_START = 1
         private val verboseDanmakuCandidateLog =
             java.lang.Boolean.getBoolean("myblbl.verbose_danmaku_candidate_log")
 
@@ -404,6 +411,8 @@ class VideoPlayerViewModel(
     private var shouldAutoSelectSubtitle = currentSettings.showSubtitleByDefault
     private var sessionStartTimestampMs: Long = 0L
     private var lastReportedHeartbeatPositionSec: Long = -1L
+    private var playbackReportSession: String = ""
+    private var playbackStartReported: Boolean = false
 
     private var requestedQualityId: Int? = null
     private var requestedAudioId: Int? = null
@@ -584,6 +593,8 @@ class VideoPlayerViewModel(
             shouldAutoSelectSubtitle = currentSettings.showSubtitleByDefault
             sessionStartTimestampMs = 0L
             lastReportedHeartbeatPositionSec = -1L
+            playbackReportSession = ""
+            playbackStartReported = false
             resetFallbackState()
             clearPreloadedPlayback(cancelJob = true)
             hasReachedFirstFrame = false
@@ -905,48 +916,93 @@ class VideoPlayerViewModel(
         }
     }
 
-    fun reportPlaybackHeartbeat(playType: Int = 2) {
+    fun reportPlaybackHeartbeat(playType: Int = 0) {
         val aid = currentAid
-        val bvid = currentBvid
         val cid = currentCid
         val rawPositionMs = _currentPosition.value.coerceAtLeast(0L)
         val positionMs = rawPositionMs.takeIf { it > 0L } ?: pendingSeekPositionMs.coerceAtLeast(0L)
         val positionSec = positionMs / 1000L
         val csrf = sessionGateway.getCsrfToken()
-        if ((aid == null || aid <= 0L) && bvid.isNullOrBlank()) {
+        if (aid == null || aid <= 0L) {
             return
         }
-        if (cid <= 0L || positionSec <= 0L || csrf.isBlank()) {
+        if (cid <= 0L || csrf.isBlank()) {
+            return
+        }
+        if (positionSec <= 0L && playType != PLAY_TYPE_START) {
             return
         }
         if (positionSec == lastReportedHeartbeatPositionSec) {
             return
         }
         lastReportedHeartbeatPositionSec = positionSec
-        val startTimestamp = sessionStartTimestampMs.takeIf { it > 0L } ?: System.currentTimeMillis()
+        val startTimestampSec = ((sessionStartTimestampMs.takeIf { it > 0L } ?: System.currentTimeMillis()) / 1000L)
+            .coerceAtLeast(1L)
+        val realtimeSec = ((System.currentTimeMillis() / 1000L) - startTimestampSec).coerceAtLeast(0L)
+        val durationSec = ((_duration.value.takeIf { it > 0L } ?: currentPlayInfo?.timeLength ?: 0L) / 1000L)
+            .coerceAtLeast(positionSec)
+        val userInfo = sessionGateway.getUserInfo()
+        val mid = userInfo?.mid?.takeIf { it > 0L }
+        val quality = (_selectedQuality.value?.id ?: selectedQualityId ?: currentPlayInfo?.quality ?: 0)
+            .takeIf { it > 0 } ?: 80
+        val session = ensurePlaybackReportSession()
 
         viewModelScope.launch {
+            reportPlaybackStartIfNeeded(
+                aid = aid,
+                cid = cid,
+                mid = mid,
+                csrf = csrf,
+                startTimestampSec = startTimestampSec,
+                session = session
+            )
+
             val params = linkedMapOf(
+                "start_ts" to startTimestampSec.toString(),
+                "aid" to aid.toString(),
+                "cid" to cid.toString(),
                 "played_time" to positionSec.toString(),
-                "realtime" to positionSec.toString(),
-                "start_ts" to startTimestamp.toString(),
+                "realtime" to realtimeSec.toString(),
+                "real_played_time" to positionSec.toString(),
                 "type" to "3",
-                "refer_url" to "https://www.bilibili.com/",
+                "sub_type" to "0",
+                "dt" to "2",
                 "play_type" to playType.toString(),
+                "refer_url" to buildPlaybackReferUrl(),
+                "quality" to quality.toString(),
+                "is_auto_qn" to "1",
+                "video_duration" to durationSec.toString(),
+                "last_play_progress_time" to positionSec.toString(),
+                "max_play_progress_time" to positionSec.toString(),
+                "outer" to "0",
+                "statistics" to buildWebStatistics(),
+                "mobi_app" to "web",
+                "device" to "web",
+                "platform" to "web",
+                "cur_language_vt" to "{}",
+                "perfer_type" to "{}",
+                "play_mode" to if (playType == PLAY_TYPE_START) "1" else "8",
+                "spmid" to PLAYER_SPMID,
+                "from_spmid" to DEFAULT_FROM_SPMID,
+                "session" to session,
+                "track_id" to "",
+                "extra" to buildPlaybackExtra(),
                 "csrf" to csrf
             )
-            aid?.takeIf { it > 0L }?.let { params["aid"] = it.toString() }
-            bvid?.takeIf { it.isNotBlank() }?.let { params["bvid"] = it }
-            params["cid"] = cid.toString()
-            sessionGateway.getUserInfo()
-                ?.mid
-                ?.takeIf { it > 0L }
-                ?.let { params["mid"] = it.toString() }
+            mid?.let { params["mid"] = it.toString() }
+            val queryParams = buildHeartbeatWbiParams(
+                aid = aid,
+                mid = mid,
+                startTimestampSec = startTimestampSec,
+                realtimeSec = realtimeSec,
+                playedSec = positionSec,
+                durationSec = durationSec
+            )
             var attempt = 0
             while (attempt < 2) {
                 val result = runCatching {
                     sessionGateway.syncAuthState(
-                        apiService.playVideoHeartbeat(params),
+                        apiService.playVideoHeartbeatSigned(queryParams, params),
                         source = "player.playVideoHeartbeat"
                     )
                 }
@@ -959,6 +1015,148 @@ class VideoPlayerViewModel(
                 }
             }
         }
+    }
+
+    private suspend fun reportPlaybackStartIfNeeded(
+        aid: Long,
+        cid: Long,
+        mid: Long?,
+        csrf: String,
+        startTimestampSec: Long,
+        session: String
+    ) {
+        if (playbackStartReported || csrf.isBlank()) return
+        playbackStartReported = true
+        val nowSec = System.currentTimeMillis() / 1000L
+        val queryParams = buildClickH5WbiParams(
+            aid = aid,
+            startTimestampSec = startTimestampSec,
+            reportTimestampSec = nowSec
+        )
+        val params = linkedMapOf(
+            "aid" to aid.toString(),
+            "cid" to cid.toString(),
+            "part" to "1",
+            "lv" to (sessionGateway.getUserInfo()?.levelInfo?.currentLevel ?: 0).toString(),
+            "ftime" to startTimestampSec.toString(),
+            "stime" to nowSec.toString(),
+            "type" to "3",
+            "sub_type" to "0",
+            "refer_url" to buildPlaybackReferUrl(),
+            "outer" to "0",
+            "statistics" to buildWebStatistics(),
+            "mobi_app" to "web",
+            "device" to "web",
+            "platform" to "web",
+            "cur_language" to "",
+            "perfer_type" to "",
+            "play_mode" to "1",
+            "spmid" to PLAYER_SPMID,
+            "from_spmid" to DEFAULT_FROM_SPMID,
+            "session" to session,
+            "track_id" to "",
+            "extra" to buildPlaybackExtra(includePlayerVersion = false),
+            "csrf" to csrf
+        )
+        mid?.let { params["mid"] = it.toString() }
+        runCatching {
+            sessionGateway.syncAuthState(
+                apiService.reportVideoClickH5(queryParams, params),
+                source = "player.reportVideoClickH5"
+            )
+        }.onFailure {
+            playbackStartReported = false
+            AppLog.w(TAG, "reportPlaybackStart failed: ${it.message}")
+        }
+    }
+
+    private suspend fun buildHeartbeatWbiParams(
+        aid: Long,
+        mid: Long?,
+        startTimestampSec: Long,
+        realtimeSec: Long,
+        playedSec: Long,
+        durationSec: Long
+    ): Map<String, String> {
+        if (sessionGateway.areWbiKeysStale()) {
+            runCatching { sessionGateway.ensureWbiKeys() }
+                .onFailure { AppLog.w(TAG, "heartbeat ensureWbiKeys failed: ${it.message}") }
+        }
+        val (imgKey, subKey) = sessionGateway.getWbiKeys()
+        val params = linkedMapOf(
+            "w_start_ts" to startTimestampSec.toString(),
+            "w_aid" to aid.toString(),
+            "w_dt" to "2",
+            "w_realtime" to realtimeSec.toString(),
+            "w_played_time" to playedSec.toString(),
+            "w_real_played_time" to playedSec.toString(),
+            "w_video_duration" to durationSec.toString(),
+            "w_last_play_progress_time" to playedSec.toString(),
+            "web_location" to WEB_LOCATION_PLAYER
+        )
+        mid?.let { params["w_mid"] = it.toString() }
+        return WbiGenerator.generateWbiParams(params, imgKey, subKey)
+    }
+
+    private suspend fun buildClickH5WbiParams(
+        aid: Long,
+        startTimestampSec: Long,
+        reportTimestampSec: Long
+    ): Map<String, String> {
+        if (sessionGateway.areWbiKeysStale()) {
+            runCatching { sessionGateway.ensureWbiKeys() }
+                .onFailure { AppLog.w(TAG, "clickH5 ensureWbiKeys failed: ${it.message}") }
+        }
+        val (imgKey, subKey) = sessionGateway.getWbiKeys()
+        return WbiGenerator.generateWbiParams(
+            linkedMapOf(
+                "w_aid" to aid.toString(),
+                "w_part" to "1",
+                "w_ftime" to startTimestampSec.toString(),
+                "w_stime" to reportTimestampSec.toString(),
+                "w_type" to "3",
+                "web_location" to WEB_LOCATION_PLAYER
+            ),
+            imgKey,
+            subKey
+        )
+    }
+
+    private fun ensurePlaybackReportSession(): String {
+        if (playbackReportSession.isBlank()) {
+            playbackReportSession = UUID.randomUUID().toString().replace("-", "")
+        }
+        return playbackReportSession
+    }
+
+    private fun resetPlaybackReportSession() {
+        playbackReportSession = UUID.randomUUID().toString().replace("-", "")
+        playbackStartReported = false
+    }
+
+    private fun buildPlaybackReferUrl(): String {
+        val bvid = currentBvid?.takeIf { it.isNotBlank() }
+        return if (bvid != null) {
+            "https://www.bilibili.com/video/$bvid/"
+        } else {
+            "https://www.bilibili.com/"
+        }
+    }
+
+    private fun buildWebStatistics(): String {
+        return """{"appId":100,"platform":5,"abtest":"","version":""}"""
+    }
+
+    private fun buildPlaybackExtra(includePlayerVersion: Boolean = true): String {
+        val values = linkedMapOf<String, Any>(
+            "play_method" to 2,
+            "play_volume" to 1,
+            "auto_play" to 0
+        )
+        if (includePlayerVersion) {
+            values["player_version"] = WEB_PLAYER_VERSION
+        }
+        return Gson().toJson(values)
     }
 
     private fun rebuildPlayback() {
@@ -1589,6 +1787,7 @@ class VideoPlayerViewModel(
         if (!preparedPlayback.replaceInPlace) {
             sessionStartTimestampMs = System.currentTimeMillis()
             lastReportedHeartbeatPositionSec = -1L
+            resetPlaybackReportSession()
             hasReachedFirstFrame = false
         }
 
@@ -1663,6 +1862,7 @@ class VideoPlayerViewModel(
         if (cid != null) {
             markRecentlyPlayed(cid)
         }
+        reportPlaybackHeartbeat(playType = PLAY_TYPE_START)
         if (cid == null) return
         if (pendingPlayerExtrasCid == cid && loadedPlayerExtrasCid != cid) {
             pendingPlayerExtrasCid = 0L

@@ -11,7 +11,11 @@ import com.tutu.myblbl.model.live.LiveAreaCategoryParent
 import com.tutu.myblbl.model.live.LiveListWrapper
 import com.tutu.myblbl.network.api.ApiService
 import com.tutu.myblbl.network.session.NetworkSessionGateway
+import com.tutu.myblbl.network.WbiGenerator
 import com.tutu.myblbl.core.common.log.AppLog
+import java.util.UUID
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 data class LiveRoomPage(
     val rooms: List<LiveRoomItem> = emptyList(),
@@ -26,9 +30,18 @@ class LiveRepository(
     companion object {
         private const val TAG = "LiveRepository"
         private const val DEFAULT_LIVE_QN = 10000
+        private const val DEFAULT_LIVE_PARENT_AREA_ID = 1L
+        private const val DEFAULT_LIVE_AREA_ID = 1013L
+        private const val WEB_LOCATION_LIVE_HOME = "444.7"
+        private const val WEB_LOCATION_LIVE_ROOM = "444.8"
+        private const val LIVE_WEB_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36 Edg/147.0.0.0"
     }
 
     private var cachedIpInfo: Pair<String, String>? = null
+    private val liveDeviceId = "AUTO" + UUID.randomUUID().toString().filter { it.isDigit() }.padEnd(16, '0').take(16)
+    private val liveDeviceUuid = UUID.randomUUID().toString()
+    private var lastLiveHeartbeat: LiveHeartbeatState? = null
 
     suspend fun getLivePlayInfo(roomId: Long, quality: Int = DEFAULT_LIVE_QN): Result<LivePlayUrlDataModel> {
         return runCatching {
@@ -41,18 +54,27 @@ class LiveRepository(
             }
 
             val v2Response = apiService.getLiveRoomPlayInfoV2(
-                mapOf(
-                    "room_id" to roomInfo.realRoomId.toString(),
-                    "protocol" to "0,1",
-                    "format" to "0,1,2",
-                    "codec" to "0,1",
-                    "qn" to quality.toString(),
-                    "platform" to "web",
-                    "ptype" to "16"
+                buildWbiParams(
+                    mapOf(
+                        "room_id" to roomInfo.realRoomId.toString(),
+                        "protocol" to "0,1",
+                        "format" to "0,1,2",
+                        "codec" to "0,1,2",
+                        "qn" to "0",
+                        "platform" to "web",
+                        "ptype" to "8",
+                        "dolby" to "5",
+                        "panorama" to "1",
+                        "hdr_type" to "0,1,6",
+                        "req_reason" to "0",
+                        "supported_drms" to "0,1,2,3",
+                        "special_scenario" to "2",
+                        "web_location" to WEB_LOCATION_LIVE_HOME
+                    )
                 )
             )
             if (v2Response.code == 0 && v2Response.data != null) {
-                parseV2PlayInfo(v2Response.data, roomInfo.liveTime, roomInfo.roomTitle, roomInfo.anchorName)?.let { playInfo ->
+                parseV2PlayInfo(v2Response.data, roomInfo.liveTime, roomInfo.roomTitle, roomInfo.anchorName, quality)?.let { playInfo ->
                     return@runCatching playInfo
                 }
                 AppLog.e(
@@ -165,9 +187,14 @@ class LiveRepository(
             val csrf = sessionGateway.getCsrfToken()
             if (csrf.isBlank()) return@runCatching
             val response = apiService.liveRoomEntryAction(
+                queryParams = buildWbiParams(
+                    mapOf(
+                        "csrf" to csrf,
+                        "web_location" to WEB_LOCATION_LIVE_ROOM
+                    )
+                ),
                 roomId = roomId.toString(),
-                csrf = csrf,
-                csrfToken = csrf
+                platform = "pc"
             )
             AppLog.d(TAG, "reportRoomEntry: roomId=$roomId, code=${response.code}")
         }
@@ -175,8 +202,13 @@ class LiveRepository(
 
     suspend fun getHeartbeatKey(roomId: Long): Result<JsonObject> {
         return runCatching {
-            val response = apiService.getLiveHeartbeatKey(roomId)
+            val roomInfo = resolveRoomInfo(roomId)
+            val realRoomId = roomInfo?.realRoomId ?: roomId
+            val ruid = roomInfo?.ruid ?: 0L
+            val heartbeatRoomInfo = roomInfo ?: ResolvedRoomInfo(realRoomId, 0, ruid = ruid)
+            val response = apiService.getLiveHeartbeatKey(buildLiveHeartbeatInitParams(heartbeatRoomInfo))
             if (response.code == 0 && response.data != null) {
+                updateLiveHeartbeatState(heartbeatRoomInfo, response.data, sequence = 0)
                 response.data
             } else {
                 throw IllegalStateException(response.errorMessage.ifBlank { "获取心跳密钥失败" })
@@ -208,21 +240,62 @@ class LiveRepository(
 
     suspend fun sendLiveHeartbeat(roomId: Long): Result<Unit> {
         return runCatching {
-            val csrf = sessionGateway.getCsrfToken()
-            apiService.playVideoHeartbeat(
-                mapOf(
-                    "aid" to "",
-                    "cid" to roomId.toString(),
-                    "played_time" to "0",
-                    "realtime" to "60",
-                    "csrf" to csrf
+            val state = lastLiveHeartbeat
+            if (state == null || state.realRoomId != roomId && state.shortOrRealRoomId != roomId) {
+                getHeartbeatKey(roomId).getOrThrow()
+                return@runCatching
+            }
+            val sequence = state.sequence + 1
+            val nowMs = System.currentTimeMillis()
+            val response = apiService.sendLiveHeartbeatX(buildLiveHeartbeatXParams(state, sequence, nowMs))
+            if (response.code == 0 && response.data != null) {
+                val signature = buildLiveHeartbeatSignature(state, sequence, nowMs)
+                updateLiveHeartbeatState(
+                    roomInfo = state.toResolvedRoomInfo(),
+                    data = response.data,
+                    sequence = sequence,
+                    lastSignature = signature,
+                    lastReportTsMs = nowMs
                 )
-            )
-            AppLog.d(TAG, "sendLiveHeartbeat: roomId=$roomId")
+            } else {
+                throw IllegalStateException(response.errorMessage.ifBlank { "直播心跳失败" })
+            }
+            AppLog.d(TAG, "sendLiveHeartbeatX: roomId=$roomId, sequence=$sequence")
         }
     }
 
     private suspend fun resolveRoomInfo(roomId: Long): ResolvedRoomInfo? {
+        runCatching { apiService.getLiveRoomInfo(roomId) }
+            .onSuccess { response ->
+                if (response.code == 0 && response.data != null) {
+                    val data = response.data
+                    val realRoomId = data.long("room_id")?.takeIf { it > 0L } ?: roomId
+                    val ruid = data.long("uid") ?: 0L
+                    val liveStatus = data.int("live_status") ?: 0
+                    val liveTime = data.string("live_time").takeIf { it.isNotBlank() }
+                    val roomTitle = data.string("title").takeIf { it.isNotBlank() }
+                    val anchorName = data.string("uname").takeIf { it.isNotBlank() }
+                    val parentAreaId = data.long("parent_area_id") ?: DEFAULT_LIVE_PARENT_AREA_ID
+                    val areaId = data.long("area_id") ?: DEFAULT_LIVE_AREA_ID
+                    AppLog.d(
+                        TAG,
+                        "resolveRoomInfo room/get_info: roomId=$roomId, realRoomId=$realRoomId, parentAreaId=$parentAreaId, areaId=$areaId"
+                    )
+                    return ResolvedRoomInfo(
+                        realRoomId = realRoomId,
+                        liveStatus = liveStatus,
+                        liveTime = liveTime,
+                        roomTitle = roomTitle,
+                        anchorName = anchorName,
+                        ruid = ruid,
+                        parentAreaId = parentAreaId,
+                        areaId = areaId,
+                        shortOrRealRoomId = roomId
+                    )
+                }
+            }
+            .onFailure { AppLog.w(TAG, "resolveRoomInfo getLiveRoomInfo failed: ${it.message}") }
+
         val response = apiService.getLiveRoomPlayInfo(roomId)
         if (response.code != 0 || response.data == null) {
             AppLog.e(
@@ -237,6 +310,10 @@ class LiveRepository(
         val realRoomId = directRoomId?.takeIf { it > 0L }
             ?: nestedRoomId?.takeIf { it > 0L }
             ?: roomId
+        val ruid = data.long("uid")
+            ?: data.objectOrNull("room_info")?.long("uid")
+            ?: data.objectOrNull("anchor_info")?.objectOrNull("base_info")?.long("uid")
+            ?: 0L
         val liveStatus = data.int("live_status")
             ?: data.objectOrNull("room_info")?.int("live_status")
             ?: 0
@@ -246,14 +323,36 @@ class LiveRepository(
         val anchorName = data.objectOrNull("anchor_info")
             ?.objectOrNull("base_info")?.string("uname")
             ?: roomInfo?.string("uname")
+        val parentAreaId = data.long("parent_area_id")
+            ?: roomInfo?.long("parent_area_id")
+            ?: DEFAULT_LIVE_PARENT_AREA_ID
+        val areaId = data.long("area_id")
+            ?: roomInfo?.long("area_id")
+            ?: DEFAULT_LIVE_AREA_ID
         AppLog.d(TAG, "resolveRoomInfo: title=$roomTitle, anchor=$anchorName, keys=${data.keySet()}")
         if (roomInfo != null) {
             AppLog.d(TAG, "resolveRoomInfo roomInfo keys=${roomInfo.keySet()}")
         }
-        return ResolvedRoomInfo(realRoomId, liveStatus, liveTime, roomTitle, anchorName)
+        return ResolvedRoomInfo(
+            realRoomId = realRoomId,
+            liveStatus = liveStatus,
+            liveTime = liveTime,
+            roomTitle = roomTitle,
+            anchorName = anchorName,
+            ruid = ruid,
+            parentAreaId = parentAreaId,
+            areaId = areaId,
+            shortOrRealRoomId = roomId
+        )
     }
 
-    private fun parseV2PlayInfo(data: JsonObject, liveTime: String?, roomTitle: String?, anchorName: String?): LivePlayUrlDataModel? {
+    private fun parseV2PlayInfo(
+        data: JsonObject,
+        liveTime: String?,
+        roomTitle: String?,
+        anchorName: String?,
+        preferredQuality: Int
+    ): LivePlayUrlDataModel? {
         val playUrl = data.objectOrNull("playurl_info")
             ?.objectOrNull("playurl")
             ?: return null
@@ -270,7 +369,8 @@ class LiveRepository(
             .orEmpty()
             .filter { acceptQn.isEmpty() || it.qn in acceptQn }
         val candidates = buildStreamCandidates(playUrl.arrayOrNull("stream")).sortedWith(
-            compareByDescending<LiveStreamCandidate> { it.priority }
+            compareByDescending<LiveStreamCandidate> { if (it.currentQn == preferredQuality) 1 else 0 }
+                .thenByDescending { it.priority }
                 .thenByDescending { it.currentQn }
                 .thenBy { it.index }
         )
@@ -383,6 +483,185 @@ class LiveRepository(
             .orEmpty()
     }
 
+    private suspend fun buildWbiParams(params: Map<String, String>): Map<String, String> {
+        if (sessionGateway.areWbiKeysStale()) {
+            runCatching { sessionGateway.ensureWbiKeys() }
+                .onFailure { AppLog.w(TAG, "buildWbiParams ensureWbiKeys failed: ${it.message}") }
+        }
+        val (imgKey, subKey) = sessionGateway.getWbiKeys()
+        return WbiGenerator.generateWbiParams(params, imgKey, subKey)
+    }
+
+    private suspend fun buildLiveHeartbeatInitParams(roomInfo: ResolvedRoomInfo): Map<String, String> {
+        val csrf = sessionGateway.getCsrfToken()
+        val nowMs = System.currentTimeMillis()
+        val params = linkedMapOf(
+            "id" to liveHeartbeatId(roomInfo.parentAreaId, roomInfo.areaId, 0, roomInfo.realRoomId),
+            "device" to """["$liveDeviceId","$liveDeviceUuid"]""",
+            "ruid" to roomInfo.ruid.toString(),
+            "ts" to nowMs.toString(),
+            "is_patch" to "1",
+            "ua" to LIVE_WEB_UA,
+            "web_location" to WEB_LOCATION_LIVE_ROOM
+        )
+        csrf.takeIf { it.isNotBlank() }?.let { params["csrf"] = it }
+        lastLiveHeartbeat?.takeIf { it.lastSignature.isNotBlank() }?.let { state ->
+            params["heart_beat"] = state.toPatchHeartbeat()
+        }
+        return buildWbiParams(params)
+    }
+
+    private suspend fun buildLiveHeartbeatXParams(
+        state: LiveHeartbeatState,
+        sequence: Int,
+        nowMs: Long
+    ): Map<String, String> {
+        val csrf = sessionGateway.getCsrfToken()
+        val signature = buildLiveHeartbeatSignature(state, sequence, nowMs)
+        val params = linkedMapOf(
+            "s" to signature,
+            "id" to liveHeartbeatId(state.parentAreaId, state.areaId, sequence, state.realRoomId),
+            "device" to """["$liveDeviceId","$liveDeviceUuid"]""",
+            "ruid" to state.ruid.toString(),
+            "ets" to state.timestamp.toString(),
+            "benchmark" to state.secretKey,
+            "time" to state.intervalSec.toString(),
+            "ts" to nowMs.toString(),
+            "ua" to LIVE_WEB_UA,
+            "trackid" to state.trackId,
+            "web_location" to WEB_LOCATION_LIVE_ROOM
+        )
+        csrf.takeIf { it.isNotBlank() }?.let { params["csrf"] = it }
+        return buildWbiParams(params)
+    }
+
+    private fun updateLiveHeartbeatState(
+        roomInfo: ResolvedRoomInfo,
+        data: JsonObject,
+        sequence: Int,
+        lastSignature: String = "",
+        lastReportTsMs: Long = 0L
+    ) {
+        val previous = lastLiveHeartbeat
+        lastLiveHeartbeat = LiveHeartbeatState(
+            realRoomId = roomInfo.realRoomId,
+            shortOrRealRoomId = roomInfo.shortOrRealRoomId,
+            ruid = roomInfo.ruid,
+            parentAreaId = roomInfo.parentAreaId,
+            areaId = roomInfo.areaId,
+            sequence = sequence,
+            timestamp = data.long("timestamp") ?: (System.currentTimeMillis() / 1000L),
+            intervalSec = data.int("heartbeat_interval") ?: 60,
+            secretKey = data.string("secret_key"),
+            secretRule = data.arrayOrNull("secret_rule")
+                ?.mapNotNull { runCatching { it.asInt }.getOrNull() }
+                ?.takeIf { it.isNotEmpty() }
+                ?: previous?.secretRule
+                ?: listOf(2, 5, 1, 4),
+            lastSignature = lastSignature,
+            lastReportTsMs = lastReportTsMs,
+            trackId = previous?.takeIf { it.realRoomId == roomInfo.realRoomId }?.trackId ?: "-99998",
+            updatedAtMs = System.currentTimeMillis()
+        )
+    }
+
+    private fun buildLiveHeartbeatSignature(
+        state: LiveHeartbeatState,
+        sequence: Int,
+        nowMs: Long
+    ): String {
+        var payload = buildLiveHeartbeatSignaturePayload(state, sequence, nowMs)
+        state.secretRule.forEach { rule ->
+            payload = hmacHex(payload, state.secretKey, liveHeartbeatDigestName(rule))
+        }
+        return payload
+    }
+
+    private fun buildLiveHeartbeatSignaturePayload(
+        state: LiveHeartbeatState,
+        sequence: Int,
+        nowMs: Long
+    ): String {
+        return buildString {
+            append("{\"platform\":\"web\"")
+            append(",\"parent_id\":").append(state.parentAreaId)
+            append(",\"area_id\":").append(state.areaId)
+            append(",\"seq_id\":").append(sequence)
+            append(",\"room_id\":").append(state.realRoomId)
+            append(",\"buvid\":\"").append(jsonEscape(liveDeviceId)).append("\"")
+            append(",\"uuid\":\"").append(jsonEscape(liveDeviceUuid)).append("\"")
+            append(",\"ets\":").append(state.timestamp)
+            append(",\"time\":").append(state.intervalSec)
+            append(",\"ts\":").append(nowMs)
+            append("}")
+        }
+    }
+
+    private fun hmacHex(payload: String, key: String, algorithm: String): String {
+        val mac = Mac.getInstance("Hmac$algorithm")
+        mac.init(SecretKeySpec(key.toByteArray(Charsets.UTF_8), "Hmac$algorithm"))
+        return mac.doFinal(payload.toByteArray(Charsets.UTF_8)).joinToString("") { byte ->
+            "%02x".format(byte)
+        }
+    }
+
+    private fun liveHeartbeatDigestName(rule: Int): String {
+        return when (rule) {
+            0 -> "MD5"
+            1 -> "SHA1"
+            2 -> "SHA256"
+            3 -> "SHA224"
+            4 -> "SHA512"
+            5 -> "SHA384"
+            else -> "SHA256"
+        }
+    }
+
+    private fun liveHeartbeatId(parentAreaId: Long, areaId: Long, sequence: Int, roomId: Long): String {
+        return "[$parentAreaId,$areaId,$sequence,$roomId]"
+    }
+
+    private fun LiveHeartbeatState.toPatchHeartbeat(): String {
+        val id = liveHeartbeatId(parentAreaId, areaId, sequence, realRoomId)
+        val device = """["$liveDeviceId","$liveDeviceUuid"]"""
+        val ts = lastReportTsMs.takeIf { it > 0L } ?: System.currentTimeMillis()
+        return buildString {
+            append("[{\"s\":\"").append(jsonEscape(lastSignature)).append("\"")
+            append(",\"id\":\"").append(jsonEscape(id)).append("\"")
+            append(",\"device\":\"").append(jsonEscape(device)).append("\"")
+            append(",\"ruid\":").append(ruid)
+            append(",\"ets\":").append(timestamp)
+            append(",\"benchmark\":\"").append(jsonEscape(secretKey)).append("\"")
+            append(",\"time\":").append(elapsedSeconds())
+            append(",\"ts\":").append(ts)
+            append(",\"ua\":\"").append(jsonEscape(LIVE_WEB_UA)).append("\"")
+            append(",\"trackid\":\"").append(jsonEscape(trackId)).append("\"")
+            append("}]")
+        }
+    }
+
+    private fun LiveHeartbeatState.toResolvedRoomInfo(): ResolvedRoomInfo {
+        return ResolvedRoomInfo(
+            realRoomId = realRoomId,
+            liveStatus = 1,
+            ruid = ruid,
+            parentAreaId = parentAreaId,
+            areaId = areaId,
+            shortOrRealRoomId = shortOrRealRoomId
+        )
+    }
+
+    private fun jsonEscape(value: String): String {
+        return value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\b", "\\b")
+            .replace("\u000C", "\\f")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+    }
+
     private fun parseExtraParams(extra: String): Map<String, String> {
         if (extra.isBlank()) return emptyMap()
         val query = extra.substringAfter('?', "")
@@ -442,8 +721,33 @@ class LiveRepository(
         val liveStatus: Int,
         val liveTime: String? = null,
         val roomTitle: String? = null,
-        val anchorName: String? = null
+        val anchorName: String? = null,
+        val ruid: Long = 0L,
+        val parentAreaId: Long = DEFAULT_LIVE_PARENT_AREA_ID,
+        val areaId: Long = DEFAULT_LIVE_AREA_ID,
+        val shortOrRealRoomId: Long = realRoomId
     )
+
+    private data class LiveHeartbeatState(
+        val realRoomId: Long,
+        val shortOrRealRoomId: Long,
+        val ruid: Long,
+        val parentAreaId: Long,
+        val areaId: Long,
+        val sequence: Int,
+        val timestamp: Long,
+        val intervalSec: Int,
+        val secretKey: String,
+        val secretRule: List<Int>,
+        val lastSignature: String,
+        val lastReportTsMs: Long,
+        val trackId: String,
+        val updatedAtMs: Long
+    ) {
+        fun elapsedSeconds(): Long {
+            return ((System.currentTimeMillis() - updatedAtMs) / 1000L).coerceAtLeast(0L)
+        }
+    }
 
     private data class LiveStreamCandidate(
         val url: String,

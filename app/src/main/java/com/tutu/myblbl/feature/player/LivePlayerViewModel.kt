@@ -62,6 +62,7 @@ class LivePlayerViewModel(
     private var currentRoomId: Long = 0
     private var heartbeatJob: Job? = null
     private var durationJob: Job? = null
+    private var heartbeatIntervalMs: Long = HEARTBEAT_INTERVAL_MS
 
     fun loadLiveStream(roomId: Long) {
         currentRoomId = roomId
@@ -117,7 +118,11 @@ class LivePlayerViewModel(
         }
 
         viewModelScope.launch {
-            runCatching { repository.getHeartbeatKey(roomId) }
+            repository.getHeartbeatKey(roomId)
+                .onSuccess { data ->
+                    val intervalSec = runCatching { data["heartbeat_interval"]?.asLong }.getOrNull() ?: 60L
+                    heartbeatIntervalMs = (intervalSec.coerceAtLeast(15L) * 1000L)
+                }
                 .onFailure { AppLog.w(TAG, "getHeartbeatKey failed: ${it.message}") }
         }
 
@@ -140,7 +145,7 @@ class LivePlayerViewModel(
         heartbeatJob?.cancel()
         heartbeatJob = viewModelScope.launch {
             while (true) {
-                delay(HEARTBEAT_INTERVAL_MS)
+                delay(heartbeatIntervalMs)
                 runCatching { repository.sendLiveHeartbeat(roomId) }
                     .onFailure { AppLog.w(TAG, "sendLiveHeartbeat failed: ${it.message}") }
             }

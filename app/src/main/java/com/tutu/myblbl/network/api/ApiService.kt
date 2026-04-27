@@ -213,6 +213,20 @@ interface ApiService {
         @FieldMap params: Map<String, String>
     ): BaseResponse<String>
 
+    @POST("x/click-interface/web/heartbeat")
+    @FormUrlEncoded
+    suspend fun playVideoHeartbeatSigned(
+        @QueryMap queryParams: Map<String, String>,
+        @FieldMap params: Map<String, String>
+    ): BaseResponse<String>
+
+    @POST("x/click-interface/click/web/h5")
+    @FormUrlEncoded
+    suspend fun reportVideoClickH5(
+        @QueryMap queryParams: Map<String, String>,
+        @FieldMap params: Map<String, String>
+    ): BaseResponse<String>
+
     @POST("x/web-interface/archive/like")
     @FormUrlEncoded
     suspend fun like(
@@ -414,6 +428,11 @@ interface ApiService {
         @Query("room_id") roomId: Long
     ): BaseResponse<JsonObject>
 
+    @GET("https://api.live.bilibili.com/room/v1/Room/get_info")
+    suspend fun getLiveRoomInfo(
+        @Query("room_id") roomId: Long
+    ): BaseResponse<JsonObject>
+
     @GET("https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo")
     suspend fun getLiveRoomPlayInfoV2(
         @QueryMap params: Map<String, String>
@@ -441,14 +460,19 @@ interface ApiService {
     @POST("https://api.live.bilibili.com/xlive/web-room/v1/index/roomEntryAction")
     @FormUrlEncoded
     suspend fun liveRoomEntryAction(
+        @QueryMap queryParams: Map<String, String>,
         @Field("room_id") roomId: String,
-        @Field("csrf") csrf: String,
-        @Field("csrf_token") csrfToken: String
+        @Field("platform") platform: String = "pc"
     ): BaseResponse<String>
 
-    @GET("https://api.live.bilibili.com/xlive/data-interface/v1/x25Kn/E")
+    @POST("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/E")
     suspend fun getLiveHeartbeatKey(
-        @Query("id") id: Long
+        @QueryMap params: Map<String, String>
+    ): BaseResponse<JsonObject>
+
+    @POST("https://live-trace.bilibili.com/xlive/data-interface/v1/x25Kn/X")
+    suspend fun sendLiveHeartbeatX(
+        @QueryMap params: Map<String, String>
     ): BaseResponse<JsonObject>
 
     @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getIpInfo")

@@ -1,6 +1,7 @@
 package com.tutu.myblbl.feature.player.danmaku
 
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.model.live.ChatHostUrlModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import okhttp3.*
@@ -51,12 +52,17 @@ class LiveDanmakuClient(
         DISCONNECTED, CONNECTING, CONNECTED, FAILED
     }
 
-    fun connect(roomId: Long, token: String, uid: Long = 0L) {
+    fun connect(
+        roomId: Long,
+        token: String,
+        uid: Long = 0L,
+        hostList: List<ChatHostUrlModel> = emptyList()
+    ) {
         disconnect()
         _connectionState.value = ConnectionState.CONNECTING
         AppLog.d(TAG, "connect: roomId=$roomId uid=$uid")
 
-        val request = Request.Builder().url(WS_URL).build()
+        val request = Request.Builder().url(resolveWsUrl(hostList)).build()
 
         webSocket = okHttpClient.newBuilder()
             .readTimeout(0, TimeUnit.MILLISECONDS)
@@ -84,6 +90,16 @@ class LiveDanmakuClient(
                     stopHeartbeat()
                 }
             })
+    }
+
+    private fun resolveWsUrl(hostList: List<ChatHostUrlModel>): String {
+        val host = hostList.firstOrNull { it.host.isNotBlank() } ?: return WS_URL
+        val port = host.wssPort.takeIf { it > 0 }
+        return if (port != null) {
+            "wss://${host.host}:$port/sub"
+        } else {
+            "wss://${host.host}/sub"
+        }
     }
 
     fun disconnect() {

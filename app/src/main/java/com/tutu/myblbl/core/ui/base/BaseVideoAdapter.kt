@@ -68,6 +68,14 @@ abstract class BaseVideoAdapter<T : Any, VH : RecyclerView.ViewHolder> : BaseAda
         }
     }
 
+    fun removeByVideoId(aid: Long, bvid: String) {
+        removeItems { itemKey(it) == buildVideoKey(aid, bvid) }
+    }
+
+    private fun buildVideoKey(aid: Long, bvid: String): String {
+        return if (bvid.isNotBlank()) "bvid:$bvid" else if (aid > 0) "aid:$aid" else ""
+    }
+
     protected fun deduplicate(source: List<T>): List<T> {
         if (source.isEmpty()) return emptyList()
         val seenKeys = LinkedHashSet<String>(source.size)

@@ -25,6 +25,11 @@ class AppEventHub {
             val aid: Long,
             val bvid: String
         ) : Event
+
+        data class VideoBlockedByMinorProtection(
+            val aid: Long,
+            val bvid: String
+        ) : Event
     }
 
     private val _events = MutableSharedFlow<Event>(extraBufferCapacity = 64)

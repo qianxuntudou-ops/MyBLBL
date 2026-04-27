@@ -40,7 +40,7 @@ import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
-class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarget {
+class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarget, com.tutu.myblbl.ui.activity.MainActivity.OnVideoBlockedListener {
     private enum class ContentFocusTarget {
         LEFT_UP_LIST,
         RIGHT_VIDEO_LIST
@@ -653,5 +653,9 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
         super.onDestroyView()
     }
 
-
+    override fun onVideoBlocked(aid: Long, bvid: String) {
+        if (::videoAdapter.isInitialized) {
+            videoAdapter.removeByVideoId(aid, bvid)
+        }
+    }
 }

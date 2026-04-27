@@ -553,6 +553,15 @@ object ContentFilter {
         return items.filter { !isSearchItemBlocked(context, it) }
     }
 
+    fun isBlockedByTags(context: Context, tags: List<com.tutu.myblbl.model.video.detail.Tag>?): Boolean {
+        if (!isMinorProtectionEnabled(context)) return false
+        if (tags.isNullOrEmpty()) return false
+        return tags.any { tag ->
+            val tagName = tag.tagName.trim().lowercase()
+            tagName.isNotEmpty() && ALL_BLOCKED_KEYWORDS_LOWER.any { tagName.contains(it) }
+        }
+    }
+
     private fun buildVideoBlockKeys(
         aid: Long = 0,
         bvid: String = "",

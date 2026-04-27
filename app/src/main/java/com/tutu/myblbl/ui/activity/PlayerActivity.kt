@@ -208,6 +208,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     }
 
     private val appEventHub: AppEventHub by inject()
+    private val videoRepository: com.tutu.myblbl.repository.VideoRepository by inject()
 
     override fun getViewBinding(): FragmentVideoPlayerBinding =
         FragmentVideoPlayerBinding.inflate(layoutInflater)
@@ -462,6 +463,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         startupTraceStartElapsedMs: Long
     ) {
         playerView.pauseDanmaku()
+        tagCheckDoneForCurrentVideo = false
         viewModel.loadVideoInfo(
             aid = aid,
             bvid = bvid,
@@ -810,6 +812,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 sessionCoordinator.updateVideoInfo(info)
                 schedulePreloadAndHeaderRefresh()
                 updatePrimaryActionVisibility()
+                checkTagsAndExitIfNeeded(info)
             }
         }
 
@@ -1073,6 +1076,39 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             preloadHeaderRefreshPosted = false
             updatePlaybackPreload()
             renderPlayerHeader()
+        }
+    }
+
+    private var tagCheckDoneForCurrentVideo = false
+
+    private fun checkTagsAndExitIfNeeded(info: VideoDetailModel?) {
+        if (info == null || tagCheckDoneForCurrentVideo) return
+        val view = info.view ?: return
+        if (view.aid <= 0L && view.bvid.isBlank()) return
+        tagCheckDoneForCurrentVideo = true
+
+        if (!ContentFilter.isBlockedByTags(this, info.tags)) return
+
+        AppLog.i(TAG, "Video blocked by tags: aid=${view.aid}, bvid=${view.bvid}, tags=${info.tags?.map { it.tagName }}")
+        ContentFilter.addBlockedVideo(
+            this,
+            aid = view.aid,
+            bvid = view.bvid,
+            title = view.title,
+            coverUrl = view.pic
+        )
+        appEventHub.dispatch(AppEventHub.Event.VideoBlockedByMinorProtection(
+            aid = view.aid,
+            bvid = view.bvid
+        ))
+        val appContext = applicationContext
+        lifecycleScope.launch {
+            runCatching {
+                val video = VideoModel(aid = view.aid, bvid = view.bvid, title = view.title, pic = view.pic)
+                videoRepository.dislikeFeed(video, 1)
+            }
+            Toast.makeText(appContext, "该视频不适合青少年观看，已自动退出", Toast.LENGTH_SHORT).show()
+            finish()
         }
     }
 

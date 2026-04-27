@@ -266,6 +266,32 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
 
     private fun updateUI(detail: VideoDetailModel) {
         val view = detail.view ?: return
+
+        if (ContentFilter.isBlockedByTags(requireContext(), detail.tags)) {
+            AppLog.i(TAG, "Video blocked by tags: aid=${view.aid}, bvid=${view.bvid}, tags=${detail.tags?.map { it.tagName }}")
+            ContentFilter.addBlockedVideo(
+                requireContext(),
+                aid = view.aid,
+                bvid = view.bvid,
+                title = view.title,
+                coverUrl = view.pic
+            )
+            appEventHub.dispatch(AppEventHub.Event.VideoBlockedByMinorProtection(
+                aid = view.aid,
+                bvid = view.bvid
+            ))
+            val ctx = requireContext()
+            lifecycleScope.launch {
+                runCatching {
+                    val video = VideoModel(aid = view.aid, bvid = view.bvid, title = view.title, pic = view.pic)
+                    videoRepository.dislikeFeed(video, 1)
+                }
+                Toast.makeText(ctx, "该视频不适合青少年观看", Toast.LENGTH_SHORT).show()
+                navigateBackFromUi()
+            }
+            return
+        }
+
         AppLog.d(TAG, "updateUI: title=${view.title}, tags=${detail.tags?.size}, pages=${view.pages?.size}, related=${detail.related?.size}")
         videoView = view
 

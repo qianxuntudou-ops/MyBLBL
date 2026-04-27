@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
-class CategoryListFragment : BaseListFragment<VideoModel>() {
+class CategoryListFragment : BaseListFragment<VideoModel>(), com.tutu.myblbl.ui.activity.MainActivity.OnVideoBlockedListener {
     companion object {
         private const val TAG = "CategoryFocus"
         private const val ARG_CATEGORY_ID = "category_id"
@@ -288,5 +288,7 @@ class CategoryListFragment : BaseListFragment<VideoModel>() {
         return true
     }
 
-
+    override fun onVideoBlocked(aid: Long, bvid: String) {
+        (adapter as? VideoAdapter)?.removeByVideoId(aid, bvid)
+    }
 }

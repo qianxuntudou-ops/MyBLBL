@@ -128,6 +128,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
                         lastKnownLoggedIn = sessionGateway.isLoggedIn()
                         refreshAvatar()
                     }
+                    if (event is AppEventHub.Event.VideoBlockedByMinorProtection) {
+                        dispatchVideoBlockedEventToCurrentFragment(event)
+                    }
                 }
             }
         }
@@ -568,6 +571,29 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             return
         }
         UserInfoDialog(this).show()
+    }
+
+    private fun dispatchVideoBlockedEventToCurrentFragment(event: AppEventHub.Event.VideoBlockedByMinorProtection) {
+        supportFragmentManager.fragments
+            .asReversed()
+            .firstOrNull { it.isVisible }
+            ?.let { fragment ->
+                if (fragment is OnVideoBlockedListener) {
+                    (fragment as OnVideoBlockedListener).onVideoBlocked(event.aid, event.bvid)
+                }
+                fragment.childFragmentManager.fragments
+                    .asReversed()
+                    .firstOrNull { it.isVisible }
+                    ?.let { child ->
+                        if (child is OnVideoBlockedListener) {
+                            (child as OnVideoBlockedListener).onVideoBlocked(event.aid, event.bvid)
+                        }
+                    }
+            }
+    }
+
+    interface OnVideoBlockedListener {
+        fun onVideoBlocked(aid: Long, bvid: String)
     }
 
     private fun updateNavigationVisibility() {

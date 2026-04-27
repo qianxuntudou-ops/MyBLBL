@@ -68,7 +68,7 @@ class PlayerActionDialog(
             if (!checkLogin()) return@setOnClickListener
             scope.launch {
                 runCatching {
-                    videoRepository.like(null, safeBvid ?: bvid, if (isLiked) 2 else 1)
+                    videoRepository.like(aid, safeBvid, if (isLiked) 2 else 1)
                 }.onSuccess { response ->
                     if (response.isSuccess) {
                         isLiked = !isLiked

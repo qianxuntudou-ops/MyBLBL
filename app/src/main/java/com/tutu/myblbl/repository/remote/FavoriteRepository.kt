@@ -17,6 +17,12 @@ class FavoriteRepository(
     private val securityGateway: NetworkSecurityGateway
 ) {
 
+    private companion object {
+        const val WEB_ACTION_SPMID = "333.788.0.0"
+        const val WEB_ACTION_FROM_SPMID = "333.1007.tianma.1-2-2.click"
+        const val WEB_ACTION_STATISTICS = "{\"appId\":100,\"platform\":5}"
+    }
+
     suspend fun checkFavorite(aid: Long?): Result<BaseResponse<CheckFavoriteModel>> =
         runCatching {
             sessionGateway.syncAuthState(
@@ -59,12 +65,12 @@ class FavoriteRepository(
             val csrf = sessionGateway.requireCsrfToken()
                 ?: return Result.success(BaseResponse(code = -111, message = "csrf token is blank"))
             sessionGateway.syncAuthState(
-                apiService.dealFavorite(
+                apiService.dealFavorite(buildFavoriteDealForm(
                     rid = rid,
                     addMediaIds = addMediaIds,
                     delMediaIds = null,
                     csrf = csrf
-                ),
+                )),
                 source = "favorite.addFavorite"
             )
         }
@@ -75,13 +81,32 @@ class FavoriteRepository(
             val csrf = sessionGateway.requireCsrfToken()
                 ?: return Result.success(BaseResponse(code = -111, message = "csrf token is blank"))
             sessionGateway.syncAuthState(
-                apiService.dealFavorite(
+                apiService.dealFavorite(buildFavoriteDealForm(
                     rid = rid,
                     addMediaIds = null,
                     delMediaIds = delMediaIds,
                     csrf = csrf
-                ),
+                )),
                 source = "favorite.removeFavorite"
             )
         }
+
+    private fun buildFavoriteDealForm(
+        rid: Long,
+        addMediaIds: String?,
+        delMediaIds: String?,
+        csrf: String
+    ): Map<String, String> {
+        return linkedMapOf(
+            "rid" to rid.toString(),
+            "type" to "2",
+            "add_media_ids" to addMediaIds.orEmpty(),
+            "del_media_ids" to delMediaIds.orEmpty(),
+            "platform" to "web",
+            "from_spmid" to WEB_ACTION_FROM_SPMID,
+            "spmid" to WEB_ACTION_SPMID,
+            "statistics" to WEB_ACTION_STATISTICS,
+            "csrf" to csrf
+        )
+    }
 }

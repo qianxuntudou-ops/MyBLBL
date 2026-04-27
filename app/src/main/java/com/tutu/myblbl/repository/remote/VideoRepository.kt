@@ -60,6 +60,10 @@ class VideoRepository(
         private const val FEEDBACK_PLATFORM = "5"
         private const val FEEDBACK_SPMID = "333.1007.0.0"
         private const val FEEDBACK_PAGE = "1"
+        private const val WEB_ACTION_SPMID = "333.788.0.0"
+        private const val WEB_ACTION_FROM_SPMID = "333.1007.tianma.1-2-2.click"
+        private const val WEB_ACTION_STATISTICS = "{\"appId\":100,\"platform\":5}"
+        private const val WEB_ACTION_SOURCE = "web_normal"
         private val FEEDBACK_RETRY_CODES = setOf(-352, -401)
     }
 
@@ -114,7 +118,11 @@ class VideoRepository(
         runCatching {
             securityGateway.ensureHealthyForPlay()
             sessionGateway.syncAuthState(
-                apiService.like(avid, bvid, like, csrf),
+                apiService.like(
+                    buildWebActionForm(avid, bvid, csrf, ramval = 3).apply {
+                        put("like", like.toString())
+                    }
+                ),
                 source = "video.like"
             )
         }
@@ -139,7 +147,13 @@ class VideoRepository(
         runCatching {
             securityGateway.ensureHealthyForPlay()
             sessionGateway.syncAuthState(
-                apiService.giveCoin(avid, bvid, multiply, selectLike, csrf),
+                apiService.giveCoin(
+                    buildWebActionForm(avid, bvid, csrf, ramval = 6).apply {
+                        put("multiply", multiply.coerceIn(1, 2).toString())
+                        put("select_like", selectLike.coerceIn(0, 1).toString())
+                        put("cross_domain", "true")
+                    }
+                ),
                 source = "video.giveCoin"
             )
         }
@@ -156,7 +170,7 @@ class VideoRepository(
         runCatching {
             securityGateway.ensureHealthyForPlay()
             val firstResponse = sessionGateway.syncAuthState(
-                apiService.tripleAction(avid, bvid, csrf),
+                apiService.tripleAction(buildWebActionForm(avid, bvid, csrf, ramval = 6)),
                 source = "video.tripleAction.first"
             )
             if (firstResponse.code == -352 || firstResponse.code == -401) {
@@ -168,7 +182,7 @@ class VideoRepository(
                     firstResponse
                 } else {
                     sessionGateway.syncAuthState(
-                        apiService.tripleAction(avid, bvid, freshCsrf),
+                        apiService.tripleAction(buildWebActionForm(avid, bvid, freshCsrf, ramval = 6)),
                         source = "video.tripleAction.second"
                     )
                 }
@@ -277,6 +291,30 @@ class VideoRepository(
     private fun buildFeedbackWbiParams(): Map<String, String> {
         val (imgKey, subKey) = sessionGateway.getWbiKeys()
         return WbiGenerator.generateWbiParams(emptyMap(), imgKey, subKey)
+    }
+
+    private fun buildWebActionForm(
+        aid: Long?,
+        bvid: String?,
+        csrf: String,
+        ramval: Int
+    ): LinkedHashMap<String, String> {
+        return linkedMapOf<String, String>().apply {
+            val normalizedAid = aid?.takeIf { it > 0L }
+            if (normalizedAid != null) {
+                put("aid", normalizedAid.toString())
+            } else if (!bvid.isNullOrBlank()) {
+                put("bvid", bvid)
+            }
+            put("from_spmid", WEB_ACTION_FROM_SPMID)
+            put("spmid", WEB_ACTION_SPMID)
+            put("statistics", WEB_ACTION_STATISTICS)
+            put("eab_x", "1")
+            put("ramval", ramval.toString())
+            put("source", WEB_ACTION_SOURCE)
+            put("ga", "1")
+            put("csrf", csrf)
+        }
     }
 
     private fun buildDislikeForm(

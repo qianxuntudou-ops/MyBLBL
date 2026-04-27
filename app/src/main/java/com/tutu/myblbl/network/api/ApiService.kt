@@ -230,10 +230,7 @@ interface ApiService {
     @POST("x/web-interface/archive/like")
     @FormUrlEncoded
     suspend fun like(
-        @Field("avid") avid: Long?,
-        @Field("bvid") bvid: String?,
-        @Field("like") like: Int,
-        @Field("csrf") csrf: String
+        @FieldMap params: Map<String, String>
     ): BaseResponse<Int>
 
     @GET("x/web-interface/archive/has/like")
@@ -251,11 +248,7 @@ interface ApiService {
     @POST("x/web-interface/coin/add")
     @FormUrlEncoded
     suspend fun giveCoin(
-        @Field("avid") avid: Long?,
-        @Field("bvid") bvid: String?,
-        @Field("multiply") multiply: Int,
-        @Field("select_like") selectLike: Int,
-        @Field("csrf") csrf: String
+        @FieldMap params: Map<String, String>
     ): BaseResponse<GiveCoinResultModel>
 
     @GET("x/web-interface/archive/coins")
@@ -267,9 +260,7 @@ interface ApiService {
     @POST("x/web-interface/archive/like/triple")
     @FormUrlEncoded
     suspend fun tripleAction(
-        @Field("avid") avid: Long?,
-        @Field("bvid") bvid: String?,
-        @Field("csrf") csrf: String
+        @FieldMap params: Map<String, String>
     ): BaseResponse<TripleActionResultModel>
 
     @GET("x/web-interface/search/all/v2")
@@ -342,11 +333,7 @@ interface ApiService {
     @POST("x/v3/fav/resource/deal")
     @FormUrlEncoded
     suspend fun dealFavorite(
-        @Field("rid") rid: Long,
-        @Field("type") type: Int = 2,
-        @Field("add_media_ids") addMediaIds: String?,
-        @Field("del_media_ids") delMediaIds: String?,
-        @Field("csrf") csrf: String
+        @FieldMap params: Map<String, String>
     ): BaseResponse<CollectionResultModel>
 
     @GET("x/v2/fav/video/favoured")

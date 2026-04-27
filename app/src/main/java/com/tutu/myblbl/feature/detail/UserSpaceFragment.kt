@@ -38,7 +38,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
-class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
+class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>(), com.tutu.myblbl.ui.activity.MainActivity.OnVideoBlockedListener {
 
     private enum class FocusArea {
         BACK,
@@ -527,5 +527,11 @@ class UserSpaceFragment : BaseFragment<FragmentUserSpaceBinding>() {
         tvFocusController?.release()
         tvFocusController = null
         super.onDestroyView()
+    }
+
+    override fun onVideoBlocked(aid: Long, bvid: String) {
+        if (::videoAdapter.isInitialized) {
+            videoAdapter.removeByVideoId(aid, bvid)
+        }
     }
 }

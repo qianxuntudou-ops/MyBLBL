@@ -13,7 +13,7 @@ import com.tutu.myblbl.ui.adapter.VideoAdapter
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
-class ChannelVideoFragment : BaseListFragment<VideoModel>() {
+class ChannelVideoFragment : BaseListFragment<VideoModel>(), com.tutu.myblbl.ui.activity.MainActivity.OnVideoBlockedListener {
 
     companion object {
         private const val ARG_TITLE = "title"
@@ -124,5 +124,9 @@ class ChannelVideoFragment : BaseListFragment<VideoModel>() {
                 video
             )
         )
+    }
+
+    override fun onVideoBlocked(aid: Long, bvid: String) {
+        (adapter as? VideoAdapter)?.removeByVideoId(aid, bvid)
     }
 }

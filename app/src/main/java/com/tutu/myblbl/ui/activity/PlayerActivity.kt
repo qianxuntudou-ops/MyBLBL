@@ -1107,7 +1107,6 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 val video = VideoModel(aid = view.aid, bvid = view.bvid, title = view.title, pic = view.pic)
                 videoRepository.dislikeFeed(video, 1)
             }
-            Toast.makeText(appContext, "该视频不适合青少年观看，已自动退出", Toast.LENGTH_SHORT).show()
             finish()
         }
     }

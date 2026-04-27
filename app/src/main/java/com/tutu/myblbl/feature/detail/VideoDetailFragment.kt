@@ -286,7 +286,6 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                     val video = VideoModel(aid = view.aid, bvid = view.bvid, title = view.title, pic = view.pic)
                     videoRepository.dislikeFeed(video, 1)
                 }
-                Toast.makeText(ctx, "该视频不适合青少年观看", Toast.LENGTH_SHORT).show()
                 navigateBackFromUi()
             }
             return

@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.viewmodel.ext.android.viewModel
 
-class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
+class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage, com.tutu.myblbl.ui.activity.MainActivity.OnVideoBlockedListener {
     companion object {
         const val TYPE_HISTORY = "history"
         const val TYPE_LATER = "later"
@@ -706,4 +706,8 @@ class MeListFragment : BaseFragment<FragmentMeTabListBinding>(), MeTabPage {
         super.onDestroyView()
     }
 
+    override fun onVideoBlocked(aid: Long, bvid: String) {
+        historyAdapter?.removeByVideoId(aid, bvid)
+        videoAdapter?.removeByVideoId(aid, bvid)
+    }
 }

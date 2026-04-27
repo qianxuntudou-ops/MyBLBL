@@ -30,7 +30,7 @@ class LiveRepository(
 
     suspend fun getUserRoomInfo(roomId: Long): Result<JsonObject> = delegate.getUserRoomInfo(roomId)
 
-    suspend fun getDanmuHistory(roomId: Long): Result<JsonArray> = delegate.getDanmuHistory(roomId)
+    suspend fun getDanmuHistory(roomId: Long): Result<JsonObject> = delegate.getDanmuHistory(roomId)
 
     suspend fun sendLiveHeartbeat(roomId: Long): Result<Unit> = delegate.sendLiveHeartbeat(roomId)
 }

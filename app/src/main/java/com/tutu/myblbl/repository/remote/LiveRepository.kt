@@ -195,7 +195,7 @@ class LiveRepository(
         }
     }
 
-    suspend fun getDanmuHistory(roomId: Long): Result<JsonArray> {
+    suspend fun getDanmuHistory(roomId: Long): Result<JsonObject> {
         return runCatching {
             val response = apiService.getLiveDanmuHistory(roomId)
             if (response.code == 0 && response.data != null) {

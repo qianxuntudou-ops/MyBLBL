@@ -15,8 +15,8 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import com.tutu.myblbl.databinding.FragmentLivePlayerBinding
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.databinding.FragmentLivePlayerBinding
 import com.tutu.myblbl.core.ui.navigation.navigateBackFromUi
 import com.tutu.myblbl.core.ui.system.ViewUtils
 import kotlinx.coroutines.launch
@@ -30,7 +30,7 @@ class LivePlayerFragment : Fragment() {
     companion object {
         private const val TAG = "LivePlayerFragment"
         const val ARG_ROOM_ID = "room_id"
-        
+
         fun newInstance(roomId: Long): LivePlayerFragment {
             return LivePlayerFragment().apply {
                 arguments = Bundle().apply {
@@ -42,10 +42,10 @@ class LivePlayerFragment : Fragment() {
 
     private var _binding: FragmentLivePlayerBinding? = null
     private val binding get() = _binding!!
-    
+
     private val viewModel: LivePlayerViewModel by viewModel()
     private val okHttpClient: OkHttpClient by inject()
-    
+
     private var player: ExoPlayer? = null
     private var roomId: Long = 0L
 
@@ -59,10 +59,23 @@ class LivePlayerFragment : Fragment() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             syncPlaybackEnvironment()
+            when (playbackState) {
+                Player.STATE_BUFFERING -> binding.playerView.pauseDanmaku()
+                Player.STATE_READY -> {
+                    if (player?.playWhenReady == true) binding.playerView.resumeDanmaku()
+                }
+                Player.STATE_ENDED -> binding.playerView.stopDanmaku()
+                Player.STATE_IDLE -> binding.playerView.pauseDanmaku()
+            }
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             syncPlaybackEnvironment()
+            if (isPlaying) {
+                binding.playerView.resumeDanmaku()
+            } else if (player?.playbackState != Player.STATE_BUFFERING) {
+                binding.playerView.pauseDanmaku()
+            }
         }
     }
 
@@ -125,7 +138,7 @@ class LivePlayerFragment : Fragment() {
         binding.playerView.showHideRelatedButton(false)
         binding.playerView.showHideRepeatButton(false)
         binding.playerView.showHideSubtitleButton(false)
-        binding.playerView.showHideDmSwitchButton(false)
+        binding.playerView.showHideDmSwitchButton(true)
         binding.playerView.setShowHideOwnerInfo(false)
         binding.playerView.showSettingButton(false)
         binding.playerView.showHideLiveSettingButton(false)
@@ -159,6 +172,11 @@ class LivePlayerFragment : Fragment() {
                 viewModel.switchQuality(qn)
             }
         })
+
+        // 初始化直播弹幕：启用弹幕，启动引擎（不等待数据）
+        binding.playerView.setDanmakuEnabled(true)
+        binding.playerView.startLiveDanmaku()
+
         syncPlaybackEnvironment()
     }
 
@@ -186,13 +204,13 @@ class LivePlayerFragment : Fragment() {
                 }
             }
         }
-        
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isLoading.collect { isLoading ->
                 binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
             }
         }
-        
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.error.collect { error ->
                 error?.let {
@@ -240,6 +258,14 @@ class LivePlayerFragment : Fragment() {
                 Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
             }
         }
+
+        // 实时弹幕：用引擎当前时间作为 position 注入
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.liveDanmaku.collect { dmModel ->
+                AppLog.d(TAG, "Fragment received danmaku: ${dmModel.content}")
+                binding.playerView.addLiveDanmaku(dmModel)
+            }
+        }
     }
 
     override fun onStart() {
@@ -251,12 +277,14 @@ class LivePlayerFragment : Fragment() {
     override fun onStop() {
         super.onStop()
         player?.playWhenReady = false
+        binding.playerView.pauseDanmaku()
         syncPlaybackEnvironment()
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         player?.removeListener(playerListener)
+        binding.playerView.stopDanmaku()
         binding.playerView.destroy()
         PlayerAudioNormalizer.release(player)
         player?.release()

@@ -3,19 +3,25 @@ package com.tutu.myblbl.feature.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.feature.player.danmaku.LiveDanmakuManager
+import com.tutu.myblbl.model.dm.DmModel
 import com.tutu.myblbl.repository.LiveRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import java.util.Locale
 
 class LivePlayerViewModel(
-    private val repository: LiveRepository
+    private val repository: LiveRepository,
+    private val danmakuManager: LiveDanmakuManager
 ) : ViewModel() {
 
     companion object {
@@ -49,6 +55,10 @@ class LivePlayerViewModel(
     private val _refreshEvent = Channel<String>(Channel.BUFFERED)
     val refreshEvent = _refreshEvent.receiveAsFlow()
 
+    // 弹幕
+    val liveDanmaku: SharedFlow<DmModel> = danmakuManager.danmakuFlow
+    val danmakuConnected: StateFlow<Boolean> = danmakuManager.isConnected
+
     private var currentRoomId: Long = 0
     private var heartbeatJob: Job? = null
     private var durationJob: Job? = null
@@ -59,11 +69,9 @@ class LivePlayerViewModel(
             _isLoading.value = true
             _error.value = null
 
-            // 步骤1：先获取IP信息（为CDN优选提供数据）
             runCatching { repository.getIpInfo() }
                 .onFailure { AppLog.w(TAG, "getIpInfo failed: ${it.message}") }
 
-            // 步骤2：获取直播流（此时remote层已缓存IP信息，CDN优选生效）
             repository.getLivePlayInfo(roomId).fold(
                 onSuccess = { data ->
                     val durl = data.durl
@@ -88,8 +96,10 @@ class LivePlayerViewModel(
                         _error.value = "无法获取直播流地址"
                     }
 
-                    // 步骤3-6：播放成功后，后台补充风控行为链（不阻塞播放）
                     launchSupplementaryCalls(roomId)
+
+                    // 启动实时弹幕连接
+                    danmakuManager.start(roomId)
                 },
                 onFailure = { e ->
                     _error.value = e.message ?: "加载直播失败"
@@ -101,31 +111,28 @@ class LivePlayerViewModel(
     }
 
     private fun launchSupplementaryCalls(roomId: Long) {
-        // 进房上报
         viewModelScope.launch {
             runCatching { repository.reportRoomEntry(roomId) }
                 .onFailure { AppLog.w(TAG, "reportRoomEntry failed: ${it.message}") }
         }
 
-        // 心跳密钥
         viewModelScope.launch {
             runCatching { repository.getHeartbeatKey(roomId) }
                 .onFailure { AppLog.w(TAG, "getHeartbeatKey failed: ${it.message}") }
         }
 
-        // 用户房间状态
         viewModelScope.launch {
             runCatching { repository.getUserRoomInfo(roomId) }
                 .onFailure { AppLog.w(TAG, "getUserRoomInfo failed: ${it.message}") }
         }
 
-        // 历史弹幕
+        // 历史弹幕（作为初始弹幕数据展示）
         viewModelScope.launch {
-            runCatching { repository.getDanmuHistory(roomId) }
-                .onFailure { AppLog.w(TAG, "getDanmuHistory failed: ${it.message}") }
+            repository.getDanmuHistory(roomId).onSuccess { jsonObj ->
+                AppLog.d(TAG, "getDanmuHistory: received keys=${jsonObj.keySet()}")
+            }.onFailure { AppLog.w(TAG, "getDanmuHistory failed: ${it.message}") }
         }
 
-        // 启动心跳定时器
         startHeartbeat(roomId)
     }
 
@@ -201,6 +208,7 @@ class LivePlayerViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        danmakuManager.release()
         heartbeatJob?.cancel()
         heartbeatJob = null
         durationJob?.cancel()

@@ -12,6 +12,7 @@ import com.kuaishou.akdanmaku.render.SimpleRenderer
 import com.kuaishou.akdanmaku.ui.DanmakuPlayer
 import com.kuaishou.akdanmaku.ui.DanmakuView
 import com.tutu.myblbl.feature.player.PlaybackStartupTrace
+import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.model.dm.DmModel
 import com.tutu.myblbl.core.common.ext.isVipColorfulDanmakuAllowed
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +34,7 @@ class MyPlayerDanmakuController(
 ) {
 
     companion object {
+        private const val TAG = "DanmakuCtrl"
         private const val MERGE_DUPLICATE_WINDOW_MS = 15_000
         private const val MERGE_DUPLICATE_MIN_COUNT = 2
         private const val MAX_SYNC_DRIFT_MS = 1200L
@@ -161,6 +163,46 @@ class MyPlayerDanmakuController(
         rawDanmakuCount = rawDanmakuData.size
         rawDanmakuSignature = rawDanmakuData.fastRawSignature()
         appendPreparedData(sortedData, enableMerge = mergeDuplicate)
+    }
+
+    /**
+     * 直播模式：立即启动弹幕引擎（不等待数据），然后用引擎当前时间作为 position 注入弹幕
+     */
+    fun startLive() {
+        AppLog.d(TAG, "startLive: player=${danmakuPlayer != null} started=$isDanmakuStarted")
+        isDanmakuStarted = true
+        isDanmakuPaused = false
+        ensurePlayer()
+        danmakuPlayer?.start(danmakuConfig)
+        AppLog.d(TAG, "startLive: after start player=${danmakuPlayer != null}")
+    }
+
+    fun addLiveDanmaku(dm: DmModel) {
+        if (!isDanmakuStarted || danmakuPlayer == null) {
+            startLive()
+        }
+        val player = danmakuPlayer
+        if (player == null) {
+            AppLog.w(TAG, "addLiveDanmaku: player is null!")
+            return
+        }
+        // 播放器状态回调可能 pause 了引擎，确保引擎在运行
+        player.start(danmakuConfig)
+        val currentTime = player.getCurrentTimeMs()
+        val color = dm.color.toDanmakuColor(isVipColorfulDanmakuAllowed())
+        val data = DanmakuItemData(
+            danmakuId = dm.id.takeIf { it > 0L } ?: System.currentTimeMillis(),
+            position = currentTime.coerceAtLeast(0L),
+            content = dm.content,
+            mode = DanmakuItemData.DANMAKU_MODE_ROLLING,
+            textSize = dm.fontSize.coerceAtLeast(12),
+            textColor = color,
+            score = 0,
+            renderFlags = DanmakuItemData.RENDER_FLAG_NONE,
+            vipGradientStyle = DanmakuVipGradientStyle.NONE
+        )
+        val item = player.send(data)
+        AppLog.d(TAG, "addLiveDanmaku: pos=$currentTime content=${dm.content.take(10)} sent=${item != null}")
     }
 
     /**

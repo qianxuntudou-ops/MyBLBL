@@ -428,13 +428,13 @@ interface ApiService {
         @Query("ptype") ptype: Int = 16
     ): BaseResponse<LivePlayUrlDataModel>
 
-    @GET("x/live/web-room/v1/index/getDanmuInfo")
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo")
     suspend fun getLiveChatRoomUrl(
         @Query("id") id: Long
     ): BaseResponse<ChatRoomWrapper>
 
-    @GET("x/live/web-room/v1/index/getConf")
-    suspend fun getLiveChatRoomUrlWithWbi(
+    @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo")
+    suspend fun getLiveDanmuInfoSigned(
         @QueryMap params: Map<String, String>
     ): BaseResponse<ChatRoomWrapper>
 
@@ -463,7 +463,7 @@ interface ApiService {
     suspend fun getLiveDanmuHistory(
         @Query("roomid") roomId: Long,
         @Query("room_type") roomType: Int = 0
-    ): BaseResponse<JsonArray>
+    ): BaseResponse<JsonObject>
 
     // ==================== 互动视频 API ====================
     

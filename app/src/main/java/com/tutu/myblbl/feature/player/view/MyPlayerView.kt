@@ -1467,6 +1467,14 @@ class MyPlayerView @JvmOverloads constructor(
         danmakuController.appendData(data)
     }
 
+    fun startLiveDanmaku() {
+        danmakuController.startLive()
+    }
+
+    fun addLiveDanmaku(dm: DmModel) {
+        danmakuController.addLiveDanmaku(dm)
+    }
+
     fun setDanmakuEnabled(enabled: Boolean) {
         if ((settingView?.getDmEnable() ?: enabled) != enabled) {
             settingView?.dmEnableClick()

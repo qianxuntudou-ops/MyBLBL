@@ -36,6 +36,7 @@ import com.tutu.myblbl.feature.me.MeListViewModel
 import com.tutu.myblbl.feature.me.MeViewModel
 import com.tutu.myblbl.feature.search.SearchViewModel
 import com.tutu.myblbl.feature.player.LivePlayerViewModel
+import com.tutu.myblbl.feature.player.danmaku.LiveDanmakuManager
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.feature.player.VideoPlayerViewModel
 import com.tutu.myblbl.feature.series.SeriesDetailViewModel
@@ -97,7 +98,7 @@ val viewModelModule = module {
     viewModel { MeListViewModel(get()) }
     viewModel { MeViewModel(get(), get()) }
     viewModel { SearchViewModel(get()) }
-    viewModel { LivePlayerViewModel(get()) }
+    viewModel { LivePlayerViewModel(get(), LiveDanmakuManager(get(), get(), get())) }
     viewModel { SeriesDetailViewModel(get(), get()) }
 }
 

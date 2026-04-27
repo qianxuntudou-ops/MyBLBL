@@ -1,10 +1,11 @@
 package com.tutu.myblbl.feature.player
 
+import android.animation.AnimatorListenerAdapter
 import android.os.Bundle
-import android.widget.Toast
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.MediaItem
@@ -94,7 +95,21 @@ class LivePlayerFragment : Fragment() {
             roomId = args.getLong(ARG_ROOM_ID, -1L)
         }
         val textClock = binding.textClock
-        AppLog.d("LiveUI", "TextClock: vis=${textClock.visibility} text=${textClock.text}")
+        textClock.alpha = 0f
+        textClock.translationY = -textClock.height.toFloat().coerceAtLeast(200f)
+        binding.playerView.setControllerVisibilityListener(object : com.tutu.myblbl.feature.player.view.MyPlayerView.ControllerVisibilityListener {
+            override fun onVisibilityChanged(visibility: Int) {
+                val animate = textClock.animate().setDuration(250L)
+                when (visibility) {
+                    View.VISIBLE -> animate.translationY(0f).alpha(1f).setListener(null)
+                    View.INVISIBLE -> animate.translationY(-textClock.height.toFloat()).alpha(0f).setListener(null)
+                    View.GONE -> {
+                        textClock.translationY = -textClock.height.toFloat()
+                        textClock.alpha = 0f
+                    }
+                }
+            }
+        })
         setupPlayer()
         setupObservers()
         if (roomId > 0) {
@@ -262,7 +277,6 @@ class LivePlayerFragment : Fragment() {
         // 实时弹幕：用引擎当前时间作为 position 注入
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.liveDanmaku.collect { dmModel ->
-                AppLog.d(TAG, "Fragment received danmaku: ${dmModel.content}")
                 binding.playerView.addLiveDanmaku(dmModel)
             }
         }

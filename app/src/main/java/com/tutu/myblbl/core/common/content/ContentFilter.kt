@@ -49,6 +49,7 @@ object ContentFilter {
         "绅士",
         "里番",
         "黄游",
+        "黄油",
         "工口",
         "媚宅",
         "卖肉",
@@ -82,8 +83,28 @@ object ContentFilter {
         "轩子",
         "大摆锤",
         "翻跳",
-        "宅舞",
-        "热舞"
+        "热舞",
+        "涩涩",
+        "色色",
+        "搞色",
+        "搞黄色",
+        "炼铜",
+        "三年起步",
+        "骨科",
+        "R18",
+        "r18",
+        "R-18",
+        "肉番",
+        "里界",
+        "NTR",
+        "ntr",
+        "触手",
+        "后宫",
+        "Galgame",
+        "galgame",
+        "恋爱模拟",
+        "RPG",
+        "黄油"
     )
 
     private val VIDEO_BLOCKED_TITLE_KEYWORDS = setOf(
@@ -231,7 +252,93 @@ object ContentFilter {
         "bikini",
         "光腿",
         "泳装",
-        "御萝"
+        "御萝",
+        "涩涩",
+        "色色",
+        "搞色",
+        "搞黄色",
+        "炼铜",
+        "三年起步",
+        "骨科",
+        "R18",
+        "r18",
+        "R-18",
+        "18禁",
+        "肉番",
+        "里界",
+        "NTR",
+        "ntr",
+        "触手",
+        "后宫",
+        "Galgame",
+        "galgame",
+        "黄油",
+        "涩图",
+        "搞色",
+        "搞黄色",
+        "搞涩",
+        "搞涩涩",
+        "涩涩的",
+        "色色的",
+        "色魔",
+        "LSP",
+        "lsp",
+        "老色批",
+        "搞颜色",
+        "桃子",
+        "水多",
+        "奈子",
+        "本子库",
+        "次元社",
+        "牛头人",
+        "媚黑",
+        "媚男",
+        "媚女",
+        "茶艺",
+        "绿茶",
+        "海王",
+        "养鱼",
+        "撩汉",
+        "撩妹",
+        "约吗",
+        "面基",
+        "磕CP",
+        "磕到了",
+        "虎狼之词",
+        "打擦边",
+        "擦边球",
+        "懂的都懂",
+        "我不说",
+        "懂的来",
+        "秒懂",
+        "老粉都知道",
+        "福利放送",
+        "粉丝福利",
+        "色情",
+        "约炮",
+        "援交",
+        "潜规则",
+        "一夜情",
+        "偷拍",
+        "走光",
+        "无码",
+        "泡妞",
+        "彩礼",
+        "出轨",
+        "邪教",
+        "降头",
+        "巫术",
+        "通灵",
+        "法术",
+        "抹胸",
+        "舞蹈生",
+        "眼镜妹",
+        "合欢",
+        "圣女",
+        "瑜伽",
+        "女神",
+        "换丝",
+        "穿丝"
     )
 
     private val LIVE_BLOCKED_AREAS = setOf(
@@ -253,6 +360,10 @@ object ContentFilter {
 
     private val BLOCKED_UP_NAMES = setOf(
         "布丁奶酱团子"
+    )
+
+    private val BLOCKED_TYPE_IDS = setOf(
+        129  // 舞蹈
     )
 
     private val ALL_BLOCKED_KEYWORDS_LOWER = (VIDEO_BLOCKED_TYPE_NAMES + VIDEO_BLOCKED_TITLE_KEYWORDS)
@@ -351,7 +462,8 @@ object ContentFilter {
         authorName: String? = "",
         aid: Long = 0,
         bvid: String = "",
-        coverUrl: String = ""
+        coverUrl: String = "",
+        typeId: Int = 0
     ): Boolean {
         if (isVideoKeyBlocked(context, aid, bvid, title.orEmpty(), coverUrl)) {
             return true
@@ -362,6 +474,7 @@ object ContentFilter {
             return true
         }
         if (!isMinorProtectionEnabled(context)) return false
+        if (typeId in BLOCKED_TYPE_IDS) return true
         val trimmedTypeName = typeName.orEmpty().trim().lowercase()
         if (trimmedTypeName.isNotEmpty() && trimmedTypeName in BLOCKED_TYPE_NAMES_LOWER) {
             return true
@@ -410,7 +523,8 @@ object ContentFilter {
                 authorName = video.authorName,
                 aid = video.aid,
                 bvid = video.bvid,
-                coverUrl = video.coverUrl
+                coverUrl = video.coverUrl,
+                typeId = video.typeId
             )
         }
     }

@@ -438,8 +438,22 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
     private fun loadRelationState() {
         val ownerMid = videoView?.owner?.mid ?: return
         val isSelf = sessionGateway.getUserInfo()?.mid == ownerMid
-        if (!sessionGateway.isLoggedIn() || isSelf) return
         lifecycleScope.launch {
+            // 粉丝数是公开数据，不需要登录
+            runCatching {
+                val statResponse = userRepository.getRelationStat(ownerMid)
+                if (statResponse.isSuccess && statResponse.data != null) {
+                    val holder = binding.recyclerView.findViewHolderForAdapterPosition(0)
+                    (holder as? VideoDetailContentAdapter.VideoDetailHeadViewHolder)
+                        ?.updateFansCount(statResponse.data.follower.toLong())
+                } else {
+                    AppLog.w(TAG, "getRelationStat failed: code=${statResponse.code}, msg=${statResponse.errorMessage}")
+                }
+            }.onFailure {
+                AppLog.w(TAG, "getRelationStat exception: ${it.message}")
+            }
+            // 关注关系需要登录
+            if (!sessionGateway.isLoggedIn() || isSelf) return@launch
             userRepository.checkUserRelation(ownerMid)
                 .onSuccess { response ->
                     if (response.isSuccess && response.data != null) {
@@ -448,14 +462,6 @@ class VideoDetailFragment : androidx.fragment.app.Fragment() {
                             ?.updateFollowState(response.data.attribute)
                     }
                 }
-            try {
-                val statResponse = userRepository.getRelationStat(ownerMid)
-                if (statResponse.isSuccess && statResponse.data != null) {
-                    val holder = binding.recyclerView.findViewHolderForAdapterPosition(0)
-                    (holder as? VideoDetailContentAdapter.VideoDetailHeadViewHolder)
-                        ?.updateFansCount(statResponse.data.follower.toLong())
-                }
-            } catch (_: Exception) { }
         }
     }
 

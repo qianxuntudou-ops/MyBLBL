@@ -43,6 +43,8 @@ class MyPlayerDanmakuController(
         private const val SEEK_DEDUP_POSITION_TOLERANCE_MS = 80L
         private const val SMART_FILTER_LEVEL_OFF = 0
         private const val SMART_FILTER_LEVEL_MAX = 10
+        private const val LIVE_THROTTLE_WINDOW_MS = 100L
+        private const val LIVE_THROTTLE_MAX_ITEMS = 30
     }
 
     data class SettingsSnapshot(
@@ -65,6 +67,9 @@ class MyPlayerDanmakuController(
     private var danmakuPositionMs: Long = 0L
     private var isDanmakuStarted = false
     private var isDanmakuPaused = false
+    private var liveEngineStarted = false
+    private var liveThrottleWindowStart = 0L
+    private var liveThrottleCount = 0
     private var mergeDuplicate = true
     private var smartFilterLevel = SMART_FILTER_LEVEL_OFF
     private var lastSettingsSnapshot: SettingsSnapshot? = null
@@ -173,6 +178,7 @@ class MyPlayerDanmakuController(
         isDanmakuStarted = true
         isDanmakuPaused = false
         ensurePlayer()
+        danmakuPlayer?.setLiveMode(true)
         danmakuPlayer?.start(danmakuConfig)
         AppLog.d(TAG, "startLive: after start player=${danmakuPlayer != null}")
     }
@@ -186,8 +192,19 @@ class MyPlayerDanmakuController(
             AppLog.w(TAG, "addLiveDanmaku: player is null!")
             return
         }
-        // 播放器状态回调可能 pause 了引擎，确保引擎在运行
-        player.start(danmakuConfig)
+        val now = SystemClock.uptimeMillis()
+        if (now - liveThrottleWindowStart >= LIVE_THROTTLE_WINDOW_MS) {
+            liveThrottleWindowStart = now
+            liveThrottleCount = 0
+        }
+        if (liveThrottleCount >= LIVE_THROTTLE_MAX_ITEMS) {
+            return
+        }
+        liveThrottleCount++
+        if (!liveEngineStarted) {
+            player.start(danmakuConfig)
+            liveEngineStarted = true
+        }
         val currentTime = player.getCurrentTimeMs()
         val color = dm.color.toDanmakuColor(isVipColorfulDanmakuAllowed())
         val data = DanmakuItemData(
@@ -201,8 +218,7 @@ class MyPlayerDanmakuController(
             renderFlags = DanmakuItemData.RENDER_FLAG_NONE,
             vipGradientStyle = DanmakuVipGradientStyle.NONE
         )
-        val item = player.send(data)
-        AppLog.d(TAG, "addLiveDanmaku: pos=$currentTime content=${dm.content.take(10)} sent=${item != null}")
+        player.send(data)
     }
 
     /**
@@ -250,6 +266,14 @@ class MyPlayerDanmakuController(
     fun setEnabled(enabled: Boolean) {
         lastSettingsSnapshot = lastSettingsSnapshot?.copy(enabled = enabled)
         updateVisibility(enabled)
+        val danmakuView = danmakuViewProvider()
+        if (enabled) {
+            danmakuView?.visibility = android.view.View.VISIBLE
+            resume()
+        } else {
+            danmakuView?.visibility = android.view.View.INVISIBLE
+            pause()
+        }
     }
 
     fun pause() {
@@ -277,7 +301,10 @@ class MyPlayerDanmakuController(
     fun stop() {
         isDanmakuStarted = false
         isDanmakuPaused = false
+        liveEngineStarted = false
+        liveThrottleCount = 0
         danmakuPositionMs = 0L
+        danmakuPlayer?.setLiveMode(false)
         danmakuPlayer?.stop()
     }
 
@@ -456,6 +483,8 @@ class MyPlayerDanmakuController(
     private fun releasePlayer() {
         danmakuPlayer?.release()
         danmakuPlayer = null
+        liveEngineStarted = false
+        liveThrottleCount = 0
         lastSeekPositionMs = Long.MIN_VALUE
         lastSeekRealtimeMs = 0L
     }

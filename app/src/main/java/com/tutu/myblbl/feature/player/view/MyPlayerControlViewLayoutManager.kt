@@ -778,7 +778,13 @@ class MyPlayerControlViewLayoutManager(
             playerControlView.visibility = View.VISIBLE
         }
         if (oldState != newState) {
-            playerControlView.notifyOnVisibilityChange()
+            val effective = when (newState) {
+                UX_STATE_ANIMATING_SHOW, UX_STATE_ALL_VISIBLE -> View.VISIBLE
+                UX_STATE_ANIMATING_HIDE, UX_STATE_ONLY_PROGRESS_VISIBLE -> View.INVISIBLE
+                UX_STATE_NONE_VISIBLE -> View.GONE
+                else -> playerControlView.visibility
+            }
+            playerControlView.notifyChromeState(effective)
         }
         uiCoordinator?.let { coord ->
             when (newState) {

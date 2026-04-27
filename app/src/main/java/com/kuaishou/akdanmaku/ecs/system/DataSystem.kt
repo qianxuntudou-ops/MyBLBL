@@ -28,7 +28,6 @@ import androidx.annotation.WorkerThread
 import com.badlogic.ashley.core.Engine
 import com.badlogic.ashley.core.Entity
 import com.kuaishou.akdanmaku.data.DanmakuItemData
-import com.kuaishou.akdanmaku.collection.TreeList
 import com.kuaishou.akdanmaku.ecs.DanmakuContext
 import com.kuaishou.akdanmaku.ecs.DanmakuEngine
 import com.kuaishou.akdanmaku.ecs.base.DanmakuSortedSystem
@@ -60,7 +59,7 @@ internal class DataSystem(context: DanmakuContext) :
    * 有序的弹幕数据合集
    */
   private val sortedData = Collections.synchronizedList(mutableListOf<DanmakuItem>())
-  private var currentData = Danmakus(Collections.synchronizedList(TreeList()), 0L, 0L, -1, -1)
+  private var currentData = Danmakus(Collections.synchronizedList(mutableListOf()), 0L, 0L, -1, -1)
   private val comparator = DanmakuItemComparator()
   private val pendingAddItems = mutableListOf<DanmakuItem>()
   private val pendingCreateItems = mutableListOf<DanmakuItem>()
@@ -69,6 +68,8 @@ internal class DataSystem(context: DanmakuContext) :
   private var startTimeMills = 0L
   private var endTimeMills = 0L
   private var entityEntryTime = 0L
+
+  internal var liveMode = false
 
   private var forceUpdate = false
 
@@ -192,7 +193,7 @@ internal class DataSystem(context: DanmakuContext) :
       startTrace("DataSystem_getCurrentEntity_${newData.size}")
       val oldData = currentData
       currentData =
-        Danmakus(Collections.synchronizedList(newData.toTreeList()), startTimeMills, endTimeMills, startIndex, endIndex)
+        Danmakus(Collections.synchronizedList(newData.toMutableList()), startTimeMills, endTimeMills, startIndex, endIndex)
       endTrace()
 
       startTrace("DataSystem_diffAndCreateEntity")
@@ -255,6 +256,23 @@ internal class DataSystem(context: DanmakuContext) :
       items
     }
 
+    if (liveMode && updateItems.isEmpty()) {
+      // Live fast path: items arrive in time order, skip full sort
+      if (pendingItems.isEmpty()) return
+      val sorted = if (pendingItems.size > 1) pendingItems.sortedBy { it.data.position } else pendingItems
+      sortedData.addAll(sorted)
+      val beforeStartCount = pendingItems.count { it.data.position < startTimeMills }
+      val currentItems = pendingItems.filter { it.data.position in startTimeMills until endTimeMills }
+      currentData.startIndex += beforeStartCount
+      currentData.endIndex += (beforeStartCount + currentItems.size)
+      currentData.data.addAll(currentItems)
+      pendingCreateItems.addAll(currentItems)
+      if (currentItems.isNotEmpty()) {
+        currentData.shouldSort = true
+      }
+      return
+    }
+
     sortedData.removeAll(updateItems)
     sortedData.addAll(updateItems)
     sortedData.addAll(pendingItems)
@@ -280,7 +298,10 @@ internal class DataSystem(context: DanmakuContext) :
       pendingCreateItems.clear()
       items
     }
-    pendingItems.forEach(::createItemEntity)
+    val maxEntities = if (liveMode) MAX_ACTIVE_ENTITIES_LIVE else MAX_ACTIVE_ENTITIES_VIDEO
+    val activeCount = getEntities().size
+    val remaining = (maxEntities - activeCount).coerceAtLeast(0)
+    pendingItems.take(remaining).forEach(::createItemEntity)
   }
 
   fun addItems(items: Collection<DanmakuItem>) {
@@ -343,6 +364,10 @@ internal class DataSystem(context: DanmakuContext) :
         trimElapsedItems()
       }
       shouldSort = false
+    } else if (liveMode) {
+      synchronized(this) {
+        trimElapsedItems()
+      }
     }
     if (currentData.shouldSort) {
       synchronized(this) {
@@ -353,14 +378,17 @@ internal class DataSystem(context: DanmakuContext) :
   }
 
   private fun trimElapsedItems() {
-    if (sortedData.size <= 200) return
-    val threshold = startTimeMills - 30_000L
-    if (threshold <= 0L) return
+    val retentionMs = if (liveMode) 5_000L else 30_000L
+    val maxSize = if (liveMode) 2000 else Int.MAX_VALUE
+    if (sortedData.size <= 200 && sortedData.size <= maxSize) return
+    val threshold = startTimeMills - retentionMs
+    if (threshold <= 0L && sortedData.size <= maxSize) return
+    val toRemove = sortedData.size - maxSize
     val iterator = sortedData.iterator()
     var removed = 0
     while (iterator.hasNext()) {
       val item = iterator.next()
-      if (item.timePosition < threshold) {
+      if (item.timePosition < threshold || removed < toRemove) {
         idSet.remove(item.data.danmakuId)
         iterator.remove()
         removed++
@@ -376,6 +404,8 @@ internal class DataSystem(context: DanmakuContext) :
 
   companion object {
     const val PRE_ENTRY_ENTITY_TIME_MS = 100L
+    private const val MAX_ACTIVE_ENTITIES_LIVE = 150
+    private const val MAX_ACTIVE_ENTITIES_VIDEO = 500
   }
 
   override fun onDataAdded(additionalItems: List<DanmakuItem>) {

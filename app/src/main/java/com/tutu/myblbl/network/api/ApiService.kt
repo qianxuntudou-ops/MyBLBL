@@ -366,39 +366,16 @@ interface ApiService {
 
     // ==================== 直播模块 API ====================
     
-    @GET("x/live/web-interface/v1/second/getList")
-    suspend fun getLiveList(
-        @Query("platform") platform: String = "web",
-        @Query("parent_area_id") parentAreaId: Int = 0,
-        @Query("area_id") areaId: Int = 0,
-        @Query("page") page: Int = 1
-    ): BaseResponse<LiveListWrapper>
-
-    @GET("https://api.live.bilibili.com/room/v1/Area/getList")
-    suspend fun getLiveArea(): BaseResponse<List<LiveAreaCategoryParent>>
-
-    @GET("https://api.live.bilibili.com/room/v1/Area/getRoomList")
-    suspend fun getAreaRoomList(
-        @Query("parent_area_id") parentAreaId: Long,
-        @Query("area_id") areaId: Long,
-        @Query("page") page: Int = 1,
-        @Query("page_size") pageSize: Int = 30,
-        @Query("sort_type") sortType: String = "online"
-    ): BaseResponse<List<LiveRoomItem>>
-
-    @GET("https://api.live.bilibili.com/xlive/web-interface/v1/second/getList")
-    suspend fun getLiveCategoryDetailList(
-        @Query("platform") platform: String = "web",
-        @Query("parent_area_id") parentAreaId: Long,
-        @Query("area_id") areaId: Long,
-        @Query("page") page: Int = 1
-    ): BaseResponse<LiveCategoryDetailListWrapper>
+    @GET("https://api.live.bilibili.com/xlive/web-interface/v1/index/getWebAreaList")
+    suspend fun getWebAreaList(
+        @Query("source_id") sourceId: Int = 2
+    ): BaseResponse<LiveWebAreaWrapper>
 
     @GET("https://api.live.bilibili.com/xlive/web-interface/v1/second/getList")
     suspend fun getLiveCategoryDetailListSigned(
         @QueryMap params: Map<String, String>
     ): BaseResponse<LiveCategoryDetailListWrapper>
-    
+
     @GET("x/live/web-interface/v1/second/recommend")
     suspend fun getRecommendLive(
         @Query("page") page: Int,
@@ -410,11 +387,6 @@ interface ApiService {
         @Query("platform") platform: String = "web"
     ): BaseResponse<LiveListWrapper>
     
-    @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getRoomPlayInfo")
-    suspend fun getLiveRoomPlayInfo(
-        @Query("room_id") roomId: Long
-    ): BaseResponse<JsonObject>
-
     @GET("https://api.live.bilibili.com/room/v1/Room/get_info")
     suspend fun getLiveRoomInfo(
         @Query("room_id") roomId: Long
@@ -424,15 +396,6 @@ interface ApiService {
     suspend fun getLiveRoomPlayInfoV2(
         @QueryMap params: Map<String, String>
     ): BaseResponse<JsonObject>
-
-    @GET("https://api.live.bilibili.com/xlive/web-room/v1/playUrl/playUrl")
-    suspend fun getLivePlayInfo(
-        @Query("cid") cid: Long,
-        @Query("qn") qn: Int = 10000,
-        @Query("platform") platform: String = "web",
-        @Query("https_url_req") httpsUrlReq: Int = 1,
-        @Query("ptype") ptype: Int = 16
-    ): BaseResponse<LivePlayUrlDataModel>
 
     @GET("https://api.live.bilibili.com/xlive/web-room/v1/index/getDanmuInfo")
     suspend fun getLiveChatRoomUrl(

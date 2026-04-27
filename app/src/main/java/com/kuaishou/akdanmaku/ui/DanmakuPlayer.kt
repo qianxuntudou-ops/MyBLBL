@@ -303,6 +303,10 @@ class DanmakuPlayer(renderer: DanmakuRenderer, dataSource: DataSource? = null) {
     dataSystem?.addItem(item)
   }
 
+  fun setLiveMode(enabled: Boolean) {
+    dataSystem?.liveMode = enabled
+  }
+
   /**
    * 更新一个弹幕
    */

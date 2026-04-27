@@ -41,6 +41,7 @@ import com.tutu.myblbl.feature.player.PlayerLaunchContext
 import com.tutu.myblbl.feature.player.VideoPlayerFragment
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.navigation.TabBarView
+import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -137,6 +138,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         initFragments()
         binding.myTabView.setOnTabClickListener(this)
         applyBackgroundImage()
+        applyCategoryEntryVisibility()
         applyLiveEntryVisibility()
     }
 
@@ -188,6 +190,14 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         binding.mainBackgroundImage.visibility = if (themeIndex == 3) View.VISIBLE else View.GONE
     }
 
+    fun applyCategoryEntryVisibility() {
+        val enabled = ContentFilter.isMinorProtectionEnabled(this)
+        binding.myTabView.setCategoryButtonVisible(!enabled)
+        if (enabled && currentFragmentIndex == 1) {
+            binding.myTabView.selectTab(0)
+        }
+    }
+
     fun applyLiveEntryVisibility() {
         val liveEntry = appSettings.getCachedString("live_entry", "关") ?: "关"
         val show = liveEntry == "开"
@@ -209,6 +219,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
 
     private fun showFragment(index: Int) {
         if (index < 0 || index >= fragments.size) return
+        if (index == 1 && !binding.myTabView.isCategoryButtonVisible()) return
         if (index == 3 && !binding.myTabView.isLiveButtonVisible()) return
         if (currentFragmentIndex == index) return
 

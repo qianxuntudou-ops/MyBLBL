@@ -313,7 +313,11 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
                 val activity = activity as? com.tutu.myblbl.ui.activity.MainActivity
                 activity?.applyLiveEntryVisibility()
             }
-            6 -> toggleSetting(commonSettings, 6, KEY_MINOR_PROTECTION)
+            6 -> toggleSetting(commonSettings, 6, KEY_MINOR_PROTECTION) { value ->
+                appSettings.putStringAsync(KEY_MINOR_PROTECTION, value)
+                val activity = activity as? com.tutu.myblbl.ui.activity.MainActivity
+                activity?.applyCategoryEntryVisibility()
+            }
             COMMON_POSITION_RISK_CONTROL -> showRiskControlDialog()
         }
     }

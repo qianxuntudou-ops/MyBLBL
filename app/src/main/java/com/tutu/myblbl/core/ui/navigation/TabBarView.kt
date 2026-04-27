@@ -137,6 +137,7 @@ class TabBarView @JvmOverloads constructor(
 
     fun selectTab(index: Int) {
         if (index < 0 || index >= tabButtons.size) return
+        if (index == 1 && buttonCategory.visibility == GONE) return
         if (index == 3 && buttonLive.visibility == GONE) return
         if (currentSelectedIndex == index) {
             if (index == 5) {
@@ -168,6 +169,14 @@ class TabBarView @JvmOverloads constructor(
 
     fun isLiveButtonVisible(): Boolean {
         return buttonLive.visibility == VISIBLE
+    }
+
+    fun setCategoryButtonVisible(visible: Boolean) {
+        buttonCategory.visibility = if (visible) VISIBLE else GONE
+    }
+
+    fun isCategoryButtonVisible(): Boolean {
+        return buttonCategory.visibility == VISIBLE
     }
 
     fun showAvatar(show: Boolean) {

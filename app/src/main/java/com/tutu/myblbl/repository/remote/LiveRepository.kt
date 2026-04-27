@@ -74,34 +74,13 @@ class LiveRepository(
                 )
             )
             if (v2Response.code == 0 && v2Response.data != null) {
-                parseV2PlayInfo(v2Response.data, roomInfo.liveTime, roomInfo.roomTitle, roomInfo.anchorName, quality)?.let { playInfo ->
+                val liveTime = v2Response.data.long("live_time")?.toString()
+                    ?: roomInfo.liveTime
+                parseV2PlayInfo(v2Response.data, liveTime, roomInfo.roomTitle, roomInfo.anchorName, quality)?.let { playInfo ->
                     return@runCatching playInfo
                 }
-                AppLog.e(
-                    TAG,
-                    "getLivePlayInfo v2 parse failed: roomId=$roomId, realRoomId=${roomInfo.realRoomId}"
-                )
-            } else {
-                AppLog.e(
-                    TAG,
-                    "getLivePlayInfo v2 failure: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, code=${v2Response.code}, message=${v2Response.errorMessage}"
-                )
             }
-
-            val legacyResponse = apiService.getLivePlayInfo(roomInfo.realRoomId, quality)
-            if (legacyResponse.code == 0 && legacyResponse.data != null) {
-                legacyResponse.data.copy(
-                    liveTime = roomInfo.liveTime,
-                    roomTitle = roomInfo.roomTitle,
-                    anchorName = roomInfo.anchorName
-                )
-            } else {
-                AppLog.e(
-                    TAG,
-                    "getLivePlayInfo legacy failure: roomId=$roomId, realRoomId=${roomInfo.realRoomId}, code=${legacyResponse.code}, message=${legacyResponse.errorMessage}"
-                )
-                throw IllegalStateException(legacyResponse.errorMessage.ifBlank { "无法获取直播流地址" })
-            }
+            throw IllegalStateException(v2Response.errorMessage.ifBlank { "无法获取直播流地址" })
         }
     }
 
@@ -136,16 +115,18 @@ class LiveRepository(
         page: Int
     ): Result<LiveRoomPage> {
         return runCatching {
-            val response = apiService.getAreaRoomList(
-                parentAreaId = parentAreaId,
-                areaId = areaId,
-                page = page,
-                pageSize = 30,
-                sortType = "online"
+            val params = buildWbiParams(
+                mapOf(
+                    "platform" to "web",
+                    "parent_area_id" to parentAreaId.toString(),
+                    "area_id" to areaId.toString(),
+                    "page" to page.toString()
+                )
             )
+            val response = apiService.getLiveCategoryDetailListSigned(params)
             if (response.code == 0 && response.data != null) {
-                val rooms = response.data
-                val hasMore = rooms.size >= 30
+                val rooms = response.data.list.orEmpty()
+                val hasMore = response.data.hasMore != 0
                 LiveRoomPage(rooms = rooms, hasMore = hasMore)
             } else {
                 throw IllegalStateException(response.message)
@@ -155,9 +136,9 @@ class LiveRepository(
 
     suspend fun getLiveAreas(): Result<List<LiveAreaCategoryParent>> {
         return runCatching {
-            val response = apiService.getLiveArea()
-            if (response.code == 0 && response.data != null) {
-                response.data
+            val response = apiService.getWebAreaList()
+            if (response.code == 0 && response.data?.data != null) {
+                response.data.data
             } else {
                 throw IllegalStateException(response.message)
             }
@@ -265,6 +246,7 @@ class LiveRepository(
     }
 
     private suspend fun resolveRoomInfo(roomId: Long): ResolvedRoomInfo? {
+        var result: ResolvedRoomInfo? = null
         runCatching { apiService.getLiveRoomInfo(roomId) }
             .onSuccess { response ->
                 if (response.code == 0 && response.data != null) {
@@ -281,12 +263,25 @@ class LiveRepository(
                         TAG,
                         "resolveRoomInfo room/get_info: roomId=$roomId, realRoomId=$realRoomId, parentAreaId=$parentAreaId, areaId=$areaId"
                     )
-                    return ResolvedRoomInfo(
+                    if (anchorName != null) {
+                        return ResolvedRoomInfo(
+                            realRoomId = realRoomId,
+                            liveStatus = liveStatus,
+                            liveTime = liveTime,
+                            roomTitle = roomTitle,
+                            anchorName = anchorName,
+                            ruid = ruid,
+                            parentAreaId = parentAreaId,
+                            areaId = areaId,
+                            shortOrRealRoomId = roomId
+                        )
+                    }
+                    result = ResolvedRoomInfo(
                         realRoomId = realRoomId,
                         liveStatus = liveStatus,
                         liveTime = liveTime,
                         roomTitle = roomTitle,
-                        anchorName = anchorName,
+                        anchorName = null,
                         ruid = ruid,
                         parentAreaId = parentAreaId,
                         areaId = areaId,
@@ -296,54 +291,24 @@ class LiveRepository(
             }
             .onFailure { AppLog.w(TAG, "resolveRoomInfo getLiveRoomInfo failed: ${it.message}") }
 
-        val response = apiService.getLiveRoomPlayInfo(roomId)
-        if (response.code != 0 || response.data == null) {
-            AppLog.e(
-                TAG,
-                "resolveRoomInfo failure: roomId=$roomId, code=${response.code}, message=${response.errorMessage}"
-            )
-            return null
+        val ruid = result?.ruid ?: 0L
+        if (ruid > 0 && result?.anchorName.isNullOrBlank()) {
+            runCatching {
+                val wbiParams = buildWbiParams(mapOf("mid" to ruid.toString()))
+                apiService.getUserSpace(wbiParams)
+            }
+                .onSuccess { response ->
+                    if (response.code == 0 && response.data != null && result != null) {
+                        val name = response.data.name.takeIf { it.isNotBlank() }
+                        if (name != null) {
+                            result = result!!.copy(anchorName = name)
+                        }
+                    }
+                }
+                .onFailure { AppLog.w(TAG, "resolveRoomInfo getUserSpace failed: ${it.message}") }
         }
-        val data = response.data
-        val directRoomId = data.long("room_id")
-        val nestedRoomId = data.objectOrNull("room_info")?.long("room_id")
-        val realRoomId = directRoomId?.takeIf { it > 0L }
-            ?: nestedRoomId?.takeIf { it > 0L }
-            ?: roomId
-        val ruid = data.long("uid")
-            ?: data.objectOrNull("room_info")?.long("uid")
-            ?: data.objectOrNull("anchor_info")?.objectOrNull("base_info")?.long("uid")
-            ?: 0L
-        val liveStatus = data.int("live_status")
-            ?: data.objectOrNull("room_info")?.int("live_status")
-            ?: 0
-        val liveTime = data.string("live_time").takeIf { it.isNotBlank() }
-        val roomInfo = data.objectOrNull("room_info")
-        val roomTitle = roomInfo?.string("title")?.takeIf { it.isNotBlank() }
-        val anchorName = data.objectOrNull("anchor_info")
-            ?.objectOrNull("base_info")?.string("uname")
-            ?: roomInfo?.string("uname")
-        val parentAreaId = data.long("parent_area_id")
-            ?: roomInfo?.long("parent_area_id")
-            ?: DEFAULT_LIVE_PARENT_AREA_ID
-        val areaId = data.long("area_id")
-            ?: roomInfo?.long("area_id")
-            ?: DEFAULT_LIVE_AREA_ID
-        AppLog.d(TAG, "resolveRoomInfo: title=$roomTitle, anchor=$anchorName, keys=${data.keySet()}")
-        if (roomInfo != null) {
-            AppLog.d(TAG, "resolveRoomInfo roomInfo keys=${roomInfo.keySet()}")
-        }
-        return ResolvedRoomInfo(
-            realRoomId = realRoomId,
-            liveStatus = liveStatus,
-            liveTime = liveTime,
-            roomTitle = roomTitle,
-            anchorName = anchorName,
-            ruid = ruid,
-            parentAreaId = parentAreaId,
-            areaId = areaId,
-            shortOrRealRoomId = roomId
-        )
+
+        return result
     }
 
     private fun parseV2PlayInfo(

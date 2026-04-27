@@ -44,7 +44,10 @@ class UserRepository(
     }
 
     suspend fun getRelationStat(mid: Long): BaseResponse<UserStatModel> {
-        return apiService.getRelationStat(mid)
+        return sessionGateway.syncAuthState(
+            apiService.getRelationStat(mid),
+            source = "getRelationStat"
+        )
     }
     
     suspend fun getUserSpace(mid: Long): BaseResponse<UserSpaceInfo> {

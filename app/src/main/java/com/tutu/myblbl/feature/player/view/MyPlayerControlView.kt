@@ -990,6 +990,10 @@ class MyPlayerControlView @JvmOverloads constructor(
         visibilityListeners.forEach { it.onVisibilityChange(visibility) }
     }
 
+    internal fun notifyChromeState(effectiveVisibility: Int) {
+        visibilityListeners.forEach { it.onVisibilityChange(effectiveVisibility) }
+    }
+
     fun isVisible(): Boolean = visibility == VISIBLE
 }
 

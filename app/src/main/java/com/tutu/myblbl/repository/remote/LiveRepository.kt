@@ -115,18 +115,14 @@ class LiveRepository(
         page: Int
     ): Result<LiveRoomPage> {
         return runCatching {
-            val params = buildWbiParams(
-                mapOf(
-                    "platform" to "web",
-                    "parent_area_id" to parentAreaId.toString(),
-                    "area_id" to areaId.toString(),
-                    "page" to page.toString()
-                )
+            val response = apiService.getLiveAreaRoomList(
+                parentAreaId = parentAreaId,
+                areaId = areaId,
+                page = page
             )
-            val response = apiService.getLiveCategoryDetailListSigned(params)
             if (response.code == 0 && response.data != null) {
-                val rooms = response.data.list.orEmpty()
-                val hasMore = response.data.hasMore != 0
+                val rooms = response.data
+                val hasMore = rooms.size >= 30
                 LiveRoomPage(rooms = rooms, hasMore = hasMore)
             } else {
                 throw IllegalStateException(response.message)
@@ -136,9 +132,9 @@ class LiveRepository(
 
     suspend fun getLiveAreas(): Result<List<LiveAreaCategoryParent>> {
         return runCatching {
-            val response = apiService.getWebAreaList()
-            if (response.code == 0 && response.data?.data != null) {
-                response.data.data
+            val response = apiService.getLiveAreaList()
+            if (response.code == 0 && response.data != null) {
+                response.data
             } else {
                 throw IllegalStateException(response.message)
             }

@@ -365,7 +365,19 @@ interface ApiService {
     ): BaseResponse<FavoriteFolderDetailWrapper>
 
     // ==================== 直播模块 API ====================
-    
+
+    @GET("https://api.live.bilibili.com/room/v1/Area/getList")
+    suspend fun getLiveAreaList(): BaseResponse<List<LiveAreaCategoryParent>>
+
+    @GET("https://api.live.bilibili.com/room/v1/Area/getRoomList")
+    suspend fun getLiveAreaRoomList(
+        @Query("parent_area_id") parentAreaId: Long,
+        @Query("area_id") areaId: Long,
+        @Query("page") page: Int,
+        @Query("page_size") pageSize: Int = 30,
+        @Query("sort_type") sortType: String = "online"
+    ): BaseResponse<List<LiveRoomItem>>
+
     @GET("https://api.live.bilibili.com/xlive/web-interface/v1/index/getWebAreaList")
     suspend fun getWebAreaList(
         @Query("source_id") sourceId: Int = 2

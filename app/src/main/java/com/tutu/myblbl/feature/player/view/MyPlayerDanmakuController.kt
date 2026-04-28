@@ -291,7 +291,7 @@ class MyPlayerDanmakuController(
         }
         isDanmakuStarted = true
         isDanmakuPaused = false
-        if (!hasPreparedData()) {
+        if (!hasPreparedData() && !liveEngineStarted) {
             return
         }
         ensurePlayer()

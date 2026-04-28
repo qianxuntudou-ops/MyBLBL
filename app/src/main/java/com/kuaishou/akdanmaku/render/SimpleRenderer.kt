@@ -279,12 +279,7 @@ open class SimpleRenderer : DanmakuRenderer {
     if ((resolved and 0x00FFFFFF) == 0x00FFFFFF) {
       return withAlpha(Color.BLACK, 232)
     }
-    val tonedOutline = blendColor(
-      Color.BLACK,
-      darkenColor(resolved, 0.72f),
-      0.32f
-    )
-    return withAlpha(tonedOutline, 236)
+    return withAlpha(Color.WHITE, 200)
   }
 
   private fun isDarkTextColor(color: Int): Boolean {

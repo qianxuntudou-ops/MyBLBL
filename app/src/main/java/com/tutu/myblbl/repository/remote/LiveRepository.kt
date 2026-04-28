@@ -60,7 +60,7 @@ class LiveRepository(
                         "protocol" to "0,1",
                         "format" to "0,1,2",
                         "codec" to "0,1,2",
-                        "qn" to "0",
+                        "qn" to quality.toString(),
                         "platform" to "web",
                         "ptype" to "8",
                         "dolby" to "5",
@@ -367,6 +367,7 @@ class LiveRepository(
             return emptyList()
         }
         val candidates = mutableListOf<LiveStreamCandidate>()
+        val flvHevcFallback = mutableListOf<LiveStreamCandidate>()
         streams.forEachIndexed streamLoop@{ streamIndex, streamElement ->
             val stream = streamElement.asJsonObjectOrNull() ?: return@streamLoop
             val protocolName = stream.string("protocol_name")
@@ -381,6 +382,8 @@ class LiveRepository(
                         return@codecLoop
                     }
                     val currentQn = codec.int("current_qn") ?: 0
+                    val isFlvHevc = formatName.equals("flv", ignoreCase = true) &&
+                        codecName.equals("hevc", ignoreCase = true)
                     codec.arrayOrNull("url_info").orEmpty().forEachIndexed urlLoop@{ urlIndex, urlElement ->
                         val urlInfo = urlElement.asJsonObjectOrNull() ?: return@urlLoop
                         val host = urlInfo.string("host")
@@ -389,15 +392,23 @@ class LiveRepository(
                         if (url.isBlank()) {
                             return@urlLoop
                         }
-                        candidates += LiveStreamCandidate(
+                        val candidate = LiveStreamCandidate(
                             url = url,
                             currentQn = currentQn,
                             priority = streamPriority(protocolName, formatName, codecName, extra),
                             index = (((streamIndex * 10) + formatIndex) * 10 + codecIndex) * 10 + urlIndex
                         )
+                        if (isFlvHevc) {
+                            flvHevcFallback += candidate
+                        } else {
+                            candidates += candidate
+                        }
                     }
                 }
             }
+        }
+        if (candidates.isEmpty()) {
+            return flvHevcFallback
         }
         return candidates
     }

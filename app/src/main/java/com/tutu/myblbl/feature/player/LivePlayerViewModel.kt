@@ -87,7 +87,7 @@ class LivePlayerViewModel(
                         data.qualityDescription?.let { qualities ->
                             val mappedQualities = qualities.map {
                                 LiveQualityInfo(it.qn, it.desc)
-                            }
+                            }.distinctBy { it.qn }
                             _qualities.value = mappedQualities
                             _selectedQuality.value = mappedQualities.firstOrNull {
                                 it.qn == data.currentQn
@@ -166,10 +166,12 @@ class LivePlayerViewModel(
                 val h = elapsed / 3600
                 val m = (elapsed % 3600) / 60
                 val s = elapsed % 60
-                _liveDuration.value = if (h > 0) {
-                    String.format(Locale.getDefault(), "%d:%02d:%02d", h, m, s)
-                } else {
-                    String.format(Locale.getDefault(), "%02d:%02d", m, s)
+                val days = h / 24
+                val remainHours = h % 24
+                _liveDuration.value = when {
+                    days > 0 -> String.format(Locale.getDefault(), "%dD %02d:%02d:%02d", days, remainHours, m, s)
+                    h > 0   -> String.format(Locale.getDefault(), "%d:%02d:%02d", h, m, s)
+                    else    -> String.format(Locale.getDefault(), "%02d:%02d", m, s)
                 }
                 delay(1000)
             }

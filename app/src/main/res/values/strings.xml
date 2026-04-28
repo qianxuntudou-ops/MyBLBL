@@ -32,6 +32,8 @@
     <string name="follower_count_">%d\n粉丝</string>
     <string name="following_count_">%d\n关注</string>
     <string name="app_exit">再按一次返回退出应用</string>
+    <string name="usage_tip_title">使用提示</string>
+    <string name="usage_tip_content">1. 本应用仅供学习研究使用，请勿用于商业用途，避免侵犯哔哩哔哩相关权益。\n\n2. 应用支持直播入口和青少年模式，均可在设置中开启或关闭。\n\n3. 青少年模式关闭方法：遥控器依次按「上上下下左右左右」；触摸屏连续快速点击验证码区域 7 次即可通过验证。\n\n4. 长按视频卡片可进行「稍后再看」等更多操作。</string>
     <string name="app_name">MyBili</string>
     <string name="appbar_scrolling_view_behavior">com.google.android.material.appbar.AppBarLayout$ScrollingViewBehavior</string>
     <string name="audioTrack">音轨</string>

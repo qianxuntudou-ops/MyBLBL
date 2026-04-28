@@ -35,6 +35,7 @@ import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.feature.search.SearchNewFragment
 import com.tutu.myblbl.feature.settings.SettingsFragment
 import com.tutu.myblbl.feature.settings.SignInFragment
+import com.tutu.myblbl.ui.dialog.UsageTipDialog
 import com.tutu.myblbl.ui.dialog.UserInfoDialog
 import com.tutu.myblbl.feature.player.PlayerInstancePool
 import com.tutu.myblbl.feature.player.PlayerLaunchContext
@@ -159,6 +160,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         binding.root.post {
             AppLog.i(STARTUP_TAG, "MainActivity first root post elapsed=${SystemClock.elapsedRealtime() - activityCreateStartMs}ms")
             dismissSplash()
+            showUsageTipIfNeeded()
         }
         AppLog.i(STARTUP_TAG, "MainActivity.initData end elapsed=${SystemClock.elapsedRealtime() - startMs}ms")
     }
@@ -571,6 +573,14 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             return
         }
         UserInfoDialog(this).show()
+    }
+
+    private fun showUsageTipIfNeeded() {
+        if (restoredFromSavedState) return
+        if (appSettings.getCachedBoolean("usage_tip_shown")) return
+        if (isFinishing || isDestroyed) return
+        appSettings.putBooleanAsync("usage_tip_shown", true)
+        UsageTipDialog(this).show()
     }
 
     private fun dispatchVideoBlockedEventToCurrentFragment(event: AppEventHub.Event.VideoBlockedByMinorProtection) {

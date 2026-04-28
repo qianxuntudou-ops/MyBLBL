@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.LinearLayoutCompat xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/dialog_background"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:paddingStart="@dimen/px50"
+    android:paddingTop="@dimen/px40"
+    android:paddingEnd="@dimen/px50"
+    android:paddingBottom="@dimen/px40">
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/text_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/usage_tip_title"
+        android:textColor="?android:attr/textColorPrimary"
+        android:textSize="@dimen/px36"
+        android:textStyle="bold" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/px30"
+        android:maxHeight="@dimen/px600"
+        android:scrollbars="vertical">
+
+        <androidx.appcompat.widget.AppCompatTextView
+            android:id="@+id/text_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:lineSpacingMultiplier="1.4"
+            android:text="@string/usage_tip_content"
+            android:textColor="?android:attr/textColorSecondary"
+            android:textSize="@dimen/px30" />
+    </ScrollView>
+
+    <androidx.appcompat.widget.AppCompatTextView
+        android:id="@+id/button_confirm"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="@dimen/px35"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:gravity="center"
+        android:paddingStart="@dimen/px80"
+        android:paddingTop="@dimen/px18"
+        android:paddingEnd="@dimen/px80"
+        android:paddingBottom="@dimen/px18"
+        android:text="@string/confirm"
+        android:textColor="@color/pink"
+        android:textSize="@dimen/px32"
+        android:textStyle="bold" />
+
+</androidx.appcompat.widget.LinearLayoutCompat>

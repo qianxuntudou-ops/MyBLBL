@@ -6,7 +6,6 @@ import android.os.Build
 import android.text.format.DateFormat
 import android.view.LayoutInflater
 import android.view.KeyEvent
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -1290,58 +1289,37 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         val dialog = AppCompatDialog(requireContext(), R.style.DialogTheme)
         dialog.setCanceledOnTouchOutside(true)
 
-        var twoFingerDownTime = 0L
+        val codeDisplayView = TextView(requireContext()).apply {
+            text = "? ? ? ? ? ? ? ?"
+            setTextColor(textColor)
+            textSize = 16f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            gravity = android.view.Gravity.CENTER
+            setPadding(px16, px14, px16, px14)
+        }
 
-        val root = object : LinearLayout(requireContext()) {
-            override fun onTouchEvent(event: MotionEvent): Boolean {
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_POINTER_DOWN -> {
-                        if (event.pointerCount == 2) {
-                            val w = width
-                            val h = height
-                            val inSecondQuadrant = (0 until 2).all { i ->
-                                val x = event.getX(i)
-                                val y = event.getY(i)
-                                x >= 0 && x < w / 2 && y >= 0 && y < h / 2
-                            }
-                            if (inSecondQuadrant) {
-                                twoFingerDownTime = System.currentTimeMillis()
-                            }
-                        }
-                    }
-                    MotionEvent.ACTION_MOVE -> {
-                        if (event.pointerCount == 2 && twoFingerDownTime > 0L) {
-                            val w = width
-                            val h = height
-                            val stillInQuadrant = (0 until 2).all { i ->
-                                val x = event.getX(i)
-                                val y = event.getY(i)
-                                x >= 0 && x < w / 2 && y >= 0 && y < h / 2
-                            }
-                            if (stillInQuadrant && System.currentTimeMillis() - twoFingerDownTime >= 2000L) {
-                                twoFingerDownTime = 0L
-                                dialog.dismiss()
-                                onVerified()
-                                return true
-                            }
-                            if (!stillInQuadrant) {
-                                twoFingerDownTime = 0L
-                            }
-                        }
-                    }
-                    MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                        twoFingerDownTime = 0L
-                    }
-                }
-                return super.onTouchEvent(event)
-            }
-        }.apply {
+        var tapCount = 0
+        var lastTapTime = 0L
+
+        val root = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundResource(R.drawable.dialog_background)
             isClickable = true
             isFocusable = true
-            isFocusableInTouchMode = true
-            setOnClickListener { dialog.dismiss() }
+            setOnClickListener {
+                val now = System.currentTimeMillis()
+                if (now - lastTapTime > 3000L) {
+                    tapCount = 1
+                } else {
+                    tapCount++
+                }
+                lastTapTime = now
+                if (tapCount >= 7) {
+                    tapCount = 0
+                    dialog.dismiss()
+                    onVerified()
+                }
+            }
             setOnKeyListener { _, keyCode, event ->
                 if (event.action == KeyEvent.ACTION_DOWN) {
                     when (keyCode) {
@@ -1350,6 +1328,23 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
                         KeyEvent.KEYCODE_DPAD_LEFT,
                         KeyEvent.KEYCODE_DPAD_RIGHT -> {
                             inputSequence.add(keyCode)
+                            val count = minOf(inputSequence.size, 8)
+                            val display = buildString {
+                                repeat(count) { append("* ") }
+                                repeat(8 - count) { append("? ") }
+                            }.trimEnd()
+                            codeDisplayView.text = display
+                            if (inputSequence.size >= 8) {
+                                val last8 = inputSequence.takeLast(8)
+                                if (last8 == konamiCode) {
+                                    dialog.dismiss()
+                                    onVerified()
+                                } else {
+                                    inputSequence.clear()
+                                    codeDisplayView.text = "? ? ? ? ? ? ? ?"
+                                    Toast.makeText(requireContext(), "魂斗罗秘籍错误", Toast.LENGTH_SHORT).show()
+                                }
+                            }
                             true
                         }
                         else -> false
@@ -1378,7 +1373,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         })
 
         root.addView(TextView(requireContext()).apply {
-            text = "输入魂斗罗秘籍才能关闭！"
+            text = "使用遥控器方向键输入魂斗罗秘籍才能关闭！"
             setTextColor(textColor)
             textSize = 12f
             setLineSpacing(resources.getDimension(R.dimen.px6), 1f)
@@ -1387,37 +1382,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             layoutParams = lp
         })
 
-        val actionContainer = LinearLayout(requireContext()).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER
-            val lp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            lp.setMargins(px18, px20, px18, px18)
-            layoutParams = lp
-        }
+        root.addView(codeDisplayView, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { setMargins(px40, px20, px40, 0) })
 
-        actionContainer.addView(TextView(requireContext()).apply {
-            text = "确定"
-            setTextColor(textColor)
-            textSize = 12f
-            setPadding(px16, px14, px16, px14)
-            isClickable = true
-            isFocusable = true
-            setOnClickListener {
-                val last8 = inputSequence.takeLast(8)
-                if (last8 == konamiCode) {
-                    dialog.dismiss()
-                    onVerified()
-                } else {
-                    Toast.makeText(requireContext(), "秘籍不对", Toast.LENGTH_SHORT).show()
-                    inputSequence.clear()
-                }
-            }
-            setBackgroundResource(R.drawable.bg_dialog_button)
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            setMargins(px10, 0, px10, 0)
-        })
-
-        root.addView(actionContainer)
         dialog.setContentView(root)
         dialog.setOnShowListener { root.requestFocus() }
         dialog.show()

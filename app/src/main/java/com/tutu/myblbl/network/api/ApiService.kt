@@ -15,6 +15,7 @@ import com.tutu.myblbl.model.user.CheckRelationModel
 import com.tutu.myblbl.model.user.GetFollowUserWrapper
 import com.tutu.myblbl.model.user.ScanQrModel
 import com.tutu.myblbl.model.user.SignInResultModel
+import com.tutu.myblbl.model.user.SsoListModel
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.model.video.detail.VideoDetailModel
 import com.tutu.myblbl.model.video.VideoPvModel
@@ -321,14 +322,33 @@ interface ApiService {
 
     @GET("https://passport.bilibili.com/x/passport-login/web/qrcode/generate")
     suspend fun getSignInQrCode(
-        @Query("source") source: String = "main-fe-header"
+        @Query("source") source: String = "main-fe-header",
+        @Query("web_location") webLocation: String = "333.1007",
+        @Query("x-bili-locale-json") localeJson: String = "{\"c_locale\":{\"language\":\"zh\",\"region\":\"CN\"},\"always_translate\":true}",
+        @Query("go_url") goUrl: String = "https://www.bilibili.com/"
     ): BaseResponse<ScanQrModel>
 
     @GET("https://passport.bilibili.com/x/passport-login/web/qrcode/poll")
     suspend fun checkSignInResult(
         @Query("qrcode_key") qrcodeKey: String,
-        @Query("source") source: String = "main-fe-header"
+        @Query("source") source: String = "main-fe-header",
+        @Query("web_location") webLocation: String = "333.1007",
+        @Query("x-bili-locale-json") localeJson: String = "{\"c_locale\":{\"language\":\"zh\",\"region\":\"CN\"},\"always_translate\":true}",
+        @Query("b_ret") bRet: String = ""
     ): BaseResponse<SignInResultModel>
+
+    @FormUrlEncoded
+    @POST("https://passport.bilibili.com/x/passport-login/web/sso/list")
+    suspend fun getSsoList(
+        @Field("csrf") csrf: String
+    ): BaseResponse<SsoListModel>
+
+    @POST
+    suspend fun setSso(
+        @Url url: String,
+        @Query("x-bili-locale-json") localeJson: String = "{\"c_locale\":{\"language\":\"zh\",\"region\":\"CN\"},\"always_translate\":true}",
+        @Query("b_ret") bRet: String = ""
+    ): BaseResponse<Any>
 
     @POST("x/v3/fav/resource/deal")
     @FormUrlEncoded

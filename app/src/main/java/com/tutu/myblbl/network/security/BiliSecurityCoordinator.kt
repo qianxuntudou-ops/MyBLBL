@@ -362,6 +362,7 @@ class BiliSecurityCoordinator(
                     delay(EXCLIMB_RETRY_DELAY_MS)
                 }
                 runCatching {
+                    WbiGenerator.ensureBRet()
                     val rand = ByteArray(32 + 8 + 4)
                     SecureRandom().nextBytes(rand)
                     rand[32] = 0; rand[33] = 0; rand[34] = 0; rand[35] = 0

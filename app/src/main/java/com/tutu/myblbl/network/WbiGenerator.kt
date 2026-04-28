@@ -1,11 +1,27 @@
 package com.tutu.myblbl.network
 
+import android.util.Base64
 import java.security.MessageDigest
+import java.security.SecureRandom
 
 object WbiGenerator {
 
     private var cachedOriginKey: String? = null
     private var cachedMixinKey: String? = null
+    private var cachedBRet: String? = null
+
+    fun ensureBRet(): String {
+        cachedBRet?.let { return it }
+        val rand = ByteArray(44)
+        SecureRandom().nextBytes(rand)
+        rand[36] = 0; rand[37] = 73; rand[38] = 69; rand[39] = 78; rand[40] = 68; rand[41] = 0xAE.toByte(); rand[42] = 0x42; rand[43] = 0x60
+        val b64 = Base64.encodeToString(rand, Base64.NO_WRAP)
+        val result = b64.takeLast(80)
+        cachedBRet = result
+        return result
+    }
+
+    fun getCachedBRet(): String? = cachedBRet
 
     private val mixinKeyEncTab = intArrayOf(
         46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35,

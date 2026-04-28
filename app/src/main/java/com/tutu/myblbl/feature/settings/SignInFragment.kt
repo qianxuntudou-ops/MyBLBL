@@ -23,6 +23,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
+import com.tutu.myblbl.network.WbiGenerator
 
 class SignInFragment : BaseFragment<FragmentSignInBinding>() {
 
@@ -130,8 +131,9 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
 
     private suspend fun checkSignInResultInternal() {
         if (qrcodeKey.isEmpty()) return
-        
-        val result = authRepository.checkSignInResult(qrcodeKey)
+
+        val bRet = WbiGenerator.ensureBRet()
+        val result = authRepository.checkSignInResult(qrcodeKey, bRet)
         result.onSuccess { response ->
             val data = response.data
             if (data != null && data.isSuccess()) {
@@ -140,6 +142,7 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
                 if (data.refreshToken.isNotBlank()) {
                     NetworkManager.saveLoginRefreshToken(data.refreshToken)
                 }
+                performSsoSync(data.url, bRet)
                 Toast.makeText(requireContext(), "登录成功", Toast.LENGTH_SHORT).show()
                 onLoginSuccess()
             } else if (data != null && data.code == 86038) {
@@ -171,6 +174,35 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
         } catch (e: Exception) {
             AppLog.e("SignInFragment", "saveCookiesFromLoginUrl failed", e)
         }
+    }
+
+    private suspend fun performSsoSync(loginUrl: String, bRet: String) {
+        try {
+            val csrf = extractCookieValueFromUrl(loginUrl, "bili_jct")
+            if (csrf.isBlank()) return
+
+            val ssoResult = authRepository.getSsoList(csrf)
+            ssoResult.onSuccess { response ->
+                val ssoUrls = response.data?.sso ?: return
+                for (url in ssoUrls) {
+                    try {
+                        authRepository.setSso(url, bRet)
+                    } catch (e: Exception) {
+                        AppLog.d("SignInFragment", "setSso failed for $url: ${e.message}")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            AppLog.w("SignInFragment", "SSO sync failed: ${e.message}")
+        }
+    }
+
+    private fun extractCookieValueFromUrl(url: String, name: String): String {
+        val queryPart = url.substringAfter("?", "")
+        return queryPart.split("&")
+            .firstOrNull { it.startsWith("$name=") }
+            ?.substringAfter("=", "")
+            .orEmpty()
     }
 
     private fun onLoginSuccess() {

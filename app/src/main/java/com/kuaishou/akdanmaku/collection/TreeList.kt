@@ -64,12 +64,12 @@ class TreeList<E : Comparable<E>>(coll: Collection<E>? = null) : AbstractList<E>
         return TreeListIterator(this, fromIndex)
     }
 
-    override fun indexOf(element: @UnsafeVariance E): Int {
+    override fun indexOf(element: @UnsafeVariance E?): Int {
         val r = root ?: return -1
         return r.indexOf(element, r.relativePosition)
     }
 
-    override fun contains(element: @UnsafeVariance E): Boolean = indexOf(element) >= 0
+    override fun contains(element: @UnsafeVariance E?): Boolean = indexOf(element) >= 0
 
     override fun toArray(): Array<Any?> {
         val array = arrayOfNulls<Any>(_size)

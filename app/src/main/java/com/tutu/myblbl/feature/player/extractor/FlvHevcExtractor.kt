@@ -149,8 +149,20 @@ class FlvHevcExtractor : Extractor {
         val packetType = if (headerSize > 1) hdr.readUnsignedByte() else 0
         val payloadSize = tagDataSize - headerSize
 
+        // CTS offset (signed 24-bit big-endian): bytes 2-4 of video tag data.
+        // FLV tag timestamp is DTS; PTS = DTS + CTS. Ignoring this when B-frames
+        // are present causes the player to render frames in decode order, producing
+        // visible forward/backward stuttering.
+        val ctsOffset = if (headerSize >= 5 && packetType == PACKET_NALU) {
+            var cts = ((hdr.data[2].toInt() and 0xFF) shl 16) or
+                ((hdr.data[3].toInt() and 0xFF) shl 8) or
+                (hdr.data[4].toInt() and 0xFF)
+            if (cts and 0x800000 != 0) cts = cts or 0xFF000000.toInt()
+            cts
+        } else 0
+
         when (codecId) {
-            CODEC_AVC, CODEC_HEVC -> handleVideoPacket(input, codecId, packetType, frameType, payloadSize)
+            CODEC_AVC, CODEC_HEVC -> handleVideoPacket(input, codecId, packetType, frameType, payloadSize, ctsOffset)
             else -> input.skipFully(payloadSize)
         }
     }
@@ -160,7 +172,8 @@ class FlvHevcExtractor : Extractor {
         codecId: Int,
         packetType: Int,
         frameType: Int,
-        payloadSize: Int
+        payloadSize: Int,
+        ctsOffset: Int
     ) {
         if (payloadSize <= 0) return
 
@@ -183,7 +196,8 @@ class FlvHevcExtractor : Extractor {
                 if (annexB.isNotEmpty()) {
                     track.sampleData(ParsableByteArray(annexB), annexB.size)
                     val flags = if (frameType == 1) C.BUFFER_FLAG_KEY_FRAME else 0
-                    track.sampleMetadata(tagTimestampUs, flags, annexB.size, 0, null)
+                    val ptsUs = tagTimestampUs + ctsOffset * 1000L
+                    track.sampleMetadata(ptsUs, flags, annexB.size, 0, null)
                 }
             }
 

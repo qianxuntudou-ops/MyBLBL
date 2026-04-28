@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -45,6 +46,8 @@ class MyPlayerDanmakuController(
         private const val SMART_FILTER_LEVEL_MAX = 10
         private const val LIVE_THROTTLE_WINDOW_MS = 100L
         private const val LIVE_THROTTLE_MAX_ITEMS = 30
+        private const val LIVE_MERGE_BUFFER_MS = 800L
+        private const val LIVE_DENSITY_TRACK_MS = 5000L
     }
 
     data class SettingsSnapshot(
@@ -70,7 +73,12 @@ class MyPlayerDanmakuController(
     private var liveEngineStarted = false
     private var liveThrottleWindowStart = 0L
     private var liveThrottleCount = 0
+    private val liveMergeBuffer = mutableMapOf<MergeDuplicateKey, LiveMergeEntry>()
+    private val liveSentTimestamps = ArrayDeque<Long>()
+    private var liveFlushJob: Job? = null
+    private var liveDanmakuIdCounter = 0L
     private var mergeDuplicate = true
+    private var screenPart = 1.0f
     private var smartFilterLevel = SMART_FILTER_LEVEL_OFF
     private var lastSettingsSnapshot: SettingsSnapshot? = null
     private var rawDanmakuSignature: Long = 0L
@@ -99,7 +107,7 @@ class MyPlayerDanmakuController(
             val filteredData = sortedData
                 .applySmartFilter(level = smartFilterLevel, stage = "full")
             val preparedData = filteredData
-                .mergeDuplicateDanmaku(mergeDuplicate)
+                .mergeDuplicateDanmaku(mergeDuplicate, screenPart)
                 .mapIndexedNotNull { index, item ->
                     item.toDanmakuItemData(index.toLong(), allowVipColorful)
                 }
@@ -205,10 +213,102 @@ class MyPlayerDanmakuController(
             player.start(danmakuConfig)
             liveEngineStarted = true
         }
+
+        flushExpiredLiveEntries()
+
+        val key = MergeDuplicateKey(
+            content = dm.content.trim().lowercase(),
+            mode = dm.mode,
+            color = dm.color,
+            colorful = dm.colorful,
+            colorfulSrc = dm.colorfulSrc.trim()
+        )
+        val existing = liveMergeBuffer[key]
+        if (existing != null && now - existing.createdAt <= LIVE_MERGE_BUFFER_MS) {
+            existing.count++
+        } else {
+            liveMergeBuffer[key] = LiveMergeEntry(
+                firstItem = dm,
+                count = 1,
+                createdAt = now
+            )
+        }
+        scheduleLiveFlush()
+    }
+
+    private fun flushExpiredLiveEntries() {
+        val now = SystemClock.uptimeMillis()
+        pruneLiveSentTimestamps(now)
+
+        val effectiveThreshold = max(3, (baseThreshold() * screenPart).toInt())
+        val bufferTotal = liveMergeBuffer.values.sumOf { it.count }
+
+        val expiredKeys = mutableListOf<MergeDuplicateKey>()
+        for ((key, entry) in liveMergeBuffer) {
+            if (now - entry.createdAt < LIVE_MERGE_BUFFER_MS) continue
+            expiredKeys.add(key)
+            val N = entry.count
+            val other = liveSentTimestamps.size + bufferTotal - N
+            val budget = effectiveThreshold - other
+            sendMergedLiveItems(entry.firstItem, N, budget)
+        }
+        expiredKeys.forEach { liveMergeBuffer.remove(it) }
+    }
+
+    private fun flushAllLiveEntries() {
+        val now = SystemClock.uptimeMillis()
+        pruneLiveSentTimestamps(now)
+
+        val effectiveThreshold = max(3, (baseThreshold() * screenPart).toInt())
+        val bufferTotal = liveMergeBuffer.values.sumOf { it.count }
+
+        for ((_, entry) in liveMergeBuffer) {
+            val N = entry.count
+            val other = liveSentTimestamps.size + bufferTotal - N
+            val budget = effectiveThreshold - other
+            sendMergedLiveItems(entry.firstItem, N, budget)
+        }
+        liveMergeBuffer.clear()
+    }
+
+    private fun sendMergedLiveItems(firstItem: DmModel, N: Int, budget: Int) {
+        val player = danmakuPlayer ?: return
+        val now = SystemClock.uptimeMillis()
+        when {
+            N <= 1 || N <= budget -> {
+                repeat(N) {
+                    doSendLiveDanmaku(firstItem, player)
+                    liveSentTimestamps.add(now)
+                }
+            }
+            budget >= 1 -> {
+                repeat(budget - 1) {
+                    doSendLiveDanmaku(firstItem, player)
+                    liveSentTimestamps.add(now)
+                }
+                val merged = firstItem.copy(
+                    content = "${firstItem.content} ×${N - budget + 1}",
+                    fontSize = max(firstItem.fontSize, 12) + 2
+                )
+                doSendLiveDanmaku(merged, player)
+                liveSentTimestamps.add(now)
+            }
+            else -> {
+                val merged = firstItem.copy(
+                    content = "${firstItem.content} ×$N",
+                    fontSize = max(firstItem.fontSize, 12) + 2
+                )
+                doSendLiveDanmaku(merged, player)
+                liveSentTimestamps.add(now)
+            }
+        }
+    }
+
+    private fun doSendLiveDanmaku(dm: DmModel, player: DanmakuPlayer) {
         val currentTime = player.getCurrentTimeMs()
         val color = dm.color.toDanmakuColor(isVipColorfulDanmakuAllowed())
         val data = DanmakuItemData(
-            danmakuId = dm.id.takeIf { it > 0L } ?: System.currentTimeMillis(),
+            danmakuId = ++liveDanmakuIdCounter,
             position = currentTime.coerceAtLeast(0L),
             content = dm.content,
             mode = DanmakuItemData.DANMAKU_MODE_ROLLING,
@@ -219,6 +319,21 @@ class MyPlayerDanmakuController(
             vipGradientStyle = DanmakuVipGradientStyle.NONE
         )
         player.send(data)
+    }
+
+    private fun scheduleLiveFlush() {
+        if (liveMergeBuffer.isEmpty()) return
+        liveFlushJob?.cancel()
+        liveFlushJob = controllerScope.launch(Dispatchers.Main) {
+            delay(LIVE_MERGE_BUFFER_MS)
+            flushExpiredLiveEntries()
+        }
+    }
+
+    private fun pruneLiveSentTimestamps(now: Long) {
+        while (liveSentTimestamps.isNotEmpty() && now - liveSentTimestamps.first() > LIVE_DENSITY_TRACK_MS) {
+            liveSentTimestamps.removeFirst()
+        }
     }
 
     /**
@@ -255,7 +370,8 @@ class MyPlayerDanmakuController(
         updateConfig(newConfig)
         updatePreparationOptions(
             mergeDuplicateEnabled = snapshot.mergeDuplicate,
-            smartFilterLevel = normalizedSmartFilterLevel
+            smartFilterLevel = normalizedSmartFilterLevel,
+            screenPartValue = snapshot.screenArea.toDanmakuScreenPart()
         )
     }
 
@@ -303,6 +419,9 @@ class MyPlayerDanmakuController(
         isDanmakuPaused = false
         liveEngineStarted = false
         liveThrottleCount = 0
+        liveFlushJob?.cancel()
+        liveMergeBuffer.clear()
+        liveSentTimestamps.clear()
         danmakuPositionMs = 0L
         danmakuPlayer?.setLiveMode(false)
         danmakuPlayer?.stop()
@@ -333,6 +452,9 @@ class MyPlayerDanmakuController(
     fun release() {
         prepareJob?.cancel()
         preloadTextureJob?.cancel()
+        liveFlushJob?.cancel()
+        liveMergeBuffer.clear()
+        liveSentTimestamps.clear()
         controllerScope.cancel()
         releasePlayer()
     }
@@ -345,7 +467,7 @@ class MyPlayerDanmakuController(
             val filteredData = rawDanmakuData
                 .applySmartFilter(level = smartFilterLevel, stage = "full")
             val preparedData = filteredData
-                .mergeDuplicateDanmaku(mergeDuplicate)
+                .mergeDuplicateDanmaku(mergeDuplicate, screenPart)
                 .mapIndexedNotNull { index, item ->
                     item.toDanmakuItemData(index.toLong(), allowVipColorful)
                 }
@@ -446,11 +568,8 @@ class MyPlayerDanmakuController(
             val startIndex = danmakuData.size.toLong()
             val filteredData = data
                 .applySmartFilter(level = smartFilterLevel, stage = "append")
-            val processedData = if (enableMerge) {
-                filteredData.mergeDuplicateDanmaku(enabled = true)
-            } else {
-                filteredData
-            }
+            val processedData = filteredData
+                .mergeDuplicateDanmaku(enabled = enableMerge, part = screenPart)
             val preparedData = processedData
                 .mapIndexedNotNull { index, item ->
                     item.toDanmakuItemData(startIndex + index, allowVipColorful)
@@ -510,12 +629,14 @@ class MyPlayerDanmakuController(
         }
     }
 
-    private fun updatePreparationOptions(mergeDuplicateEnabled: Boolean, smartFilterLevel: Int) {
+    private fun updatePreparationOptions(mergeDuplicateEnabled: Boolean, smartFilterLevel: Int, screenPartValue: Float) {
         val mergeChanged = mergeDuplicate != mergeDuplicateEnabled
         val smartFilterChanged = this.smartFilterLevel != smartFilterLevel
+        val screenPartChanged = screenPart != screenPartValue
         mergeDuplicate = mergeDuplicateEnabled
+        screenPart = screenPartValue
         this.smartFilterLevel = smartFilterLevel
-        if ((mergeChanged || smartFilterChanged) && rawDanmakuData.isNotEmpty()) {
+        if ((mergeChanged || smartFilterChanged || screenPartChanged) && rawDanmakuData.isNotEmpty()) {
             rebuildAndApplyData()
         }
     }
@@ -640,17 +761,25 @@ class MyPlayerDanmakuController(
         return context.isVipColorfulDanmakuAllowed()
     }
 
+    private fun baseThreshold(): Int {
+        val screenWidth = context.resources.displayMetrics.widthPixels
+        return (screenWidth / 1080f * 40).toInt().coerceIn(30, 100)
+    }
+
     private fun hasPreparedData(): Boolean {
         if (rawDanmakuData.isEmpty()) return false
         return danmakuData.isNotEmpty()
     }
 
-    private fun List<DmModel>.mergeDuplicateDanmaku(enabled: Boolean): List<DmModel> {
+    private fun List<DmModel>.mergeDuplicateDanmaku(enabled: Boolean, part: Float): List<DmModel> {
         if (!enabled || isEmpty()) return this
 
-        val firstIndexByContent = HashMap<MergeDuplicateKey, Int>()
-        val mergeCount = IntArray(size)
-        val removed = BooleanArray(size)
+        val effectiveThreshold = max(3, (baseThreshold() * part).toInt())
+
+        // First pass: identify merge groups
+        val firstIndexByKey = HashMap<MergeDuplicateKey, Int>()
+        val groupIdOf = IntArray(size) { -1 }
+        val groups = mutableListOf<MergeGroup>()
 
         for (i in indices) {
             val item = this[i]
@@ -661,27 +790,61 @@ class MyPlayerDanmakuController(
                 colorful = item.colorful,
                 colorfulSrc = item.colorfulSrc.trim()
             )
-            val existingIndex = firstIndexByContent[key]
-            if (existingIndex != null &&
-                item.progress - this[existingIndex].progress <= MERGE_DUPLICATE_WINDOW_MS
+            val firstIdx = firstIndexByKey[key]
+            if (firstIdx != null &&
+                item.progress - this[firstIdx].progress <= MERGE_DUPLICATE_WINDOW_MS
             ) {
-                mergeCount[existingIndex]++
-                removed[i] = true
+                groupIdOf[i] = groupIdOf[firstIdx]
+                groups[groupIdOf[i]].count++
             } else {
-                firstIndexByContent[key] = i
+                firstIndexByKey[key] = i
+                val gid = groups.size
+                groupIdOf[i] = gid
+                groups.add(MergeGroup(firstIndex = i, count = 1))
             }
         }
 
+        // Second pass: compute density and decide merge strategy per group
+        for (group in groups) {
+            if (group.count < 2) continue
+            val windowStart = this[group.firstIndex].progress.toLong()
+            val windowEnd = windowStart + MERGE_DUPLICATE_WINDOW_MS
+            val total = countInRange(windowStart, windowEnd)
+            val other = total - group.count
+            val budget = effectiveThreshold - other
+            when {
+                group.count <= budget -> {
+                    group.standaloneCount = group.count
+                    group.mergedCount = 0
+                }
+                budget >= 1 -> {
+                    group.standaloneCount = budget - 1
+                    group.mergedCount = group.count - budget + 1
+                }
+                else -> {
+                    group.standaloneCount = 0
+                    group.mergedCount = group.count
+                }
+            }
+        }
+
+        // Third pass: generate output
+        val emitted = IntArray(groups.size)
         return mapIndexedNotNull { index, item ->
-            if (removed[index]) return@mapIndexedNotNull null
-            val count = mergeCount[index] + 1
-            if (count >= MERGE_DUPLICATE_MIN_COUNT) {
-                item.copy(
-                    content = "${item.content} ×$count",
-                    fontSize = max(item.fontSize, 12) + 2
-                )
-            } else {
-                item
+            val gid = groupIdOf[index]
+            val group = groups[gid]
+            if (group.count < 2 || group.mergedCount == 0) return@mapIndexedNotNull item
+            val e = emitted[gid]++
+            when {
+                e < group.standaloneCount -> item
+                e == group.standaloneCount -> {
+                    val src = this[group.firstIndex]
+                    item.copy(
+                        content = "${src.content} ×${group.mergedCount}",
+                        fontSize = max(item.fontSize, 12) + 2
+                    )
+                }
+                else -> null
             }
         }
     }
@@ -716,6 +879,45 @@ class MyPlayerDanmakuController(
         val colorful: Int,
         val colorfulSrc: String
     )
+
+    private data class MergeGroup(
+        val firstIndex: Int,
+        var count: Int,
+        var standaloneCount: Int = 0,
+        var mergedCount: Int = 0
+    )
+
+    private data class LiveMergeEntry(
+        val firstItem: DmModel,
+        var count: Int,
+        val createdAt: Long
+    )
+
+    private fun List<DmModel>.countInRange(startMs: Long, endMs: Long): Int {
+        val from = lowerBoundProgress(startMs)
+        if (from >= size) return 0
+        return upperBoundProgress(endMs) - from
+    }
+
+    private fun List<DmModel>.lowerBoundProgress(target: Long): Int {
+        var lo = 0
+        var hi = size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (this[mid].progress.toLong() < target) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    private fun List<DmModel>.upperBoundProgress(target: Long): Int {
+        var lo = 0
+        var hi = size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (this[mid].progress.toLong() <= target) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
 
     private fun DmModel.toDanmakuItemData(index: Long, allowVipColorful: Boolean): DanmakuItemData? {
         val renderContent = toRenderableContent() ?: return null

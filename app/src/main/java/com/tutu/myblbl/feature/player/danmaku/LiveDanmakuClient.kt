@@ -40,6 +40,8 @@ class LiveDanmakuClient(
 
     private var webSocket: WebSocket? = null
     private var heartbeatJob: Job? = null
+    @Volatile
+    private var disposed = false
     private val scope = CoroutineScope(ioDispatcher + SupervisorJob())
 
     private val _danmakuMessages = MutableSharedFlow<LiveDanmakuMessage>(extraBufferCapacity = 64)
@@ -59,6 +61,7 @@ class LiveDanmakuClient(
         hostList: List<ChatHostUrlModel> = emptyList()
     ) {
         disconnect()
+        disposed = false
         _connectionState.value = ConnectionState.CONNECTING
         AppLog.d(TAG, "connect: roomId=$roomId uid=$uid")
 
@@ -104,6 +107,7 @@ class LiveDanmakuClient(
 
     fun disconnect() {
         stopHeartbeat()
+        disposed = true
         webSocket?.close(1000, "disconnect")
         webSocket = null
         _connectionState.value = ConnectionState.DISCONNECTED
@@ -151,6 +155,7 @@ class LiveDanmakuClient(
     private var packetCount = 0
 
     private fun handleBinaryMessage(data: ByteArray) {
+        if (disposed) return
         try {
             packetCount++
             val packets = parsePackets(data)
@@ -217,8 +222,8 @@ class LiveDanmakuClient(
                 if (info.length() < 2) return
                 val content = info.optString(1) ?: return
                 val info0 = info.optJSONArray(0)
-                // info[0]: [dmid, progress, mode, fontsize, color, timestamp, pool, dmidStr, userHash]
-                val color = info0?.optInt(4) ?: 0xFFFFFF
+                // info[0]: [rand, mode, fontsize, color, timestamp, pool, dmidStr, userHash]
+                val color = info0?.optInt(3) ?: 0xFFFFFF
                 AppLog.d(TAG, "DANMU: $content color=$color")
                 val emitted = _danmakuMessages.tryEmit(
                     LiveDanmakuMessage(

@@ -100,6 +100,7 @@ class LiveRepository(
 
     suspend fun getLiveRecommend(): Result<LiveListWrapper> {
         return runCatching {
+            sessionGateway.prewarmWebSession()
             val response = apiService.getLiveHomeList()
             if (response.code == 0 && response.data != null) {
                 response.data
@@ -115,6 +116,7 @@ class LiveRepository(
         page: Int
     ): Result<LiveRoomPage> {
         return runCatching {
+            sessionGateway.prewarmWebSession()
             val params = buildWbiParams(
                 mapOf(
                     "platform" to "web",
@@ -136,6 +138,7 @@ class LiveRepository(
 
     suspend fun getLiveAreas(): Result<List<LiveAreaCategoryParent>> {
         return runCatching {
+            sessionGateway.prewarmWebSession()
             val response = apiService.getWebAreaList()
             if (response.code == 0 && response.data?.data != null) {
                 response.data.data

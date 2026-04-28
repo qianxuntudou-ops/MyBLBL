@@ -29,6 +29,7 @@ import com.tutu.myblbl.model.search.SearchCategoryItem
 import com.tutu.myblbl.model.search.SearchType
 import com.tutu.myblbl.model.search.SearchVideoOrder
 import com.tutu.myblbl.ui.activity.LivePlayerActivity
+import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.ui.base.BaseFragment
 import com.tutu.myblbl.ui.fragment.main.MainTabFocusTarget
 import com.tutu.myblbl.feature.detail.UserSpaceFragment
@@ -374,12 +375,22 @@ class SearchNewFragment :
         }
 
         currentKeyword = normalized
-        pendingHistoryKeyword = normalized
+        pendingHistoryKeyword = null
         pendingResultFocus = true
         updateEditText(normalized, triggerSuggest = false)
         binding.textResultKeyword.text = normalized
         showResultPanel()
         resultPagerAdapter.clearResults()
+
+        if (ContentFilter.isSearchKeywordBlocked(requireContext(), normalized)) {
+            resultPagerAdapter.setPages(emptyList())
+            binding.tabSearchResult.isVisible = false
+            binding.viewPagerResult.isVisible = false
+            binding.textSearchEmpty.isVisible = true
+            return
+        }
+
+        pendingHistoryKeyword = normalized
         viewModel.searchAll(normalized)
     }
 

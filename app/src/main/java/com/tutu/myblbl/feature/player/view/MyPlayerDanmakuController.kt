@@ -48,6 +48,13 @@ class MyPlayerDanmakuController(
         private const val LIVE_THROTTLE_MAX_ITEMS = 30
         private const val LIVE_MERGE_BUFFER_MS = 800L
         private const val LIVE_DENSITY_TRACK_MS = 5000L
+        private const val BATCH_INSERT_SIZE = 100
+        private const val BATCH_INSERT_DELAY_MS = 33L
+        private const val INITIAL_WINDOW_BEHIND_MS = 5_000L
+        private const val INITIAL_WINDOW_AHEAD_MS = 20_000L
+        private const val PROGRESSIVE_START_DELAY_MS = 2000L
+        private const val PROGRESSIVE_BATCH_SIZE = 100
+        private const val PROGRESSIVE_BATCH_DELAY_MS = 200L
     }
 
     data class SettingsSnapshot(
@@ -66,7 +73,7 @@ class MyPlayerDanmakuController(
     private var danmakuPlayer: DanmakuPlayer? = null
     private var danmakuConfig = DanmakuConfig(dataFilter = listOf(TypeFilter()))
     private var danmakuData: List<DanmakuItemData> = emptyList()
-    private var rawDanmakuData: List<DmModel> = emptyList()
+    private var rawDanmakuData: MutableList<DmModel> = mutableListOf()
     private var danmakuPositionMs: Long = 0L
     private var isDanmakuStarted = false
     private var isDanmakuPaused = false
@@ -90,6 +97,7 @@ class MyPlayerDanmakuController(
     private val controllerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var prepareJob: Job? = null
     private var preloadTextureJob: Job? = null
+    private var progressiveJob: Job? = null
     private var prepareGeneration: Long = 0L
 
     fun setData(
@@ -99,20 +107,23 @@ class MyPlayerDanmakuController(
     ) {
         prepareJob?.cancel()
         val generation = ++prepareGeneration
-        val input = data.toList()
         prepareJob = controllerScope.launch {
-            val sortedData = input.sortedBy { it.progress }
+            val sortedData = data.sortedBy { it.progress }
             val rawSignature = sortedData.fastRawSignature()
             val allowVipColorful = isVipColorfulDanmakuAllowed()
-            val filteredData = sortedData
+            val preparedData = sortedData
                 .applySmartFilter(level = smartFilterLevel, stage = "full")
-            val preparedData = filteredData
                 .mergeDuplicateDanmaku(mergeDuplicate, screenPart)
                 .mapIndexedNotNull { index, item ->
                     item.toDanmakuItemData(index.toLong(), allowVipColorful)
                 }
             val preparedSignature = preparedData.fastPreparedSignature()
-            val textureStyles = preparedData.map { it.vipGradientStyle }.filter { it.hasTexture }
+            val textureStyles = ArrayList<DanmakuVipGradientStyle>(preparedData.size)
+            for (item in preparedData) {
+                if (item.vipGradientStyle.hasTexture) {
+                    textureStyles.add(item.vipGradientStyle)
+                }
+            }
             scheduleVipTexturePreload(
                 styles = textureStyles,
                 generation = generation
@@ -129,7 +140,7 @@ class MyPlayerDanmakuController(
                 ) {
                     return@withContext
                 }
-                rawDanmakuData = sortedData
+                rawDanmakuData = sortedData.toMutableList()
                 rawDanmakuSignature = rawSignature
                 rawDanmakuCount = sortedData.size
                 syncSnapshotPosition()
@@ -138,8 +149,7 @@ class MyPlayerDanmakuController(
                 preparedDanmakuCount = preparedData.size
                 val existingPlayer = danmakuPlayer
                 if (existingPlayer != null) {
-                    existingPlayer.clearData()
-                    existingPlayer.updateData(danmakuData)
+                    injectWindowedData(existingPlayer, danmakuData, danmakuPositionMs, generation)
                     if (danmakuPositionMs > 0L) {
                         seekPlayerTo(
                             player = existingPlayer,
@@ -168,11 +178,7 @@ class MyPlayerDanmakuController(
             return
         }
         val sortedData = data.sortedBy { it.progress }
-        rawDanmakuData = if (rawDanmakuData.isEmpty()) {
-            sortedData
-        } else {
-            rawDanmakuData + sortedData
-        }
+        rawDanmakuData.addAll(sortedData)
         rawDanmakuCount = rawDanmakuData.size
         rawDanmakuSignature = rawDanmakuData.fastRawSignature()
         appendPreparedData(sortedData, enableMerge = mergeDuplicate)
@@ -420,6 +426,7 @@ class MyPlayerDanmakuController(
         liveEngineStarted = false
         liveThrottleCount = 0
         liveFlushJob?.cancel()
+        progressiveJob?.cancel()
         liveMergeBuffer.clear()
         liveSentTimestamps.clear()
         danmakuPositionMs = 0L
@@ -452,6 +459,7 @@ class MyPlayerDanmakuController(
     fun release() {
         prepareJob?.cancel()
         preloadTextureJob?.cancel()
+        progressiveJob?.cancel()
         liveFlushJob?.cancel()
         liveMergeBuffer.clear()
         liveSentTimestamps.clear()
@@ -462,7 +470,10 @@ class MyPlayerDanmakuController(
     private fun rebuildAndApplyData() {
         prepareJob?.cancel()
         val generation = ++prepareGeneration
+        val capturedGeneration = generation
         prepareJob = controllerScope.launch {
+            delay(200L)
+            if (prepareGeneration != capturedGeneration) return@launch
             val allowVipColorful = isVipColorfulDanmakuAllowed()
             val filteredData = rawDanmakuData
                 .applySmartFilter(level = smartFilterLevel, stage = "full")
@@ -471,8 +482,14 @@ class MyPlayerDanmakuController(
                 .mapIndexedNotNull { index, item ->
                     item.toDanmakuItemData(index.toLong(), allowVipColorful)
                 }
+            val rebuildTextureStyles = ArrayList<DanmakuVipGradientStyle>(preparedData.size)
+            for (item in preparedData) {
+                if (item.vipGradientStyle.hasTexture) {
+                    rebuildTextureStyles.add(item.vipGradientStyle)
+                }
+            }
             scheduleVipTexturePreload(
-                styles = preparedData.map { it.vipGradientStyle }.filter { it.hasTexture },
+                styles = rebuildTextureStyles,
                 generation = generation
             )
             withContext(Dispatchers.Main.immediate) {
@@ -492,8 +509,7 @@ class MyPlayerDanmakuController(
                 preparedDanmakuCount = preparedData.size
                 val existingPlayer = danmakuPlayer
                 if (existingPlayer != null) {
-                    existingPlayer.clearData()
-                    existingPlayer.updateData(danmakuData)
+                    injectWindowedData(existingPlayer, danmakuData, danmakuPositionMs, generation)
                     if (danmakuPositionMs > 0L) {
                         seekPlayerTo(
                             player = existingPlayer,
@@ -538,7 +554,7 @@ class MyPlayerDanmakuController(
                 player.notifyDisplayerSizeChanged(viewWidth, viewHeight)
             }
             if (danmakuData.isNotEmpty()) {
-                player.updateData(danmakuData)
+                injectWindowedData(player, danmakuData, danmakuPositionMs, prepareGeneration)
             }
             if (danmakuPositionMs > 0L) {
                 seekPlayerTo(
@@ -587,9 +603,106 @@ class MyPlayerDanmakuController(
                 preparedDanmakuSignature = danmakuData.fastPreparedSignature()
                 preparedDanmakuCount = danmakuData.size
                 ensurePlayer()
-                danmakuPlayer?.updateData(preparedData)
+                val player = danmakuPlayer
+                if (player != null && preparedData.size > BATCH_INSERT_SIZE) {
+                    scheduleBatchUpdate(player, preparedData, generation)
+                } else {
+                    danmakuPlayer?.updateData(preparedData)
+                }
             }
         }
+    }
+
+    /**
+     * 将弹幕数据分批灌入引擎，每批 [BATCH_INSERT_SIZE] 条，间隔 [BATCH_INSERT_DELAY_MS]，
+     * 避免单帧处理大量弹幕导致主线程冻结。
+     * 数据已按 position 排序，前几批优先覆盖当前播放位置附近的弹幕。
+     */
+    private fun scheduleBatchUpdate(
+        player: com.kuaishou.akdanmaku.ui.DanmakuPlayer,
+        data: List<com.kuaishou.akdanmaku.data.DanmakuItemData>,
+        generation: Long
+    ) {
+        val batches = data.chunked(BATCH_INSERT_SIZE)
+        batches.forEachIndexed { index, batch ->
+            controllerScope.launch {
+                if (index > 0) delay(BATCH_INSERT_DELAY_MS)
+                withContext(Dispatchers.Main.immediate) {
+                    if (prepareGeneration != generation) return@withContext
+                    player.updateData(batch)
+                }
+            }
+        }
+    }
+
+    /**
+     * 初始注入当前播放位置附近的弹幕（时间窗口内），剩余弹幕延迟分批注入，
+     * 避免首帧一次性处理大量弹幕导致卡顿。
+     */
+    private fun injectWindowedData(
+        player: DanmakuPlayer,
+        allData: List<DanmakuItemData>,
+        positionMs: Long,
+        generation: Long
+    ) {
+        progressiveJob?.cancel()
+        player.clearData()
+        if (allData.isEmpty()) return
+
+        if (allData.size <= BATCH_INSERT_SIZE) {
+            player.updateData(allData)
+            return
+        }
+
+        val windowStart = (positionMs - INITIAL_WINDOW_BEHIND_MS).coerceAtLeast(0L)
+        val windowEnd = positionMs + INITIAL_WINDOW_AHEAD_MS
+        val startIdx = allData.lowerBoundPosition(windowStart)
+        val endIdx = allData.upperBoundPosition(windowEnd)
+
+        if (startIdx < endIdx) {
+            player.updateData(allData.subList(startIdx, endIdx))
+        }
+
+        val remaining = ArrayList<DanmakuItemData>(allData.size - (endIdx - startIdx))
+        for (i in endIdx until allData.size) remaining.add(allData[i])
+        for (i in 0 until startIdx) remaining.add(allData[i])
+        if (remaining.isEmpty()) return
+
+        progressiveJob = controllerScope.launch {
+            delay(PROGRESSIVE_START_DELAY_MS)
+            if (prepareGeneration != generation) return@launch
+            val batches = remaining.chunked(PROGRESSIVE_BATCH_SIZE)
+            for ((index, batch) in batches.withIndex()) {
+                if (prepareGeneration != generation) return@launch
+                withContext(Dispatchers.Main.immediate) {
+                    if (prepareGeneration != generation) return@withContext
+                    player.updateData(batch)
+                }
+                if (index < batches.lastIndex) {
+                    delay(PROGRESSIVE_BATCH_DELAY_MS)
+                }
+            }
+        }
+    }
+
+    private fun List<DanmakuItemData>.lowerBoundPosition(target: Long): Int {
+        var lo = 0
+        var hi = size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (this[mid].position < target) lo = mid + 1 else hi = mid
+        }
+        return lo
+    }
+
+    private fun List<DanmakuItemData>.upperBoundPosition(target: Long): Int {
+        var lo = 0
+        var hi = size
+        while (lo < hi) {
+            val mid = (lo + hi) ushr 1
+            if (this[mid].position <= target) lo = mid + 1 else hi = mid
+        }
+        return lo
     }
 
     private fun syncSnapshotPosition() {
@@ -854,17 +967,18 @@ class MyPlayerDanmakuController(
         if (normalizedLevel == SMART_FILTER_LEVEL_OFF || isEmpty()) {
             return this
         }
-        val maxPositiveScore = asSequence()
-            .map { it.aiFlagScore }
-            .filter { it > 0 }
-            .maxOrNull()
-            ?: return this
+        var maxPositiveScore = 0
+        for (item in this) {
+            if (item.aiFlagScore > maxPositiveScore) {
+                maxPositiveScore = item.aiFlagScore
+            }
+        }
+        if (maxPositiveScore == 0) return this
         val threshold = resolveSmartFilterThreshold(normalizedLevel, maxPositiveScore)
-        val filtered = filter { item ->
+        return filter { item ->
             val score = item.aiFlagScore
             score <= 0 || score < threshold
         }
-        return filtered
     }
 
     private fun resolveSmartFilterThreshold(level: Int, maxPositiveScore: Int): Int {

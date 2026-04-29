@@ -18,6 +18,7 @@ import com.tutu.myblbl.model.player.SupportFormat
 import com.tutu.myblbl.model.video.quality.AudioQuality
 import com.tutu.myblbl.model.video.quality.VideoCodecEnum
 import com.tutu.myblbl.model.video.quality.VideoQuality
+import com.tutu.myblbl.core.common.log.AppLog
 import kotlin.math.roundToLong
 
 @OptIn(UnstableApi::class)
@@ -27,6 +28,7 @@ internal class VideoPlayerStreamResolver(
 ) {
 
     companion object {
+        private const val TAG = "StreamResolver"
     }
 
     // Centralizes stream fallback rules so the ViewModel only coordinates state and side effects.
@@ -100,6 +102,9 @@ internal class VideoPlayerStreamResolver(
         val selectedAudio = buildAudioTracks(playInfo)
             .firstOrNull { it.id == selectedAudioId }
             ?: buildAudioTracks(playInfo).maxByOrNull { it.bandwidth }
+        AppLog.i(TAG, "audio track selected: id=${selectedAudio?.id} name=${AudioQuality.fromId(selectedAudio?.id ?: 0).name} " +
+            "mimeType=${selectedAudio?.realMimeType} codecs=${selectedAudio?.codecs} bandwidth=${selectedAudio?.bandwidth} " +
+            "requestedId=$selectedAudioId fallback=${selectedAudio?.id != selectedAudioId}")
         val audioUrls = selectedAudio
             ?.let { CdnLatencyProfile.sortUrlsByLatency(buildDistinctUrls(it.realBaseUrl, it.realBackupUrl)) }
             .orEmpty()
@@ -272,6 +277,7 @@ internal class VideoPlayerStreamResolver(
                 )
             }
             .sortedByDescending { it.bandwidth }
+            .also { AppLog.i(TAG, "available audio tracks: ${it.map { a -> "${a.name}(id=${a.id},codec=${a.codecId},bw=${a.bandwidth})" }}") }
     }
 
     fun buildCodecList(
@@ -317,6 +323,8 @@ internal class VideoPlayerStreamResolver(
             val selectedAudio = buildAudioTracks(playInfo)
                 .firstOrNull { it.id == selectedAudioId }
                 ?: buildAudioTracks(playInfo).maxByOrNull { it.bandwidth }
+            AppLog.i(TAG, "buildMediaSource audio: id=${selectedAudio?.id} mimeType=${selectedAudio?.realMimeType} " +
+                "codecs=${selectedAudio?.codecs} bandwidth=${selectedAudio?.bandwidth}")
             val videoUrls = CdnLatencyProfile.sortUrlsByLatency(
                 buildDistinctUrls(
                     primaryUrl = selectedVideo.realBaseUrl,
@@ -636,8 +644,8 @@ internal class VideoPlayerStreamResolver(
         val source = createProgressivePairSource(
             videoUrls = normalizedVideoUrls,
             audioUrls = normalizedAudioUrls,
-            videoMimeType = videoMimeType,
-            audioMimeType = audioMimeType
+            videoMimeType = videoMimeType.ifBlank { "video/mp4" },
+            audioMimeType = audioMimeType.ifBlank { "audio/mp4" }
         )
         return source
     }

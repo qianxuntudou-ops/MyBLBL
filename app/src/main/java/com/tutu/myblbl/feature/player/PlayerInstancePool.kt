@@ -4,17 +4,28 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
 
+@UnstableApi
 object PlayerInstancePool {
     private const val TAG = "PlayerInstancePool"
     private const val IDLE_RELEASE_DELAY_MS = 45_000L
-    private const val MIN_BUFFER_MS = 3_000
-    private const val MAX_BUFFER_MS = 12_000
-    private const val BUFFER_FOR_PLAYBACK_MS = 100
-    private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 500
-    private const val TARGET_BUFFER_BYTES = 10 * 1024 * 1024 // 10MB
+    private const val MIN_BUFFER_MS = 8_000
+    private const val MAX_BUFFER_MS = 30_000
+    private const val BUFFER_FOR_PLAYBACK_MS = 1_500
+    private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 2_000
+    private const val TARGET_BUFFER_BYTES = 20 * 1024 * 1024 // 20MB
+
+    // PCM AudioTrack 缓冲：从默认 250-750ms 提升到 500-1500ms，抵御低端设备 CPU 抢占
+    private const val MIN_PCM_BUFFER_DURATION_US = 500_000
+    private const val MAX_PCM_BUFFER_DURATION_US = 1_500_000
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -78,7 +89,6 @@ object PlayerInstancePool {
     fun releaseNow(reason: String) {
         cancelPendingRelease()
         isAttached = false
-        cachedPlayer?.let(PlayerAudioNormalizer::release)
         cachedPlayer?.release()
         cachedPlayer = null
     }
@@ -89,7 +99,6 @@ object PlayerInstancePool {
         val releaseRunnable = Runnable {
             synchronized(this) {
                 if (isAttached) return@synchronized
-                cachedPlayer?.let(PlayerAudioNormalizer::release)
                 cachedPlayer?.release()
                 cachedPlayer = null
                 pendingReleaseRunnable = null
@@ -116,7 +125,30 @@ object PlayerInstancePool {
             .setTargetBufferBytes(TARGET_BUFFER_BYTES)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
+        val renderersFactory = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioOutputPlaybackParameters(enableAudioTrackPlaybackParams)
+                    .setAudioOutputProvider(
+                        AudioTrackAudioOutputProvider.Builder(context)
+                            .setAudioTrackBufferSizeProvider(
+                                DefaultAudioTrackBufferSizeProvider.Builder()
+                                    .setMinPcmBufferDurationUs(MIN_PCM_BUFFER_DURATION_US)
+                                    .setMaxPcmBufferDurationUs(MAX_PCM_BUFFER_DURATION_US)
+                                    .build()
+                            )
+                            .build()
+                    )
+                    .build()
+            }
+        }
         return ExoPlayer.Builder(context)
+            .setRenderersFactory(renderersFactory)
             .setLoadControl(loadControl)
             .build()
             .also(PlayerPlaybackPolicy::apply)

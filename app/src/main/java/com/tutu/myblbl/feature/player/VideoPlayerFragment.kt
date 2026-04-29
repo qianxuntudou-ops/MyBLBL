@@ -1011,10 +1011,7 @@ class VideoPlayerFragment : Fragment() {
             return
         }
         val snapshotPosition = currentPlayer.currentPosition
-        currentPlayer.stop()
-        currentPlayer.prepare()
         currentPlayer.seekTo(snapshotPosition.coerceAtLeast(0L))
-        currentPlayer.play()
         playerView.syncDanmakuPosition(snapshotPosition, forceSeek = true)
         progressCoordinator.restart()
     }

@@ -775,6 +775,7 @@ class VideoPlayerViewModel(
         currentPositionMs: Long,
         playWhenReady: Boolean
     ) {
+        AppLog.i(TAG, "selectAudioQuality: id=${quality.id} name=${quality.name} bandwidth=${quality.bandwidth} codecId=${quality.codecId}")
         requestedAudioId = quality.id
         _selectedAudioQuality.value = quality
         savePlayerSnapshot()
@@ -3232,6 +3233,9 @@ class VideoPlayerViewModel(
         selectedQualityId = snapshot.selectedQualityId
         selectedAudioId = snapshot.selectedAudioId
         selectedCodec = snapshot.selectedCodec
+        val audio = snapshot.audios.firstOrNull { it.id == selectedAudioId }
+        AppLog.i(TAG, "applySelection: qualityId=$selectedQualityId audioId=$selectedAudioId " +
+            "audioName=${audio?.name} audioCodecId=${audio?.codecId} audioBandwidth=${audio?.bandwidth} codec=$selectedCodec")
         _qualities.value = snapshot.qualities
         _selectedQuality.value = snapshot.qualities.firstOrNull { it.id == selectedQualityId }
         _audioQualities.value = snapshot.audios

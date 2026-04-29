@@ -186,20 +186,23 @@ open class SimpleRenderer : DanmakuRenderer {
       withAlpha(darkenColor(trailingColor, 0.4f), 100)
     )
 
-    textPaint.shader = LinearGradient(
-      startX,
-      top,
-      startX + textWidth,
-      bottom,
-      intArrayOf(
-        Color.WHITE,
-        lightenColor(leadingColor, 0.55f),
-        leadingColor,
-        trailingColor
-      ),
-      VIP_TEXT_GRADIENT_POSITIONS,
-      Shader.TileMode.CLAMP
-    )
+    val shaderKey = "${leadingColor}_${trailingColor}_${textWidth}_${textHeight}"
+    textPaint.shader = vipShaderCache.getOrPut(shaderKey) {
+      LinearGradient(
+        startX,
+        top,
+        startX + textWidth,
+        bottom,
+        intArrayOf(
+          Color.WHITE,
+          lightenColor(leadingColor, 0.55f),
+          leadingColor,
+          trailingColor
+        ),
+        VIP_TEXT_GRADIENT_POSITIONS,
+        Shader.TileMode.CLAMP
+      )
+    }
     textPaint.setShadowLayer(
       textPaint.textSize * 0.04f,
       0f,
@@ -266,9 +269,12 @@ open class SimpleRenderer : DanmakuRenderer {
     if ((resolved and 0x00FFFFFF) == 0x00FFFFFF) {
       return DEFAULT_VIP_GRADIENT_COLORS
     }
-    return DEFAULT_VIP_GRADIENT_COLORS.map { color ->
-      blendColor(color, resolved, 0.26f)
-    }.toIntArray()
+    vipPaletteCache[resolved]?.let { return it }
+    val result = IntArray(DEFAULT_VIP_GRADIENT_COLORS.size) { i ->
+      blendColor(DEFAULT_VIP_GRADIENT_COLORS[i], resolved, 0.26f)
+    }
+    vipPaletteCache[resolved] = result
+    return result
   }
 
   private fun resolveStandardStrokeColor(textColor: Int): Int {
@@ -349,6 +355,8 @@ open class SimpleRenderer : DanmakuRenderer {
     private const val CANVAS_PADDING: Int = 6
 
     private val sTextHeightCache: MutableMap<Float, Float> = HashMap()
+    private val vipPaletteCache = HashMap<Int, IntArray>()
+    private val vipShaderCache = HashMap<String, LinearGradient>()
 
     private fun getCacheHeight(paint: Paint): Float {
       val textSize = paint.textSize

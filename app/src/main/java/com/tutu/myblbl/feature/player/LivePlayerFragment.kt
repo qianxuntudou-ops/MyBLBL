@@ -167,7 +167,7 @@ class LivePlayerFragment : Fragment() {
             )
             .setDefaultRequestProperties(liveHeaders)
         val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
-            .setBufferDurationsMs(5_000, 50_000, 600, 1200)
+            .setBufferDurationsMs(4_000, 15_000, 800, 1_500)
             .build()
         val extractorsFactory = ExtractorsFactory {
             DefaultExtractorsFactory().createExtractors().map { extractor ->
@@ -180,7 +180,6 @@ class LivePlayerFragment : Fragment() {
             .build()
             .also {
                 PlayerPlaybackPolicy.apply(it)
-                PlayerAudioNormalizer.attach(it)
                 it.addListener(playerListener)
             }
         binding.playerView.setPlayer(player)
@@ -237,7 +236,6 @@ class LivePlayerFragment : Fragment() {
     private fun rebuildPlayer() {
         player?.removeListener(playerListener)
         binding.playerView.stopDanmaku()
-        PlayerAudioNormalizer.release(player)
         player?.release()
         player = null
         setupPlayer()
@@ -348,7 +346,6 @@ class LivePlayerFragment : Fragment() {
         player?.removeListener(playerListener)
         binding.playerView.stopDanmaku()
         binding.playerView.destroy()
-        PlayerAudioNormalizer.release(player)
         player?.release()
         activity?.let { ViewUtils.keepScreenOn(it, false) }
         player = null

@@ -280,7 +280,10 @@ class DanmakuPlayer(renderer: DanmakuRenderer, dataSource: DataSource? = null) {
   }
 
   fun updateData(dataList: List<DanmakuItemData>): List<DanmakuItem> {
-    val items = dataList.map { obtainItem(it) }
+    val items = ArrayList<DanmakuItem>(dataList.size)
+    for (data in dataList) {
+      items.add(obtainItem(data))
+    }
     dataSystem?.addItems(items)
     return items
   }

@@ -13,6 +13,5 @@ internal object PlayerPlaybackPolicy {
             .build()
         player.setAudioAttributes(audioAttributes, true)
         player.setHandleAudioBecomingNoisy(true)
-        PlayerAudioNormalizer.attach(player)
     }
 }

@@ -97,12 +97,12 @@ internal object PlayerAudioNormalizer {
             private const val TAG = "PlayerAudioNormalizer"
             private const val AUDIO_SESSION_ID_UNSET = -1
 
-            private const val INPUT_GAIN_DB = 3.0f
+            private const val INPUT_GAIN_DB = 0.0f
 
             private const val COMPRESSOR_ATTACK_MS = 3.0f
             private const val COMPRESSOR_RELEASE_MS = 80.0f
             private const val COMPRESSOR_RATIO = 3.5f
-            private const val COMPRESSOR_THRESHOLD_DB = -22.0f
+            private const val COMPRESSOR_THRESHOLD_DB = -24.0f
             private const val COMPRESSOR_KNEE_WIDTH_DB = 8.0f
             private const val COMPRESSOR_POST_GAIN_DB = 0.0f
 

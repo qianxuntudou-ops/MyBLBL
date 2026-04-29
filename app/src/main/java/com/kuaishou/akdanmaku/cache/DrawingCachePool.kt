@@ -38,19 +38,35 @@ import com.kuaishou.akdanmaku.ext.AkLog as Log
  */
 class DrawingCachePool(private var maxMemorySize: Int) {
 
-  private val caches = mutableSetOf<DrawingCache>()
+  companion object {
+    private const val BUCKET_SIZE = 16
+  }
 
+  private val caches = mutableSetOf<DrawingCache>()
+  private val bucketMap = mutableMapOf<Long, MutableSet<DrawingCache>>()
   private var memorySize = 0
+
+  private fun bucketKey(width: Int, height: Int): Long {
+    return ((width / BUCKET_SIZE).toLong() shl 32) or (height / BUCKET_SIZE).toLong()
+  }
 
   fun acquire(width: Int, height: Int): DrawingCache? {
     synchronized(this) {
-      return caches.firstOrNull {
-        it.width >= width && it.height >= height &&
-          it.width - width < 5 && it.height - height < 5
-      }?.also {
-        caches.remove(it)
-        memorySize -= it.size
+      val key = bucketKey(width, height)
+      val bucket = bucketMap[key] ?: return null
+      val iter = bucket.iterator()
+      while (iter.hasNext()) {
+        val cache = iter.next()
+        if (cache.width >= width && cache.height >= height &&
+          cache.width - width < 5 && cache.height - height < 5
+        ) {
+          iter.remove()
+          caches.remove(cache)
+          memorySize -= cache.size
+          return cache
+        }
       }
+      return null
     }
   }
 
@@ -65,6 +81,8 @@ class DrawingCachePool(private var maxMemorySize: Int) {
         caches.add(cache)
         cache.erase()
         memorySize += cache.size
+        val key = bucketKey(cache.width, cache.height)
+        bucketMap.getOrPut(key) { mutableSetOf() }.add(cache)
       }
       true
     }
@@ -82,6 +100,8 @@ class DrawingCachePool(private var maxMemorySize: Int) {
         .take(maxReleasePerDrain)
       toRelease.forEach { cache ->
         caches.remove(cache)
+        val key = bucketKey(cache.width, cache.height)
+        bucketMap[key]?.remove(cache)
         memorySize -= cache.size
         cache.destroy()
       }
@@ -101,10 +121,11 @@ class DrawingCachePool(private var maxMemorySize: Int) {
     val newSize = DanmakuConfig.computeCachePoolMaxMemorySize(screenWidth, screenHeight)
     synchronized(this) {
       maxMemorySize = newSize
-      // 如果当前已用内存超过新上限，释放多余的缓存
       while (memorySize > maxMemorySize && caches.isNotEmpty()) {
         val cache = caches.first()
         caches.remove(cache)
+        val key = bucketKey(cache.width, cache.height)
+        bucketMap[key]?.remove(cache)
         memorySize -= cache.size
         cache.destroy()
       }
@@ -120,6 +141,7 @@ class DrawingCachePool(private var maxMemorySize: Int) {
     synchronized(this) {
       caches.forEach { it.destroy() }
       caches.clear()
+      bucketMap.clear()
       memorySize = 0
     }
   }

@@ -19,7 +19,7 @@
         android:textSize="@dimen/px36"
         android:textStyle="bold" />
 
-    <ScrollView
+    <com.tutu.myblbl.ui.widget.NonFocusableScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="@dimen/px30"
@@ -34,7 +34,7 @@
             android:text="@string/usage_tip_content"
             android:textColor="?android:attr/textColorSecondary"
             android:textSize="@dimen/px30" />
-    </ScrollView>
+    </com.tutu.myblbl.ui.widget.NonFocusableScrollView>
 
     <androidx.appcompat.widget.AppCompatTextView
         android:id="@+id/button_confirm"

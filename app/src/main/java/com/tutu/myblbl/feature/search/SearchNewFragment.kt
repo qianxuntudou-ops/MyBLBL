@@ -180,10 +180,6 @@ class SearchNewFragment :
     }
 
     private fun setupInput() {
-        binding.buttonSearchBack.setOnClickListener {
-            navigateBackFromUi()
-        }
-
         binding.editText.showSoftInputOnFocus = false
 
         binding.editText.setOnKeyListener { view, keyCode, event ->
@@ -257,6 +253,7 @@ class SearchNewFragment :
     private fun setupKeywordColumns() {
         centerAdapter = SearchSuggestAdapter(
             onItemClick = { keyword -> performSearch(keyword) },
+            onClearHistory = ::clearSearchHistory,
             onLeftEdge = ::focusKeyboardFromSearchColumn,
             onRightEdge = ::focusHotSearchColumn
         )
@@ -480,8 +477,13 @@ class SearchNewFragment :
             centerAdapter.setData(latestSuggests)
             binding.recyclerViewCenter.isVisible = true
         } else {
-            val historyModels = recentSearches.mapIndexed { index, keyword ->
-                HotWordModel.createHistory(keyword, index)
+            val historyModels = buildList {
+                if (recentSearches.isNotEmpty()) {
+                    add(HotWordModel.createClearHistory())
+                }
+                recentSearches.mapIndexedTo(this) { index, keyword ->
+                    HotWordModel.createHistory(keyword, index)
+                }
             }
             centerAdapter.setData(historyModels)
             binding.recyclerViewCenter.isVisible = historyModels.isNotEmpty()
@@ -545,6 +547,12 @@ class SearchNewFragment :
 
     private fun saveRecentSearch(keyword: String) {
         recentSearches = historyStore.save(keyword, recentSearches)
+        syncCenterColumn()
+    }
+
+    private fun clearSearchHistory() {
+        historyStore.clear()
+        recentSearches = emptyList()
         syncCenterColumn()
     }
 

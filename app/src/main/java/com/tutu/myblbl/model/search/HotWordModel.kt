@@ -23,6 +23,7 @@ data class HotWordModel(
     companion object {
         const val HOT_ID_HISTORY = "-1"
         const val HOT_ID_SUGGEST = "0"
+        const val HOT_ID_CLEAR_HISTORY = "-2"
 
         fun createHistory(keyword: String, pos: Int = 0): HotWordModel {
             return HotWordModel(
@@ -42,6 +43,15 @@ data class HotWordModel(
             )
         }
 
+        fun createClearHistory(): HotWordModel {
+            return HotWordModel(
+                keyword = "",
+                showName = "",
+                pos = 0,
+                hotId = HOT_ID_CLEAR_HISTORY
+            )
+        }
+
         fun createHot(keyword: String, showName: String, pos: Int): HotWordModel {
             return HotWordModel(
                 keyword = keyword,
@@ -57,6 +67,9 @@ data class HotWordModel(
 
     val isSuggest: Boolean
         get() = hotId == HOT_ID_SUGGEST && pos == 0
+
+    val isClearHistory: Boolean
+        get() = hotId == HOT_ID_CLEAR_HISTORY
 
     val isHot: Boolean
         get() = hotId != HOT_ID_HISTORY && hotId != HOT_ID_SUGGEST

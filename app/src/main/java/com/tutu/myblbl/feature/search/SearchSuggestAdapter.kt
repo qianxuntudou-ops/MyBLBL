@@ -14,6 +14,7 @@ import com.tutu.myblbl.model.search.HotWordModel
 
 class SearchSuggestAdapter(
     private val onItemClick: (String) -> Unit,
+    private val onClearHistory: (() -> Unit)? = null,
     private val onLeftEdge: ((View) -> Boolean)? = null,
     private val onRightEdge: ((View) -> Boolean)? = null
 ) : ListAdapter<HotWordModel, SearchSuggestAdapter.ViewHolder>(DIFF_CALLBACK) {
@@ -21,7 +22,7 @@ class SearchSuggestAdapter(
     companion object {
         private val DIFF_CALLBACK = object : DiffUtil.ItemCallback<HotWordModel>() {
             override fun areItemsTheSame(oldItem: HotWordModel, newItem: HotWordModel): Boolean {
-                return oldItem.keyword == newItem.keyword
+                return oldItem.keyword == newItem.keyword && oldItem.hotId == newItem.hotId
             }
 
             override fun areContentsTheSame(oldItem: HotWordModel, newItem: HotWordModel): Boolean {
@@ -55,7 +56,12 @@ class SearchSuggestAdapter(
             binding.clickView.setOnClickListener {
                 val position = bindingAdapterPosition
                 if (position != RecyclerView.NO_POSITION) {
-                    onItemClick(currentList[position].keyword)
+                    val model = currentList[position]
+                    if (model.isClearHistory) {
+                        onClearHistory?.invoke()
+                    } else {
+                        onItemClick(model.keyword)
+                    }
                 }
             }
             binding.clickView.setOnKeyListener { view, keyCode, event ->
@@ -71,13 +77,21 @@ class SearchSuggestAdapter(
         }
 
         fun bind(model: HotWordModel) {
-            binding.textTitle.text = model.showName
+            if (model.isClearHistory) {
+                binding.textTitle.setText(R.string.clear)
+            } else {
+                binding.textTitle.text = model.showName
+            }
             binding.clickView.tag = model.keyword
             updateIcon(binding.imageIcon, model)
         }
 
         private fun updateIcon(icon: AppCompatImageView, model: HotWordModel) {
             when {
+                model.isClearHistory -> {
+                    icon.visibility = AppCompatImageView.VISIBLE
+                    icon.setImageResource(R.drawable.ic_delete)
+                }
                 model.isHistory -> {
                     icon.visibility = AppCompatImageView.VISIBLE
                     icon.setImageResource(R.drawable.ic_history)

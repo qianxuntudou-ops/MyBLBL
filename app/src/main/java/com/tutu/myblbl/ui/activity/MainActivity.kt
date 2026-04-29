@@ -584,22 +584,16 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
     }
 
     private fun dispatchVideoBlockedEventToCurrentFragment(event: AppEventHub.Event.VideoBlockedByMinorProtection) {
-        supportFragmentManager.fragments
-            .asReversed()
-            .firstOrNull { it.isVisible }
-            ?.let { fragment ->
-                if (fragment is OnVideoBlockedListener) {
-                    (fragment as OnVideoBlockedListener).onVideoBlocked(event.aid, event.bvid)
-                }
-                fragment.childFragmentManager.fragments
-                    .asReversed()
-                    .firstOrNull { it.isVisible }
-                    ?.let { child ->
-                        if (child is OnVideoBlockedListener) {
-                            (child as OnVideoBlockedListener).onVideoBlocked(event.aid, event.bvid)
-                        }
-                    }
+        supportFragmentManager.fragments.forEach { fragment ->
+            if (fragment is OnVideoBlockedListener) {
+                (fragment as OnVideoBlockedListener).onVideoBlocked(event.aid, event.bvid)
             }
+            fragment.childFragmentManager.fragments.forEach { child ->
+                if (child is OnVideoBlockedListener) {
+                    (child as OnVideoBlockedListener).onVideoBlocked(event.aid, event.bvid)
+                }
+            }
+        }
     }
 
     interface OnVideoBlockedListener {

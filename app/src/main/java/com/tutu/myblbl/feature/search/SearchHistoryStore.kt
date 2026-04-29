@@ -34,6 +34,10 @@ class SearchHistoryStore(
         }
     }
 
+    fun clear() {
+        persist(emptyList())
+    }
+
     fun save(keyword: String, existing: List<String>): List<String> {
         val normalized = keyword.trim()
         if (normalized.isEmpty()) {

@@ -77,8 +77,6 @@ class KeyboardView @JvmOverloads constructor(
 
     init {
         orientation = VERTICAL
-        isFocusable = true
-        isClickable = true
         clipChildren = false
         buildKeyboard()
     }

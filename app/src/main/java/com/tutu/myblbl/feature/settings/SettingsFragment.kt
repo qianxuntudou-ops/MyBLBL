@@ -1306,6 +1306,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             setBackgroundResource(R.drawable.dialog_background)
             isClickable = true
             isFocusable = true
+            defaultFocusHighlightEnabled = false
             setOnClickListener {
                 val now = System.currentTimeMillis()
                 if (now - lastTapTime > 3000L) {

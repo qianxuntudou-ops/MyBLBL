@@ -35,6 +35,7 @@ import com.badlogic.gdx.utils.Pool
 import com.kuaishou.akdanmaku.DanmakuConfig
 import com.kuaishou.akdanmaku.cache.DrawingCache
 import com.kuaishou.akdanmaku.data.DanmakuItem
+import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.data.ItemState
 import com.kuaishou.akdanmaku.ecs.DanmakuContext
 import com.kuaishou.akdanmaku.ecs.DanmakuEngine
@@ -135,6 +136,11 @@ internal class RenderSystem(context: DanmakuContext) : DanmakuEntitySystem(conte
           }
         }
       }
+
+    // 按弹幕类型排序：滚动弹幕先绘制（底层），顶部/底部弹幕后绘制（顶层）
+    newRenderObjects.sortBy { obj ->
+      if (obj.item.data.mode == DanmakuItemData.DANMAKU_MODE_ROLLING) 0 else 1
+    }
 
     synchronized(this) {
       renderResult?.let {

@@ -412,7 +412,7 @@ internal class DataSystem(context: DanmakuContext) :
     const val PRE_ENTRY_ENTITY_TIME_MS = 100L
     private const val MAX_ACTIVE_ENTITIES_LIVE = 150
     private const val MAX_ACTIVE_ENTITIES_VIDEO = 500
-    private const val MAX_CREATE_PER_TICK = 30
+    private const val MAX_CREATE_PER_TICK = 80
   }
 
   override fun onDataAdded(additionalItems: List<DanmakuItem>) {

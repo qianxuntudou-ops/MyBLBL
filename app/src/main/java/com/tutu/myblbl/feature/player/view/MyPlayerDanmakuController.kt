@@ -50,11 +50,11 @@ class MyPlayerDanmakuController(
         private const val LIVE_DENSITY_TRACK_MS = 5000L
         private const val BATCH_INSERT_SIZE = 100
         private const val BATCH_INSERT_DELAY_MS = 33L
-        private const val INITIAL_WINDOW_BEHIND_MS = 5_000L
-        private const val INITIAL_WINDOW_AHEAD_MS = 20_000L
-        private const val PROGRESSIVE_START_DELAY_MS = 2000L
-        private const val PROGRESSIVE_BATCH_SIZE = 100
-        private const val PROGRESSIVE_BATCH_DELAY_MS = 200L
+        private const val INITIAL_WINDOW_BEHIND_MS = 10_000L
+        private const val INITIAL_WINDOW_AHEAD_MS = 60_000L
+        private const val PROGRESSIVE_START_DELAY_MS = 300L
+        private const val PROGRESSIVE_BATCH_SIZE = 500
+        private const val PROGRESSIVE_BATCH_DELAY_MS = 50L
     }
 
     data class SettingsSnapshot(
@@ -658,7 +658,6 @@ class MyPlayerDanmakuController(
         val windowEnd = positionMs + INITIAL_WINDOW_AHEAD_MS
         val startIdx = allData.lowerBoundPosition(windowStart)
         val endIdx = allData.upperBoundPosition(windowEnd)
-
         if (startIdx < endIdx) {
             player.updateData(allData.subList(startIdx, endIdx))
         }
@@ -666,6 +665,7 @@ class MyPlayerDanmakuController(
         val remaining = ArrayList<DanmakuItemData>(allData.size - (endIdx - startIdx))
         for (i in endIdx until allData.size) remaining.add(allData[i])
         for (i in 0 until startIdx) remaining.add(allData[i])
+
         if (remaining.isEmpty()) return
 
         progressiveJob = controllerScope.launch {
@@ -876,7 +876,7 @@ class MyPlayerDanmakuController(
 
     private fun baseThreshold(): Int {
         val screenWidth = context.resources.displayMetrics.widthPixels
-        return (screenWidth / 1080f * 40).toInt().coerceIn(30, 100)
+        return (screenWidth / 1080f * 120).toInt().coerceAtMost(250)
     }
 
     private fun hasPreparedData(): Boolean {

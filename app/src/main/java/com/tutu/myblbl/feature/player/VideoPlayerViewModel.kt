@@ -617,7 +617,7 @@ class VideoPlayerViewModel(
                     loadPgcVideoInfo(loadGeneration)
                     return@launch
                 }
-                loadUgcVideoInfo(preferLastPlayTime = true, loadGeneration = loadGeneration)
+                loadUgcVideoInfo(preferLastPlayTime = currentSettings.resumePlayback, loadGeneration = loadGeneration)
             } catch (e: Exception) {
                 AppLog.e(TAG, "loadVideoInfo exception: ${e.message}", e)
                 _error.value = e.message ?: "播放器初始化失败"
@@ -1290,7 +1290,7 @@ class VideoPlayerViewModel(
                 async {
                     requestPreparedPlayback(
                         identity = identity,
-                        preferLastPlayTime = true,
+                        preferLastPlayTime = currentSettings.resumePlayback,
                         replaceInPlace = false
                     )
                 }
@@ -1307,7 +1307,7 @@ class VideoPlayerViewModel(
             if (shouldFallbackToUgcPlayback(detailResponse)) {
                 currentSeasonId = null
                 currentEpId = null
-                loadUgcVideoInfo(preferLastPlayTime = true, loadGeneration = loadGeneration)
+                loadUgcVideoInfo(preferLastPlayTime = currentSettings.resumePlayback, loadGeneration = loadGeneration)
                 return@coroutineScope
             }
             AppLog.e(
@@ -1394,7 +1394,7 @@ class VideoPlayerViewModel(
         if (preparedPlayback != null) {
             applyPreparedPlayback(preparedPlayback)
         } else {
-            loadPlayUrl(preferLastPlayTime = true, loadGeneration = loadGeneration)
+            loadPlayUrl(preferLastPlayTime = currentSettings.resumePlayback, loadGeneration = loadGeneration)
         }
     }
 
@@ -2679,35 +2679,6 @@ class VideoPlayerViewModel(
                 }
             }
 
-            if (initialSegment < segmentCount) {
-                launch(Dispatchers.IO) {
-                    val nextSegment = initialSegment + 1
-                    PlaybackStartupTrace.log(
-                        traceId = currentStartupTraceId,
-                        startElapsedMs = currentStartupTraceStartElapsedMs,
-                        step = "danmaku_segment_preload_started",
-                        message = "cid=$cid segment=$nextSegment"
-                    )
-                    val nextPayload = loadDanmakuSegmentPayload(
-                        cid = cid,
-                        aid = aid,
-                        segmentIndices = listOf(nextSegment)
-                    )
-                    withContext(Dispatchers.Main) {
-                        if (!isActiveDanmakuRequest(loadGeneration)) return@withContext
-                        if (danmakuLoadedSegments.contains(nextSegment)) return@withContext
-                        danmakuSegmentPayloads[nextSegment] = nextPayload
-                        danmakuLoadedSegments.add(nextSegment)
-                        PlaybackStartupTrace.log(
-                            traceId = currentStartupTraceId,
-                            startElapsedMs = currentStartupTraceStartElapsedMs,
-                            step = "danmaku_segment_preload_ready",
-                            message = "cid=$cid segment=$nextSegment regular=${nextPayload.regularItems.size} special=${nextPayload.specialItems.size}"
-                        )
-                        publishDanmakuSegmentPayload(nextPayload)
-                    }
-                }
-            }
         }
     }
 
@@ -3103,7 +3074,18 @@ class VideoPlayerViewModel(
      */
     private fun onDanmakuSegmentChanged(positionMs: Long) {
         val newIndex = resolveDanmakuSegmentIndex(positionMs)
-        if (newIndex <= 0 || newIndex == currentDanmakuSegmentIndex) return
+        if (newIndex <= 0) return
+        if (newIndex == currentDanmakuSegmentIndex) {
+            // 邻近预加载：距离下个 segment 边界不足 2 分钟时提前加载
+            if (newIndex < danmakuTotalSegments) {
+                val segmentEndMs = newIndex.toLong() * 360_000L
+                val remainingMs = segmentEndMs - positionMs
+                if (remainingMs in 0..120_000L) {
+                    loadDanmakuSegmentIfNeeded(newIndex + 1)
+                }
+            }
+            return
+        }
         if (!hasReachedFirstFrame && currentDanmakuSegmentIndex > 1 && newIndex == 1 && positionMs < 1_000L) {
             PlaybackStartupTrace.log(
                 traceId = currentStartupTraceId,

@@ -91,6 +91,7 @@
     <string name="dm_setting">弹幕设置</string>
     <string name="dm_speed">弹幕速度</string>
     <string name="dm_switch">弹幕开关</string>
+    <string name="resume_playback">恢复播放进度</string>
     <string name="dm_text_size">弹幕字体大小</string>
     <string name="documentary">纪录片</string>
     <string name="dynamic">动态</string>

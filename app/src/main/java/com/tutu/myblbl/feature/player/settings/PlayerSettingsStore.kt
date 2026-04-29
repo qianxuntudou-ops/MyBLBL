@@ -21,7 +21,8 @@ data class PlayerSettings(
     val showRewindFastForward: Boolean = false,
     val showNextPrevious: Boolean = false,
     val showDanmakuSwitch: Boolean = false,
-    val fastSeekSeconds: Int = 10
+    val fastSeekSeconds: Int = 10,
+    val resumePlayback: Boolean = true
 )
 
 private object VideoQualityDefaults {
@@ -52,6 +53,7 @@ object PlayerSettingsStore {
     private const val KEY_SHOW_NEXT_PREVIOUS = "show_next_previous"
     private const val KEY_SHOW_DM_SWITCH = "show_dm_switch"
     private const val KEY_FF_SEEK_SECOND = "ff_seek_second"
+    private const val KEY_RESUME_PLAYBACK = "resume_playback"
 
     fun load(context: Context): PlayerSettings {
         fun readSetting(key: String): String? = appSettings.getCachedString(key)
@@ -85,6 +87,8 @@ object PlayerSettingsStore {
             append(readSetting(KEY_SHOW_DM_SWITCH).orEmpty())
             append("|")
             append(readSetting(KEY_FF_SEEK_SECOND).orEmpty())
+            append("|")
+            append(readSetting(KEY_RESUME_PLAYBACK).orEmpty())
         }
         if (snapshot == lastSettingsSnapshot) {
             return cachedSettings!!
@@ -149,7 +153,11 @@ object PlayerSettingsStore {
                 ?.removeSuffix("s")
                 ?.toIntOrNull()
                 ?.coerceIn(5, 60)
-                ?: 10
+                ?: 10,
+            resumePlayback = parseToggle(
+                readSetting(KEY_RESUME_PLAYBACK),
+                defaultValue = true
+            )
         )
         cachedSettings = settings
         lastSettingsSnapshot = snapshot

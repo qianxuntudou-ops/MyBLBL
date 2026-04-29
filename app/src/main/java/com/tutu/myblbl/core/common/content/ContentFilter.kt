@@ -208,6 +208,8 @@ object ContentFilter {
         "暴力",
         "猎奇",
         "獵奇",
+        "性感",
+        "asmr",
         "ryona"
     )
 

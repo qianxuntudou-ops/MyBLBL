@@ -88,6 +88,9 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
                 checkLoadMore()
+                if (recyclerView.scrollState == RecyclerView.SCROLL_STATE_DRAGGING) {
+                    tvFocusController?.onUserTouchScroll()
+                }
             }
 
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {

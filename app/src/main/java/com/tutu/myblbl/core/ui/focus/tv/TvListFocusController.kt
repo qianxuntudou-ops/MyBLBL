@@ -79,16 +79,13 @@ class TvListFocusController(
         }
 
         if (reason == TvDataChangeReason.APPEND) {
-            // Clear the pending flag. Don't auto-move focus — let the user's next DOWN press
-            // navigate into the newly loaded items naturally.
-            // Fall through to the common anchor-restore logic only when the anchor is still
-            // near the current viewport. If the user flung the list far past the anchor (e.g.
-            // anchor=10 but now at row 90), restoring would violently scroll the list back up.
+            // Don't auto-move focus — let the user's next DOWN press navigate into the
+            // newly loaded items naturally. Never restore anchor on APPEND: if the user is
+            // navigating by D-pad the focused item is preserved by DiffUtil; if the user is
+            // touch-scrolling there is no focus to restore and scrolling back to the stale
+            // anchor causes a visible jump.
             pendingMoveAfterLoadMore = null
-            val anchor = currentAnchor ?: capturedAnchor
-            if (anchor == null || !isAnchorNearViewport(anchor)) {
-                return
-            }
+            return
         }
 
         if (hasValidFocusedItem()) {
@@ -156,7 +153,7 @@ class TvListFocusController(
         capturedAnchor = if (focused != null && position != RecyclerView.NO_POSITION && adapter.isFocusablePosition(position)) {
             createAnchor(focused, position, TvFocusAnchor.Source.RETURN_RESTORE)
         } else {
-            currentAnchor
+            anchorFromVisibleOrCurrent()
         }
     }
 
@@ -256,6 +253,42 @@ class TvListFocusController(
             offsetTop = offsetTop,
             source = source
         )
+    }
+
+    /**
+     * Called when the user is touch-dragging the list.
+     * Updates both [currentAnchor] and [capturedAnchor] to the current viewport position
+     * so that subsequent restore operations (onResume, onHiddenChanged, focusPrimary)
+     * return to where the user was actually looking, not to a stale focused position.
+     */
+    fun onUserTouchScroll() {
+        val visiblePos = firstVisibleFocusablePosition()
+        if (visiblePos == RecyclerView.NO_POSITION) return
+        val visibleView = recyclerView.findViewHolderForAdapterPosition(visiblePos)?.itemView
+        val offset = visibleView?.let { it.top - recyclerView.paddingTop } ?: 0
+        val anchor = strategy.anchorFor(
+            position = visiblePos,
+            stableKey = adapter.stableKeyAt(visiblePos),
+            offsetTop = offset,
+            source = TvFocusAnchor.Source.VISIBLE_ITEM
+        )
+        currentAnchor = anchor
+        capturedAnchor = anchor
+    }
+
+    private fun anchorFromVisibleOrCurrent(): TvFocusAnchor? {
+        val visiblePos = firstVisibleFocusablePosition()
+        if (visiblePos != RecyclerView.NO_POSITION) {
+            val visibleView = recyclerView.findViewHolderForAdapterPosition(visiblePos)?.itemView
+            val offset = visibleView?.let { it.top - recyclerView.paddingTop } ?: 0
+            return strategy.anchorFor(
+                position = visiblePos,
+                stableKey = adapter.stableKeyAt(visiblePos),
+                offsetTop = offset,
+                source = TvFocusAnchor.Source.RETURN_RESTORE
+            )
+        }
+        return currentAnchor
     }
 
     private fun resolveAnchorPosition(anchor: TvFocusAnchor): Int {

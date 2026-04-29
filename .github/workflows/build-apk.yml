@@ -86,14 +86,25 @@ jobs:
           name: MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-release
           path: app/build/outputs/renamed_apk/release/MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-release.apk
 
+      - name: Extract changelog
+        if: steps.check_version.outputs.VERSION_CHANGED == 'true'
+        id: changelog
+        run: |
+          VERSION="v${{ steps.get_version.outputs.VERSION_NAME }}"
+          # 提取该版本的更新内容（从 ## v1.2.0 到下一个 ## 之间的内容）
+          CHANGELOG=$(sed -n "/^## ${VERSION}/,/^## /{ /^## ${VERSION}/d; /^## /q; p; }" CHANGELOG.md)
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         if: steps.check_version.outputs.VERSION_CHANGED == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.VERSION_NAME }}
           name: v${{ steps.get_version.outputs.VERSION_NAME }}
+          body: ${{ steps.changelog.outputs.CHANGELOG }}
           files: app/build/outputs/renamed_apk/release/MyBili-v${{ steps.get_version.outputs.VERSION_NAME }}-release.apk
-          generate_release_notes: true
           draft: false
           prerelease: false
         env:

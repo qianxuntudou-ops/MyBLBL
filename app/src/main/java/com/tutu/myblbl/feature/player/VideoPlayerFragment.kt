@@ -655,7 +655,6 @@ class VideoPlayerFragment : Fragment() {
                         return
                     }
                     uiCoordinator.handleBackPress(
-                        nowMs = System.currentTimeMillis(),
                         isSettingShowing = playerView.isSettingViewShowing(),
                         hideSetting = { playerView.showHideSettingView(false) },
                         isControllerFullyVisible = playerView.isControllerFullyVisible(),
@@ -666,9 +665,6 @@ class VideoPlayerFragment : Fragment() {
                             exitPlayerHost()
                             isEnabled = true
                         },
-                        showExitPrompt = {
-                            Toast.makeText(requireContext(), R.string.video_play_exit, Toast.LENGTH_SHORT).show()
-                        }
                     )
                 }
             }

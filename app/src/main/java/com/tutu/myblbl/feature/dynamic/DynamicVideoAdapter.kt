@@ -35,12 +35,11 @@ class DynamicVideoAdapter(
     }
 
     override fun itemKey(item: VideoModel): String {
-        return when {
-            item.bvid.isNotBlank() -> "bvid:${item.bvid}"
-            item.aid > 0 -> "aid:${item.aid}"
-            item.cid > 0 -> "cid:${item.cid}"
-            else -> "title:${item.title}|cover:${item.coverUrl}"
-        }
+        val bvid = item.bvid
+        if (bvid.isNotBlank()) return "bvid:$bvid"
+        if (item.aid > 0) return "aid:${item.aid}"
+        if (item.cid > 0) return "cid:${item.cid}"
+        return "title:${item.title}|cover:${item.coverUrl}"
     }
 
     override fun areContentsSame(old: VideoModel, new: VideoModel): Boolean = old == new
@@ -119,6 +118,7 @@ class DynamicVideoAdapter(
                     onItemFocusedWithView?.invoke(view, position)
                 }
             }
+            @Suppress("ClickableViewAccessibility")
             binding.root.setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> startLongPress()
@@ -149,14 +149,13 @@ class DynamicVideoAdapter(
 
         fun bind(item: VideoModel) {
             currentItem = item
-            val bangumi = item.bangumi
             val ownerName = item.authorName
             val publishText = formatPublishTime(item)
 
             val coverUrl: String
-            if (bangumi != null) {
-                binding.textView.text = bangumi.longTitle
-                coverUrl = bangumi.cover
+            if (item.bangumi != null) {
+                binding.textView.text = item.bangumi.longTitle
+                coverUrl = item.bangumi.cover
             } else {
                 binding.textView.text = item.title
                 coverUrl = item.coverUrl

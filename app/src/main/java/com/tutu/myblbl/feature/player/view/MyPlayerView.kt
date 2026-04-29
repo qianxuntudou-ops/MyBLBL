@@ -288,8 +288,12 @@ class MyPlayerView @JvmOverloads constructor(
             })
 
             controller?.setOnDmEnableChangeImpl(object : OnDmEnableChangeImpl {
-                override fun onEnable() {
-                    settingView?.dmEnableClick()
+                override fun onDmEnable(enabled: Boolean) {
+                    if (settingView?.getDmEnable() != enabled) {
+                        settingView?.dmEnableClick()
+                    }
+                    danmakuController.setEnabled(enabled)
+                    specialDanmakuController.setEnabled(enabled)
                 }
             })
             controller?.setOnSeekCommitListener { positionMs ->

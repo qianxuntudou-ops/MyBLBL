@@ -272,9 +272,7 @@ class MyPlayerControlView @JvmOverloads constructor(
             resetHideCallbacks()
             dmEnabled = !dmEnabled
             updateDmSwitchIcon()
-            if (dmEnabled) {
-                onDmEnableChangeImpl?.onEnable()
-            }
+            onDmEnableChangeImpl?.onDmEnable(dmEnabled)
             onVideoSettingChangeListener?.onDmEnableChange(dmEnabled)
         }
         

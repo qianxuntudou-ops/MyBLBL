@@ -371,24 +371,18 @@ class PlaybackUiCoordinator {
     fun hasBlockingPanel(): Boolean = panelState != PanelState.None
 
     fun handleBackPress(
-        nowMs: Long,
         isSettingShowing: Boolean,
         hideSetting: () -> Unit,
         isControllerFullyVisible: Boolean,
         hideController: () -> Unit,
         hidePanel: () -> Unit,
         exitPlayer: () -> Unit,
-        showExitPrompt: () -> Unit
     ) {
         when {
             isSettingShowing -> hideSetting()
             hasVisiblePanel() -> hidePanel()
             isControllerFullyVisible -> hideController()
-            nowMs - lastBackPressedAtMs <= exitIntervalMs -> exitPlayer()
-            else -> {
-                lastBackPressedAtMs = nowMs
-                showExitPrompt()
-            }
+            else -> exitPlayer()
         }
     }
 
@@ -407,11 +401,4 @@ class PlaybackUiCoordinator {
     interface OnStateChangedListener {
         fun onStateChanged(coordinator: PlaybackUiCoordinator)
     }
-
-    companion object {
-        private const val EXIT_INTERVAL_MS = 2000L
-    }
-
-    private var lastBackPressedAtMs: Long = 0L
-    private val exitIntervalMs: Long = EXIT_INTERVAL_MS
 }

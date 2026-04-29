@@ -20,7 +20,7 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.AppCompatImageView
 import androidx.core.view.isVisible
-import androidx.lifecycle.Lifecycle
+
 import androidx.lifecycle.lifecycleScope
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
@@ -712,16 +712,12 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 uiCoordinator.handleBackPress(
-                    nowMs = System.currentTimeMillis(),
                     isSettingShowing = playerView.isSettingViewShowing(),
                     hideSetting = { playerView.showHideSettingView(false) },
                     isControllerFullyVisible = playerView.isControllerFullyVisible(),
                     hideController = { playerView.hideController() },
                     hidePanel = { hideContentPanel() },
                     exitPlayer = { finish() },
-                    showExitPrompt = {
-                        Toast.makeText(applicationContext, "再按一次退出", Toast.LENGTH_SHORT).show()
-                    }
                 )
             }
         })

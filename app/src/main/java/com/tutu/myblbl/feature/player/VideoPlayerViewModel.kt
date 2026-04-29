@@ -2594,11 +2594,12 @@ class VideoPlayerViewModel(
             if (danmakuView != null) {
                 danmakuViewCache[cid] = danmakuView to System.currentTimeMillis()
             }
+            val smartFilter = danmakuView?.smartFilterConfig
             PlaybackStartupTrace.log(
                 traceId = currentStartupTraceId,
                 startElapsedMs = currentStartupTraceStartElapsedMs,
                 step = "danmaku_view_ready",
-                message = "cid=$cid source=$danmakuViewSource segments=${danmakuView?.totalSegments ?: 0} special=${danmakuView?.specialDanmakuUrls?.size ?: 0}"
+                message = "cid=$cid source=$danmakuViewSource segments=${danmakuView?.totalSegments ?: 0} totalCount=${danmakuView?.totalCount ?: 0} special=${danmakuView?.specialDanmakuUrls?.size ?: 0} filterLevel=${smartFilter?.resolvedLevel ?: 0} filterEnabled=${smartFilter?.resolvedEnabled ?: false} cloudLvl=${smartFilter?.cloudLevel ?: 0} cloudSw=${smartFilter?.cloudSwitch ?: 0} playerLvl=${smartFilter?.playerLevel ?: 0} playerOn=${smartFilter?.playerEnabled ?: false}"
             )
 
             val segmentCount = danmakuView?.totalSegments
@@ -2830,9 +2831,11 @@ class VideoPlayerViewModel(
         if (danmakuView == null) {
             return
         }
-        val specialCount = danmakuView.specialDanmakuUrls.size
-        if (specialCount > 0) {
-        }
+        val filter = danmakuView.smartFilterConfig
+        AppLog.d(
+            "DanmakuMeta",
+            "cid=$cid aid=$aid duration=${durationMs}ms segments=$segmentCount totalCount=${danmakuView.totalCount} special=${danmakuView.specialDanmakuUrls.size} filterLevel=${filter.resolvedLevel} filterEnabled=${filter.resolvedEnabled} cloudLvl=${filter.cloudLevel} cloudSw=${filter.cloudSwitch} playerLvl=${filter.playerLevel} playerOn=${filter.playerEnabled} defaultLvl=${filter.defaultLevel} defaultOn=${filter.defaultEnabled}"
+        )
     }
 
     private fun logDanmakuDiagnostics(
@@ -2843,6 +2846,14 @@ class VideoPlayerViewModel(
         if (items.isEmpty()) {
             return
         }
+        val totalCount = danmakuView?.totalCount ?: 0L
+        val totalSegments = danmakuView?.totalSegments ?: 0
+        val expectedPerSegment = if (totalSegments > 0 && totalCount > 0) totalCount / totalSegments else 0L
+        val filter = danmakuView?.smartFilterConfig
+        AppLog.d(
+            "DanmakuDiag",
+            "$label: received=${items.size} totalCount=$totalCount totalSegments=$totalSegments expectedPerSeg=$expectedPerSegment filterLevel=${filter?.resolvedLevel ?: 0} filterOn=${filter?.resolvedEnabled ?: false}"
+        )
         val advancedCount = items.count { it.mode == 7 }
         val unsupportedCount = items.count { it.mode !in setOf(1, 4, 5, 6, 7) }
         if (advancedCount > 0) {

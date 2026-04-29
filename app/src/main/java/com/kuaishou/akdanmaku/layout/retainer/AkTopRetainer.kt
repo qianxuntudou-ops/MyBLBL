@@ -23,6 +23,7 @@
 
 package com.kuaishou.akdanmaku.layout.retainer
 
+import android.util.Log
 import com.kuaishou.akdanmaku.DanmakuConfig
 import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.data.DanmakuItem
@@ -33,6 +34,15 @@ internal class AkTopRetainer(
   private val startRatio: Float = 1f,
   private val endRatio: Float = 1f
 ) : DanmakuRetainer {
+
+  private companion object {
+    const val TAG = "DanmakuRetainer"
+    const val LOG_INTERVAL_MS = 5000L
+  }
+
+  private var rejectCount = 0
+  private var acceptCount = 0
+  private var lastLogTime = 0L
 
   private class Row(
     val top: Int,
@@ -84,6 +94,7 @@ internal class AkTopRetainer(
         itemToRow[drawItem] = bestRow
         topPos = bestRow.top
         visibility = true
+        acceptCount++
       } else {
         val gapTop = findGap(itemHeight, margin)
         if (gapTop >= 0) {
@@ -92,6 +103,7 @@ internal class AkTopRetainer(
           itemToRow[drawItem] = newRow
           topPos = gapTop
           visibility = true
+          acceptCount++
         } else if (config.allowOverlap) {
           val fallback = rows.minByOrNull { it.items.size }
           if (fallback != null) {
@@ -99,15 +111,19 @@ internal class AkTopRetainer(
             itemToRow[drawItem] = fallback
             topPos = fallback.top
             visibility = true
+            acceptCount++
           } else {
             topPos = -1
             visibility = false
+            rejectCount++
           }
         } else {
           topPos = -1
           visibility = false
+          rejectCount++
         }
       }
+      maybeLogRetainer()
     } else {
       visibility = drawState.visibility
       topPos = drawItem.drawState.positionY.toInt()
@@ -156,5 +172,13 @@ internal class AkTopRetainer(
   override fun update(start: Int, end: Int) {
     maxEnd = (end * endRatio).toInt()
     clear()
+    Log.d(TAG, "update: maxEnd=$maxEnd screenArea=${end}px ratio=$endRatio")
+  }
+
+  private fun maybeLogRetainer() {
+    val now = System.currentTimeMillis()
+    if (now - lastLogTime < LOG_INTERVAL_MS) return
+    lastLogTime = now
+    Log.d(TAG, "stats: rows=${rows.size} accept=$acceptCount reject=$rejectCount maxEnd=$maxEnd active=${itemToRow.size}")
   }
 }

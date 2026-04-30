@@ -59,6 +59,7 @@ class YouTubeOverlay @JvmOverloads constructor(
     private var persistentBottomProgressEnabled = false
     private var lastSwipeTargetPositionMs = 0L
     private var currentPreviewFrameKey: String? = null
+    private var lastQuantizedFrameMs: Long = -1L
     private var previewRequestToken = 0
     private var currentPreviewTarget: CustomTarget<Bitmap>? = null
     private val previewBitmapCache = object : LruCache<String, Bitmap>(24) {}
@@ -433,6 +434,15 @@ class YouTubeOverlay @JvmOverloads constructor(
             showPreviewLoadingIndicator()
             return
         }
+
+        val quantizedMs = snapshot.quantizeToFrameMs(targetPositionMs)
+        if (quantizedMs != null && quantizedMs == lastQuantizedFrameMs) {
+            return
+        }
+        if (quantizedMs != null) {
+            lastQuantizedFrameMs = quantizedMs
+        }
+
         val frame = snapshot.resolveFrame(targetPositionMs) ?: run {
             showPreviewLoadingIndicator()
             return
@@ -496,6 +506,7 @@ class YouTubeOverlay @JvmOverloads constructor(
         currentPreviewTarget = null
         if (resetFrameKey) {
             currentPreviewFrameKey = null
+            lastQuantizedFrameMs = -1L
         }
         secondsView.hidePreview()
     }

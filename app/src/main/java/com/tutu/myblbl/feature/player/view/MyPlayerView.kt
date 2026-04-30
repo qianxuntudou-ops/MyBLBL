@@ -1686,7 +1686,6 @@ class MyPlayerView @JvmOverloads constructor(
 
     private fun renderSwipeSeekPreview(targetPositionMs: Long, durationMs: Long, deltaMs: Long) {
         controller?.beginSeekPreview(targetPositionMs)
-        uiCoordinator?.updateSeekPreview(targetPositionMs, durationMs)
         tapOverlayView?.showSwipeSeek(
             targetPositionMs = targetPositionMs,
             durationMs = durationMs,

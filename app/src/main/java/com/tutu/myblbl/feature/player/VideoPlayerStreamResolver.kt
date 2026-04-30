@@ -661,7 +661,7 @@ internal class VideoPlayerStreamResolver(
             .takeIf { it.isNotEmpty() }
             ?.let { createProgressiveSource(it, audioMimeType) }
         return if (audioSource != null) {
-            MergingMediaSource(true, true, videoSource, audioSource)
+            MergingMediaSource(true, videoSource, audioSource)
         } else {
             videoSource
         }

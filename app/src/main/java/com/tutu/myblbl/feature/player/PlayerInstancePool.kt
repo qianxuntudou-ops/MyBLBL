@@ -21,9 +21,9 @@ object PlayerInstancePool {
     private const val IDLE_RELEASE_DELAY_MS = 45_000L
     private const val TARGET_BUFFER_BYTES = 20 * 1024 * 1024 // 20MB
 
-    // PCM AudioTrack 缓冲：从默认 250-750ms 提升到 500-1500ms，抵御低端设备 CPU 抢占
+    // PCM AudioTrack 缓冲：从默认 250-750ms 提升到 500-1000ms，抵御低端设备 CPU 抢占
     private const val MIN_PCM_BUFFER_DURATION_US = 500_000
-    private const val MAX_PCM_BUFFER_DURATION_US = 1_500_000
+    private const val MAX_PCM_BUFFER_DURATION_US = 1_000_000
 
     // WiFi 下的缓冲参数：更快起播
     private const val WIFI_MIN_BUFFER_MS = 8_000

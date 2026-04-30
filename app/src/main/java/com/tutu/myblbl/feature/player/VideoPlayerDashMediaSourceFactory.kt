@@ -56,7 +56,7 @@ class VideoPlayerDashMediaSourceFactory(
         }
 
         val mediaSource = if (audioSource != null) {
-            MergingMediaSource(true, true, videoSource, audioSource)
+            MergingMediaSource(true, videoSource, audioSource)
         } else {
             videoSource
         }

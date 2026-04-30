@@ -29,6 +29,15 @@ data class VideoSnapshotData(
         val cacheKey: String
     )
 
+    fun quantizeToFrameMs(targetPositionMs: Long): Long? {
+        if (index.size <= 1 || imgXLen <= 0 || imgYLen <= 0) return null
+        val timeline = index.drop(1)
+        if (timeline.isEmpty()) return null
+        val targetSecond = targetPositionMs.coerceAtLeast(0L) / 1000L
+        val frameIndex = findNearestFrameIndex(timeline, targetSecond)
+        return timeline[frameIndex] * 1000L
+    }
+
     fun resolveFrame(targetPositionMs: Long): Frame? {
         if (images.isEmpty() || index.size <= 1 || imgXLen <= 0 || imgYLen <= 0 || imgXSize <= 0 || imgYSize <= 0) {
             return null

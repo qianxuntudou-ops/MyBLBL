@@ -73,6 +73,10 @@ class MyBLBLApplication : Application() {
                 TAG,
                 "syncCookiesFromWebView end step=${SystemClock.elapsedRealtime() - cookieSyncStartMs}ms"
             )
+            if (NetworkManager.isLoggedIn()) {
+                KoinPlatform.getKoin().get<com.tutu.myblbl.event.AppEventHub>()
+                    .dispatch(com.tutu.myblbl.event.AppEventHub.Event.UserSessionChanged)
+            }
         }
     }
 

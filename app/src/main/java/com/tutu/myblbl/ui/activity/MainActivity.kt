@@ -152,7 +152,12 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         if (restoredFromSavedState) {
             restoreUiStateAfterRecreation()
         } else {
-            binding.myTabView.selectTab(0)
+            val startPage = appSettings.getCachedString("default_start_page")
+            if (startPage == "动态") {
+                binding.myTabView.selectTab(2)
+            } else {
+                binding.myTabView.selectTab(0)
+            }
         }
         refreshAvatar(allowNetworkFetch = false)
         updateNavigationVisibility()

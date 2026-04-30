@@ -107,7 +107,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         private const val COMMON_POSITION_RISK_CONTROL = 7
         private val DM_SMART_FILTER_OPTIONS = arrayOf("关", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
 
-        private val HOME_START_PAGE_OPTIONS = arrayOf("推荐", "热门", "番剧", "影视")
+        private val HOME_START_PAGE_OPTIONS = arrayOf("推荐", "热门", "番剧", "影视", "动态")
     }
 
     private lateinit var commonSettings: MutableList<SettingModel>
@@ -1392,7 +1392,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         ).apply { setMargins(px40, px20, px40, 0) })
 
         dialog.setContentView(root)
-        dialog.setOnShowListener { root.requestFocus() }
+        dialog.setOnShowListener { root.post { root.requestFocus() } }
         dialog.show()
     }
 

@@ -34,6 +34,7 @@ class DmMaskController(
     }
 
     fun setEnabled(enabled: Boolean) {
+        AppLog.d(TAG, "setEnabled: $enabled, maskReady=$maskReady")
         if (this.enabled == enabled) return
         this.enabled = enabled
         if (!enabled) {
@@ -44,6 +45,7 @@ class DmMaskController(
     }
 
     suspend fun loadMask(maskUrl: String, cid: Long, fps: Int): Boolean {
+        AppLog.d(TAG, "loadMask: cid=$cid, fps=$fps, enabled=$enabled")
         currentCid = cid
         maskReady = false
         lastFrame = null
@@ -52,6 +54,8 @@ class DmMaskController(
         maskReady = data != null
         if (!maskReady) {
             AppLog.d(TAG, "Mask load failed for cid=$cid")
+        } else {
+            AppLog.d(TAG, "Mask loaded OK: segments=${data?.segments?.size}")
         }
         return maskReady
     }
@@ -64,7 +68,7 @@ class DmMaskController(
 
         if (frame === lastFrame) return
         lastFrame = frame
-
+        AppLog.d(TAG, "onPositionChanged: pos=${positionMs}ms, paths=${frame.paths.size}, viewSize=${viewWidth}x${viewHeight}")
         updateMaskBitmap(frame.paths)
     }
 

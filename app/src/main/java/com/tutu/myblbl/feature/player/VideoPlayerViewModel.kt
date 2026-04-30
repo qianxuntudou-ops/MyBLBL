@@ -2626,13 +2626,16 @@ class VideoPlayerViewModel(
                     _interactionModel.value = null
                 }
                 val dmMask = wrapper.dmMask
+                AppLog.d(TAG, "dm_mask received: $dmMask")
                 if (dmMask != null && dmMask.maskUrl.isNotBlank()) {
+                    AppLog.d(TAG, "dm_mask Ready: cid=${dmMask.cid}, fps=${dmMask.fps}, url=${dmMask.maskUrl}")
                     _dmMaskState.value = DmMaskState.Ready(
                         maskUrl = dmMask.maskUrl,
                         cid = dmMask.cid,
                         fps = dmMask.fps
                     )
                 } else {
+                    AppLog.d(TAG, "dm_mask unavailable for this video")
                     _dmMaskState.value = DmMaskState.Unavailable
                 }
             } ?: AppLog.e(TAG, "loadPlayerExtras failed: cid=$cid")

@@ -884,10 +884,13 @@ class VideoPlayerFragment : Fragment() {
 
                 launch {
                     viewModel.dmMaskState.collect { state ->
+                        com.tutu.myblbl.core.common.log.AppLog.d("DmMaskFragment", "dmMaskState collected: $state")
                         if (state is VideoPlayerViewModel.DmMaskState.Ready) {
                             playerView.setDmMaskRepository(viewModel.dmMaskRepository)
                             viewLifecycleOwner.lifecycleScope.launch {
-                                playerView.loadDmMask(state.maskUrl, state.cid, state.fps)
+                                com.tutu.myblbl.core.common.log.AppLog.d("DmMaskFragment", "Calling loadDmMask: cid=${state.cid}, fps=${state.fps}")
+                                val success = playerView.loadDmMask(state.maskUrl, state.cid, state.fps)
+                                com.tutu.myblbl.core.common.log.AppLog.d("DmMaskFragment", "loadDmMask result: $success")
                             }
                         } else if (state is VideoPlayerViewModel.DmMaskState.Idle) {
                             playerView.releaseDmMask()

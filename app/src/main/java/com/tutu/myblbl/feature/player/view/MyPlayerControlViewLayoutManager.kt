@@ -153,8 +153,6 @@ class MyPlayerControlViewLayoutManager(
         isAnimationEnabled = enabled
     }
 
-    fun isAnimationEnabled(): Boolean = isAnimationEnabled
-
     fun setProgressOnlyUiEnabled(enabled: Boolean) {
         progressOnlyUiEnabled = enabled
     }
@@ -436,7 +434,7 @@ class MyPlayerControlViewLayoutManager(
             titleView.visibility = View.VISIBLE
             bottomBarController.visibility = View.VISIBLE
             applyCompactMode(force = true)
-            applyOverflowState(immediate = true)
+            applyOverflowState()
         }
         var completedCount = 0
         val onPartEnd = {
@@ -495,7 +493,7 @@ class MyPlayerControlViewLayoutManager(
         }
         syncOverflowButtons()
         applyCompactMode(force = false)
-        applyOverflowState(immediate = true)
+        applyOverflowState()
     }
 
     private fun syncOverflowButtons() {
@@ -595,7 +593,7 @@ class MyPlayerControlViewLayoutManager(
         return basicWidth + overflowWidth + getWidthWithMargins(timeView)
     }
 
-    private fun applyOverflowState(immediate: Boolean) {
+    private fun applyOverflowState() {
         val hasOverflow = extraControls.childCount > 1
         if (!hasOverflow) {
             isOverflowVisible = false
@@ -607,18 +605,14 @@ class MyPlayerControlViewLayoutManager(
         }
         if (isOverflowVisible) {
             overflowShowButton.visibility = View.INVISIBLE
-            if (immediate) {
-                cancelOverflowAnimations()
-                extraControlsScrollView.visibility = View.VISIBLE
-                setOverflowProgress(1f)
-            }
+            cancelOverflowAnimations()
+            extraControlsScrollView.visibility = View.VISIBLE
+            setOverflowProgress(1f)
         } else {
             overflowShowButton.visibility = View.VISIBLE
-            if (immediate) {
-                cancelOverflowAnimations()
-                setOverflowProgress(0f)
-                extraControlsScrollView.visibility = View.GONE
-            }
+            cancelOverflowAnimations()
+            setOverflowProgress(0f)
+            extraControlsScrollView.visibility = View.GONE
         }
     }
 
@@ -705,7 +699,7 @@ class MyPlayerControlViewLayoutManager(
         titleView.alpha = initialAlpha
         bottomBarController.alpha = initialAlpha
         applyCompactMode(force = true)
-        applyOverflowState(immediate = true)
+        applyOverflowState()
     }
 
     private fun cancelAllAnimations() {
@@ -786,25 +780,25 @@ class MyPlayerControlViewLayoutManager(
             }
             playerControlView.notifyChromeState(effective)
         }
-        uiCoordinator?.let { coord ->
+        uiCoordinator?.let { coordinator ->
             when (newState) {
                 UX_STATE_ALL_VISIBLE -> {
-                    coord.transition(com.tutu.myblbl.feature.player.UiEvent.ChromeShowAll)
+                    coordinator.transition(com.tutu.myblbl.feature.player.UiEvent.ChromeShowAll)
                 }
                 UX_STATE_ONLY_PROGRESS_VISIBLE -> {
-                    if (coord.chromeState != com.tutu.myblbl.feature.player.PlaybackUiCoordinator.ChromeState.ProgressOnly) {
-                        coord.withState { c ->
-                            c.chromeState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.ChromeState.ProgressOnly
-                            c.bottomOccupant = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.BottomOccupant.FullChrome
-                            c.hudState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.HudState.Chrome
+                    if (coordinator.chromeState != com.tutu.myblbl.feature.player.PlaybackUiCoordinator.ChromeState.ProgressOnly) {
+                        coordinator.withState { state ->
+                            state.chromeState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.ChromeState.ProgressOnly
+                            state.bottomOccupant = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.BottomOccupant.FullChrome
+                            state.hudState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.HudState.Chrome
                         }
                     }
                 }
                 UX_STATE_NONE_VISIBLE -> {
-                    coord.withState { c ->
-                        c.chromeState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.ChromeState.Hidden
-                        c.bottomOccupant = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.BottomOccupant.SlimTimeline
-                        c.hudState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.HudState.Ambient
+                    coordinator.withState { state ->
+                        state.chromeState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.ChromeState.Hidden
+                        state.bottomOccupant = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.BottomOccupant.SlimTimeline
+                        state.hudState = com.tutu.myblbl.feature.player.PlaybackUiCoordinator.HudState.Ambient
                     }
                 }
             }

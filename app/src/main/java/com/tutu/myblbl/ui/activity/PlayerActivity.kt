@@ -1,3 +1,5 @@
+@file:Suppress("SpellCheckingInspection", "OVERRIDE_DEPRECATION")
+
 package com.tutu.myblbl.ui.activity
 
 import android.app.Activity
@@ -8,9 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.TypedValue
-import android.view.MotionEvent
 import android.view.View
-import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextClock
@@ -44,7 +44,6 @@ import com.tutu.myblbl.event.AppEventHub
 import com.tutu.myblbl.feature.player.PlayerInstancePool
 import com.tutu.myblbl.feature.player.PlaybackStartupTrace
 import com.tutu.myblbl.feature.player.PlaybackUiCoordinator
-import com.tutu.myblbl.feature.player.UiEvent
 import com.tutu.myblbl.feature.player.PlayerOverlayCoordinator
 import com.tutu.myblbl.feature.player.PlayerSessionCoordinator
 import com.tutu.myblbl.feature.player.SeekSession
@@ -89,6 +88,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         private const val EXTRA_START_EPISODE = "player_start_episode"
         private const val EXTRA_STARTUP_TRACE_ID = "player_startup_trace_id"
         private const val EXTRA_STARTUP_TRACE_START_MS = "player_startup_trace_start_ms"
+        private var pendingPlayQueue: List<VideoModel> = emptyList()
 
         fun start(
             context: Context,
@@ -111,6 +111,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             val resolvedSeasonId = seasonId.takeIf { it > 0L }
                 ?: initialVideo?.playbackSeasonId
                 ?: 0L
+            pendingPlayQueue = playQueue.filter(::isPlayableVideo)
             val intent = Intent(context, PlayerActivity::class.java).apply {
                 if (context !is Activity) {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -268,7 +269,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     }
 
     private val resumePlaybackRunnable = Runnable {
-        resumePlaybackIfNeeded(reason = "delayed_resume")
+        resumePlaybackIfNeeded()
     }
 
     private val progressCoordinator = VideoPlayerProgressCoordinator(
@@ -414,6 +415,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         val cid = intent.getLongExtra(EXTRA_CID, 0L)
         val epId = intent.getLongExtra(EXTRA_EP_ID, 0L)
         val seasonId = intent.getLongExtra(EXTRA_SEASON_ID, 0L)
+        val playQueue = pendingPlayQueue
+        pendingPlayQueue = emptyList()
         val startupTraceId = intent.getStringExtra(EXTRA_STARTUP_TRACE_ID).orEmpty()
         val startupTraceStartMs = intent.getLongExtra(EXTRA_STARTUP_TRACE_START_MS, 0L)
         PlaybackStartupTrace.log(
@@ -446,6 +449,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             cid = cid,
             seasonId = seasonId,
             epId = epId,
+            playQueue = playQueue,
             seekPositionMs = intent.getLongExtra(EXTRA_SEEK_MS, 0L),
             startEpisodeIndex = intent.getIntExtra(EXTRA_START_EPISODE, -1),
             startupTraceId = startupTraceId,
@@ -459,6 +463,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         cid: Long,
         seasonId: Long,
         epId: Long,
+        playQueue: List<VideoModel>,
         seekPositionMs: Long,
         startEpisodeIndex: Int,
         startupTraceId: String,
@@ -466,6 +471,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     ) {
         playerView.pauseDanmaku()
         tagCheckDoneForCurrentVideo = false
+        sessionCoordinator.replacePlayQueue(playQueue)
         viewModel.loadVideoInfo(
             aid = aid,
             bvid = bvid,
@@ -512,7 +518,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 player?.pause()
                 viewModel.playInteractionChoice(cid, edgeId)
             }
-            override fun onGetPlayerView(): View? = playerView
+            override fun onGetPlayerView(): View = playerView
         })
         buttonCloseRelated.setOnClickListener { hideContentPanel() }
     }
@@ -691,7 +697,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             override fun onMore() { showPlayerActionDialog() }
             override fun onVideoInfo() { showVideoInfoDialog() }
             override fun onSubtitle() {
-                if (viewModel.subtitles.value.orEmpty().isNotEmpty()) {
+                if (viewModel.subtitles.value.isNotEmpty()) {
                     playerView.showSubtitleSettingView()
                 }
             }
@@ -713,13 +719,13 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 if (isInBackground) {
                     p.trackSelectionParameters = p.trackSelectionParameters
                         .buildUpon()
-                        .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                        .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, true)
                         .build()
                 } else {
                     val pos = p.currentPosition
                     p.trackSelectionParameters = p.trackSelectionParameters
                         .buildUpon()
-                        .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
+                        .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, false)
                         .build()
                     if (p.playbackState == Player.STATE_READY || p.playbackState == Player.STATE_BUFFERING) {
                         p.seekTo(pos)
@@ -817,7 +823,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
 
         lifecycleScope.launch {
             viewModel.riskControlTryLookBypass.collect { bypassed ->
-                if (bypassed != true) return@collect
+                if (!bypassed) return@collect
                 if (riskControlUserHintShown.compareAndSet(false, true)) {
                     Toast.makeText(applicationContext, RISK_CONTROL_USER_HINT, Toast.LENGTH_LONG).show()
                 }
@@ -1006,7 +1012,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         super.onStart()
         // 重新绑定 video surface，恢复视频解码器
         playerView.reattachVideoSurface()
-        resumePlaybackIfNeeded(reason = "onStart")
+        resumePlaybackIfNeeded()
         if (resumePlaybackWhenStarted) {
             playerView.resumeDanmaku()
         } else {
@@ -1121,7 +1127,6 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             aid = view.aid,
             bvid = view.bvid
         ))
-        val appContext = applicationContext
         lifecycleScope.launch {
             runCatching {
                 val video = VideoModel(aid = view.aid, bvid = view.bvid, title = view.title, pic = view.pic)
@@ -1141,8 +1146,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     }
 
     private fun updateDanmakuSwitchVisibility() {
-        val hasDanmaku = viewModel.danmaku.value.orEmpty().isNotEmpty() ||
-            viewModel.specialDanmaku.value.orEmpty().isNotEmpty()
+        val hasDanmaku = viewModel.danmaku.value.isNotEmpty() ||
+            viewModel.specialDanmaku.value.isNotEmpty()
         playerView.showHideDmSwitchButton(playerSettings.showDanmakuSwitch && hasDanmaku)
     }
 
@@ -1381,7 +1386,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         )
     }
 
-    private fun resumePlaybackIfNeeded(reason: String) {
+    private fun resumePlaybackIfNeeded() {
         val currentPlayer = player ?: return
         if (!resumePlaybackWhenStarted) {
             return

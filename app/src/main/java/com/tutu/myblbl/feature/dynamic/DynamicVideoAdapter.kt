@@ -1,3 +1,5 @@
+@file:Suppress("SpellCheckingInspection")
+
 package com.tutu.myblbl.feature.dynamic
 
 import android.view.KeyEvent

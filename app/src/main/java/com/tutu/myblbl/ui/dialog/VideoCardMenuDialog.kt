@@ -1,3 +1,5 @@
+@file:Suppress("SpellCheckingInspection")
+
 package com.tutu.myblbl.ui.dialog
 
 import android.content.Context
@@ -20,7 +22,6 @@ import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.repository.FavoriteRepository
 import com.tutu.myblbl.repository.VideoRepository
 import com.tutu.myblbl.core.navigation.VideoRouteNavigator
-import com.tutu.myblbl.ui.activity.PlayerActivity
 import com.tutu.myblbl.ui.adapter.FavoriteFolderDialogAdapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

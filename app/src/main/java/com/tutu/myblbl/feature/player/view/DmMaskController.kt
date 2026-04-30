@@ -6,7 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import com.kuaishou.akdanmaku.ui.DanmakuView
-import com.tutu.myblbl.core.common.util.AppLog
+import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.model.dm.DmMaskRepository
 import com.tutu.myblbl.model.dm.MaskFrame
 

@@ -1,7 +1,7 @@
 package com.tutu.myblbl.model.dm
 
 import android.util.LruCache
-import com.tutu.myblbl.core.common.util.AppLog
+import com.tutu.myblbl.core.common.log.AppLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection

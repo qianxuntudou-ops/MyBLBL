@@ -2,7 +2,7 @@ package com.tutu.myblbl.model.dm
 
 import android.graphics.Path
 import android.util.Base64
-import com.tutu.myblbl.core.common.util.AppLog
+import com.tutu.myblbl.core.common.log.AppLog
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder

@@ -51,6 +51,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
         internal const val KEY_DM_ALLOW_TOP = "dm_allow_top"
         internal const val KEY_DM_ALLOW_BOTTOM = "dm_allow_bottom"
         internal const val KEY_DM_MERGE_DUPLICATE = "dm_merge_duplicate"
+        internal const val KEY_DM_SMART_SHIELD = "dm_smart_shield"
 
         private const val LEVEL_MAIN = 1
         private const val LEVEL_SUB = 2
@@ -76,6 +77,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
         internal const val ITEM_DM_ALLOW_TOP = 106
         internal const val ITEM_DM_ALLOW_BOTTOM = 107
         internal const val ITEM_DM_MERGE_DUPLICATE = 108
+        internal const val ITEM_DM_SMART_SHIELD = 109
     }
 
     private val panelWidthPx by lazy { resources.getDimensionPixelSize(R.dimen.px650) }
@@ -500,6 +502,11 @@ class MyPlayerSettingView @JvmOverloads constructor(
                 updateState { it.copy(dmMergeDuplicate = itemId == 0) }
                 onPlayerSettingInnerChange?.onDmMergeDuplicate(panelState.dmMergeDuplicate)
             }
+
+            ITEM_DM_SMART_SHIELD -> {
+                updateState { it.copy(dmSmartShield = itemId == 0) }
+                onPlayerSettingInnerChange?.onDmSmartShield(panelState.dmSmartShield)
+            }
         }
         showDmSettingMenu()
     }
@@ -531,6 +538,12 @@ class MyPlayerSettingView @JvmOverloads constructor(
                 updateState { it.copy(dmMergeDuplicate = newValue) }
                 onPlayerSettingInnerChange?.onDmMergeDuplicate(newValue)
                 title = context.getString(R.string.dm_merge_duplicate)
+            }
+            ITEM_DM_SMART_SHIELD -> {
+                newValue = !panelState.dmSmartShield
+                updateState { it.copy(dmSmartShield = newValue) }
+                onPlayerSettingInnerChange?.onDmSmartShield(newValue)
+                title = context.getString(R.string.dm_smart_shield)
             }
             else -> return false
         }

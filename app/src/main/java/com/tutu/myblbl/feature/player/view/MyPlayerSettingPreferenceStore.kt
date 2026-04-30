@@ -38,7 +38,8 @@ internal class MyPlayerSettingPreferenceStore(
             } ?: DmScreenArea.Half.area,
             dmAllowTop = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_ALLOW_TOP)?.let { it == "开" } ?: false,
             dmAllowBottom = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_ALLOW_BOTTOM)?.let { it == "开" } ?: false,
-            dmMergeDuplicate = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_MERGE_DUPLICATE)?.let { it == "开" } ?: true
+            dmMergeDuplicate = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_MERGE_DUPLICATE)?.let { it == "开" } ?: true,
+            dmSmartShield = appSettings.getCachedString(MyPlayerSettingView.KEY_DM_SMART_SHIELD)?.let { it == "开" } ?: true
         )
     }
 }

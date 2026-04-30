@@ -36,6 +36,7 @@ internal class MyPlayerSettingMenuBuilder(
         val dmAllowTop: Boolean = false,
         val dmAllowBottom: Boolean = false,
         val dmMergeDuplicate: Boolean = true,
+        val dmSmartShield: Boolean = true,
         val liveQualities: List<LiveQualityInfo> = emptyList(),
         val currentLiveQualityQn: Int? = null
     )
@@ -222,7 +223,8 @@ internal class MyPlayerSettingMenuBuilder(
             PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_SPEED, context.getString(R.string.dm_speed), state.dmSpeed.toString()),
             PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_ALLOW_TOP, context.getString(R.string.dm_allow_top), state.dmAllowTop.toOpenCloseLabel()),
             PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_ALLOW_BOTTOM, context.getString(R.string.dm_allow_bottom), state.dmAllowBottom.toOpenCloseLabel()),
-            PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_MERGE_DUPLICATE, context.getString(R.string.dm_merge_duplicate), state.dmMergeDuplicate.toOpenCloseLabel())
+            PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_MERGE_DUPLICATE, context.getString(R.string.dm_merge_duplicate), state.dmMergeDuplicate.toOpenCloseLabel()),
+            PlayerSettingRow.Item(MyPlayerSettingView.ITEM_DM_SMART_SHIELD, context.getString(R.string.dm_smart_shield), state.dmSmartShield.toOpenCloseLabel())
         )
     }
 
@@ -278,6 +280,12 @@ internal class MyPlayerSettingMenuBuilder(
                 menuKey = MyPlayerSettingView.ITEM_DM_MERGE_DUPLICATE,
                 title = context.getString(R.string.dm_merge_duplicate),
                 currentValue = state.dmMergeDuplicate
+            )
+
+            MyPlayerSettingView.ITEM_DM_SMART_SHIELD -> buildBooleanChoiceMenu(
+                menuKey = MyPlayerSettingView.ITEM_DM_SMART_SHIELD,
+                title = context.getString(R.string.dm_smart_shield),
+                currentValue = state.dmSmartShield
             )
 
             else -> null

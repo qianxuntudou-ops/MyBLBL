@@ -486,9 +486,14 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
 
         root.addView(TextView(requireContext()).apply {
             val notes = if (releaseInfo.releaseNotes.isNotBlank()) {
-                "\n\n更新内容：\n${releaseInfo.releaseNotes.take(300)}"
+                getString(R.string.update_release_notes_format, releaseInfo.releaseNotes.take(300))
             } else ""
-            text = "当前版本：${BuildConfig.VERSION_NAME}\n最新版本：${releaseInfo.versionName}$notes\n\n是否立即下载更新？"
+            text = getString(
+                R.string.update_confirm_message_format,
+                BuildConfig.VERSION_NAME,
+                releaseInfo.versionName,
+                notes
+            )
             setTextColor(textColor)
             textSize = 12f
             setLineSpacing(resources.getDimension(R.dimen.px6), 1f)
@@ -1316,7 +1321,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             setBackgroundResource(R.drawable.dialog_background)
             isClickable = true
             isFocusable = true
-            defaultFocusHighlightEnabled = false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                defaultFocusHighlightEnabled = false
+            }
             setOnClickListener {
                 val now = System.currentTimeMillis()
                 if (now - lastTapTime > 3000L) {

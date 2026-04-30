@@ -1,5 +1,6 @@
 package com.tutu.myblbl.ui.adapter
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
@@ -165,6 +166,7 @@ class VideoDetailContentAdapter(
             })
 
             binding.buttonPlay.setOnClickListener { onPlayClick() }
+            @SuppressLint("ClickableViewAccessibility")
             binding.buttonPlay.setOnTouchListener { _, event ->
                 when (event.action) {
                     android.view.MotionEvent.ACTION_DOWN -> animatePlayPress(1.0f)
@@ -200,6 +202,7 @@ class VideoDetailContentAdapter(
                 tripleStartRunnable.run()
                 true
             }
+            @SuppressLint("ClickableViewAccessibility")
             binding.buttonLike.setOnTouchListener { _, event ->
                 if (event.action == android.view.MotionEvent.ACTION_UP || event.action == android.view.MotionEvent.ACTION_CANCEL) {
                     if (binding.viewTripleProgress.visibility == View.VISIBLE && !tripleActionTriggered) {

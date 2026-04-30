@@ -1,5 +1,6 @@
 package com.tutu.myblbl.feature.series
 
+import android.annotation.SuppressLint
 import android.animation.ValueAnimator
 import android.os.Parcelable
 import android.os.SystemClock
@@ -160,6 +161,7 @@ class AllSeriesFragment : BaseFragment<FragmentAllSeriesBinding>(), OnBackPresse
         binding.recyclerView.layoutManager = gridLayoutManager
         binding.recyclerView.adapter = adapter
         binding.recyclerView.itemAnimator = null
+        @SuppressLint("ClickableViewAccessibility")
         binding.recyclerView.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN,

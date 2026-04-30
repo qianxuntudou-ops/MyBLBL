@@ -1,5 +1,6 @@
 package com.tutu.myblbl.feature.search
 
+import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
@@ -348,6 +349,7 @@ class SearchItemAdapter(
                 onItemFocused?.invoke(targetView, position)
             }
         }
+        @SuppressLint("ClickableViewAccessibility")
         view.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {

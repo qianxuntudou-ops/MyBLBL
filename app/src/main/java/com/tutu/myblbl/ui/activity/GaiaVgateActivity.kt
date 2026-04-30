@@ -11,6 +11,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.network.security.NetworkWebGateway
 import com.tutu.myblbl.network.session.NetworkSessionGateway
@@ -77,7 +78,7 @@ class GaiaVgateActivity : AppCompatActivity() {
                 )
             } catch (t: Throwable) {
                 AppLog.e(TAG, "register failed", t)
-                status.text = "申请失败：${t.message}"
+                status.text = getString(R.string.risk_register_failed_format, t.message)
             }
         }
     }
@@ -116,7 +117,7 @@ class GaiaVgateActivity : AppCompatActivity() {
                     finish()
                 } catch (t: Throwable) {
                     AppLog.e(TAG, "validate failed", t)
-                    status.text = "提交失败：${t.message}"
+                    status.text = getString(R.string.risk_submit_failed_format, t.message)
                 }
             }
         }

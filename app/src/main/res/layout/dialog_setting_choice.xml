@@ -6,7 +6,7 @@
     android:layout_height="@dimen/px615"
     android:background="@drawable/dialog_background"
     android:clickable="true"
-    android:focusable="false"
+    android:focusable="true"
     android:focusableInTouchMode="false">
 
     <androidx.appcompat.widget.AppCompatTextView

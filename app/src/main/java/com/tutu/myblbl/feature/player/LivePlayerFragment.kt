@@ -20,6 +20,7 @@ import com.tutu.myblbl.feature.player.extractor.FlvHevcExtractor
 import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.flv.FlvExtractor
+import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.databinding.FragmentLivePlayerBinding
 import com.tutu.myblbl.core.ui.navigation.navigateBackFromUi
@@ -83,7 +84,7 @@ class LivePlayerFragment : Fragment() {
                     isRetrying = false
                 }
             } else {
-                binding.textError.text = "${error.message}\n已重试 $MAX_RETRY_COUNT 次，请手动刷新"
+                binding.textError.text = getString(R.string.live_retry_failed_format, error.message, MAX_RETRY_COUNT)
                 binding.textError.visibility = View.VISIBLE
             }
             syncPlaybackEnvironment()

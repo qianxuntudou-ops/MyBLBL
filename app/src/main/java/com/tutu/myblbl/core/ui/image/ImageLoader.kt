@@ -157,7 +157,7 @@ object ImageLoader {
             .error(error)
             .apply(getCoverRequestOptions(imageView.context))
 
-        if (onPortraitDetected != null) {
+        val finalRequest = if (onPortraitDetected != null) {
             request.listener(object : RequestListener<Drawable> {
                 override fun onResourceReady(
                     resource: Drawable,
@@ -182,9 +182,11 @@ object ImageLoader {
                     return false
                 }
             })
+        } else {
+            request
         }
 
-        request.into(imageView)
+        finalRequest.into(imageView)
     }
 
     fun loadSeriesCover(

@@ -3,7 +3,7 @@
     android:id="@+id/dialog_root"
     android:background="@drawable/dialog_background"
     android:clickable="true"
-    android:focusable="false"
+    android:focusable="true"
     android:layout_width="@dimen/px1000"
     android:layout_height="@dimen/px615">
     <androidx.appcompat.widget.AppCompatTextView

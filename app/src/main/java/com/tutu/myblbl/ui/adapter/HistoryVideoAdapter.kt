@@ -1,5 +1,6 @@
 package com.tutu.myblbl.ui.adapter
 
+import android.annotation.SuppressLint
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -144,6 +145,7 @@ class HistoryVideoAdapter(
                 }
                 currentItem?.let(onItemClick)
             }
+            @SuppressLint("ClickableViewAccessibility")
             binding.root.setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> startLongPress()

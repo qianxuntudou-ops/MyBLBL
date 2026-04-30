@@ -17,6 +17,7 @@
         <ImageView
             android:layout_gravity="center|top"
             android:id="@+id/exo_buffering"
+            android:contentDescription="@string/loading"
             android:layout_marginTop="175dp"
             android:visibility="gone"
             android:layout_width="50dp"

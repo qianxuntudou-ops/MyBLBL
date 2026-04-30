@@ -1,6 +1,6 @@
 package com.tutu.myblbl.feature.player
 
-import android.net.Uri
+import androidx.core.net.toUri
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
@@ -24,16 +24,22 @@ internal object CdnLatencyProfile {
         if (ttfbMs <= 0L) return
         val host = extractHost(url) ?: return
         val record = LatencyRecord(host = host, ttfbMs = ttfbMs, timestampMs = System.currentTimeMillis())
-        records.compute(host) { _, existing ->
-            val list = (existing ?: mutableListOf()).toMutableList()
+        synchronized(records) {
+            val list = (records[host] ?: mutableListOf()).toMutableList()
             list.add(record)
             if (list.size > 5) list.removeAt(0)
-            list
+            records[host] = list
         }
         if (records.size > MAX_ENTRIES) {
             val now = System.currentTimeMillis()
-            records.entries.removeIf { (_, v) ->
-                v.lastOrNull()?.let { now - it.timestampMs > RECORD_TTL_MS } ?: true
+            records.entries
+                .filter { (_, v) -> v.lastOrNull()?.let { now - it.timestampMs > RECORD_TTL_MS } ?: true }
+                .forEach { (key, _) -> records.remove(key) }
+            if (records.size > MAX_ENTRIES) {
+                records.entries
+                    .sortedBy { it.value.lastOrNull()?.timestampMs ?: Long.MIN_VALUE }
+                    .take(records.size - MAX_ENTRIES)
+                    .forEach { (key, _) -> records.remove(key) }
             }
         }
     }
@@ -54,7 +60,7 @@ internal object CdnLatencyProfile {
     }
 
     private fun cdnPreference(url: String): Int {
-        val host = runCatching { Uri.parse(url).host }.getOrNull()
+        val host = runCatching { url.toUri().host }.getOrNull()
             ?.lowercase(Locale.US) ?: return CDN_PREF_OTHER
         val isMcdn = host.contains("mcdn") && host.contains("bilivideo")
         val isBilivideo = host.contains("bilivideo") && !isMcdn
@@ -66,7 +72,7 @@ internal object CdnLatencyProfile {
     }
 
     private fun extractHost(url: String): String? {
-        return runCatching { Uri.parse(url).host }.getOrNull()
+        return runCatching { url.toUri().host }.getOrNull()
     }
 
     private fun List<Long>.median(): Long {

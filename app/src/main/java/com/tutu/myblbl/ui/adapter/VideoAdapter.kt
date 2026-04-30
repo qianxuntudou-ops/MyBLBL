@@ -1,5 +1,6 @@
 package com.tutu.myblbl.ui.adapter
 
+import android.annotation.SuppressLint
 import android.text.TextUtils
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -199,6 +200,7 @@ class VideoAdapter(
                 }
                 currentVideo?.let { onItemClick(binding.root, it) }
             }
+            @SuppressLint("ClickableViewAccessibility")
             binding.root.setOnTouchListener { _, event ->
                 when(event.action) {
                     MotionEvent.ACTION_DOWN -> startLongPress()
@@ -336,7 +338,11 @@ class VideoAdapter(
                 if (duration > 3 && progress >= duration - 3) {
                     binding.textDuration.text = "已看完"
                 } else {
-                    binding.textDuration.text = "${NumberUtils.formatDuration(progress)}/${NumberUtils.formatDuration(duration)}"
+                    binding.textDuration.text = binding.root.context.getString(
+                        R.string.video_watch_progress_format,
+                        NumberUtils.formatDuration(progress),
+                        NumberUtils.formatDuration(duration)
+                    )
                 }
             } else {
                 binding.progressBar.visibility = View.GONE

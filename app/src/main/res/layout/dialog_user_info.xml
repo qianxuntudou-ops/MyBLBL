@@ -2,7 +2,7 @@
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
     android:background="@android:color/transparent"
     android:clickable="true"
-    android:focusable="false"
+    android:focusable="true"
     android:layout_width="@dimen/px500"
     android:layout_height="@dimen/px600">
     <View

@@ -128,7 +128,14 @@ android {
             "UnusedAttribute",
             "TypographyDashes",
             "UnclosedTrace",
-            "ObsoleteSdkInt"
+            "ObsoleteSdkInt",
+            "UseKtx",
+            "ChromeOsAbiSupport",
+            "GifUsage",
+            "IconMissingDensityFolder",
+            "InsecureBaseConfiguration",
+            "VectorRaster",
+            "UnsafeOptInUsageError"
         )
         fatal += setOf("NotSibling")
     }

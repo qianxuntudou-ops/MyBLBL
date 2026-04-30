@@ -2,7 +2,7 @@
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto"
     android:background="@drawable/dialog_background"
     android:clickable="true"
-    android:focusable="false"
+    android:focusable="true"
     android:descendantFocusability="afterDescendants"
     android:layout_width="@dimen/px1400"
     android:layout_height="@dimen/px935">

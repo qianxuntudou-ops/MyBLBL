@@ -61,7 +61,10 @@ class FavoriteFolderDialogAdapter(
 
         fun bind(folder: FavoriteFolderModel) {
             binding.tvTitle.text = folder.title
-            binding.tvCount.text = "${folder.mediaCount}个内容"
+            binding.tvCount.text = binding.root.context.getString(
+                R.string.favorite_folder_media_count_format,
+                folder.mediaCount
+            )
             applyFocusState(binding.root.hasFocus())
         }
 

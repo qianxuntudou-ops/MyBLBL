@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import androidx.appcompat.widget.AppCompatImageView
+import androidx.core.content.res.ResourcesCompat
 import com.tutu.myblbl.R
 
 class AvatarBadgeView @JvmOverloads constructor(
@@ -50,9 +51,9 @@ class AvatarBadgeView @JvmOverloads constructor(
         if (newBadgeType == badgeType) return
         badgeType = newBadgeType
         badgeDrawable = when (badgeType) {
-            BADGE_YELLOW_V -> resources.getDrawable(R.drawable.ic_avatar_badge_yellow_v, context.theme)
-            BADGE_BLUE_V -> resources.getDrawable(R.drawable.ic_avatar_badge_blue_v, context.theme)
-            BADGE_VIP -> resources.getDrawable(R.drawable.ic_avatar_badge_vip, context.theme)
+            BADGE_YELLOW_V -> ResourcesCompat.getDrawable(resources, R.drawable.ic_avatar_badge_yellow_v, context.theme)
+            BADGE_BLUE_V -> ResourcesCompat.getDrawable(resources, R.drawable.ic_avatar_badge_blue_v, context.theme)
+            BADGE_VIP -> ResourcesCompat.getDrawable(resources, R.drawable.ic_avatar_badge_vip, context.theme)
             else -> null
         }
         invalidate()
@@ -62,9 +63,9 @@ class AvatarBadgeView @JvmOverloads constructor(
         if (type == badgeType) return
         badgeType = type
         badgeDrawable = when (badgeType) {
-            BADGE_YELLOW_V -> resources.getDrawable(R.drawable.ic_avatar_badge_yellow_v, context.theme)
-            BADGE_BLUE_V -> resources.getDrawable(R.drawable.ic_avatar_badge_blue_v, context.theme)
-            BADGE_VIP -> resources.getDrawable(R.drawable.ic_avatar_badge_vip, context.theme)
+            BADGE_YELLOW_V -> ResourcesCompat.getDrawable(resources, R.drawable.ic_avatar_badge_yellow_v, context.theme)
+            BADGE_BLUE_V -> ResourcesCompat.getDrawable(resources, R.drawable.ic_avatar_badge_blue_v, context.theme)
+            BADGE_VIP -> ResourcesCompat.getDrawable(resources, R.drawable.ic_avatar_badge_vip, context.theme)
             else -> null
         }
         invalidate()

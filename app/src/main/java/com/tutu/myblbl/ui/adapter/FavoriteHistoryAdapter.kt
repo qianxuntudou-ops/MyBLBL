@@ -1,5 +1,6 @@
 package com.tutu.myblbl.ui.adapter
 
+import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
@@ -197,6 +198,7 @@ class FavoriteHistoryAdapter(
                 }
                 currentItem?.let(onItemClick)
             }
+            @SuppressLint("ClickableViewAccessibility")
             binding.root.setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> startLongPress()

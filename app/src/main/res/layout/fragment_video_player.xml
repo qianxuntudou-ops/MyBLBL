@@ -92,7 +92,7 @@
         android:background="#80000000"
         android:visibility="gone"
         android:clickable="true"
-        android:focusable="false"/>
+        android:focusable="true"/>
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_gravity="bottom"
         android:orientation="vertical"

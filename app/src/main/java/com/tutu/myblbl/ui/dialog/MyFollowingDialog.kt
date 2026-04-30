@@ -78,6 +78,14 @@ class MyFollowingDialog(
             context.getString(R.string.following_animation_title)
         }
         binding.buttonBack.setOnClickListener { dismiss() }
+        setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_UP && keyCode == KeyEvent.KEYCODE_BACK) {
+                dismiss()
+                true
+            } else {
+                false
+            }
+        }
         binding.buttonBack.setOnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
                 requestFirstItemFocus()
@@ -220,7 +228,4 @@ class MyFollowingDialog(
         super.dismiss()
     }
 
-    override fun onBackPressed() {
-        dismiss()
-    }
 }

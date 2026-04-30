@@ -5,6 +5,7 @@
     android:layout_height="wrap_content"
     android:background="@drawable/dialog_background"
     android:clickable="true"
+    android:focusable="true"
     android:descendantFocusability="afterDescendants"
     android:orientation="vertical"
     android:paddingStart="@dimen/px30"

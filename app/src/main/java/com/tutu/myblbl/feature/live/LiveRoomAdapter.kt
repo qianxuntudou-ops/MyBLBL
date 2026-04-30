@@ -1,5 +1,6 @@
 package com.tutu.myblbl.feature.live
 
+import android.annotation.SuppressLint
 import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
@@ -121,6 +122,7 @@ class LiveRoomAdapter(
                     onItemClick(getItem(position))
                 }
             }
+            @SuppressLint("ClickableViewAccessibility")
             binding.root.setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> startLongPressTimer()

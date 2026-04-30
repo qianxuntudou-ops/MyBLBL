@@ -28,6 +28,7 @@
     <string name="androidx_startup">androidx.startup</string>
     <string name="animation">番剧</string>
     <string name="video">视频</string>
+    <string name="video_watch_progress_format">%1$s/%2$s</string>
     <string name="dynamic_count_">%d\n动态</string>
     <string name="follower_count_">%d\n粉丝</string>
     <string name="following_count_">%d\n关注</string>
@@ -62,6 +63,8 @@
     <string name="choose_episode">选集</string>
     <string name="clear_cache">清除缓存</string>
     <string name="risk_control_verify">风控验证</string>
+    <string name="risk_register_failed_format">申请失败：%1$s</string>
+    <string name="risk_submit_failed_format">提交失败：%1$s</string>
     <string name="clear">清空</string>
     <string name="clear_text_end_icon_content_description">Clear text</string>
     <string name="close">关闭</string>
@@ -167,6 +170,7 @@
     <string name="favorite_folder_empty">暂无收藏夹</string>
     <string name="favorite_folder_content_empty">暂无收藏内容</string>
     <string name="favorite_folder_count_format">%1$d个内容</string>
+    <string name="favorite_folder_media_count_format">%1$d个内容</string>
     <string name="history_empty">暂无历史记录</string>
     <string name="later_watch_empty">暂无稍后观看内容</string>
     <string name="following_animation_empty">暂无追番内容</string>
@@ -200,6 +204,8 @@
     <string name="give_coin_">已投币</string>
     <string name="give_coin_number">默认投币数</string>
     <string name="has_update">发现新版本</string>
+    <string name="update_release_notes_format">\n\n更新内容：\n%1$s</string>
+    <string name="update_confirm_message_format">当前版本：%1$s\n最新版本：%2$s%3$s\n\n是否立即下载更新？</string>
     <string name="history">历史</string>
     <string name="home">首页</string>
     <string name="hot">热门</string>
@@ -260,6 +266,7 @@
     <string name="live_quality">直播画质</string>
     <string name="refresh">刷新</string>
     <string name="loading">正在加载..</string>
+    <string name="live_retry_failed_format">%1$s\n已重试 %2$d 次，请手动刷新</string>
     <string name="m3_exceed_max_badge_text_suffix">%1$s%2$s</string>
     <string name="m3_sys_motion_easing_emphasized_path_data">M 0,0 C 0.05, 0, 0.133333, 0.06, 0.166666, 0.4 C 0.208333, 0.82, 0.25, 1, 1, 1</string>
     <string name="material_clock_display_divider">:</string>

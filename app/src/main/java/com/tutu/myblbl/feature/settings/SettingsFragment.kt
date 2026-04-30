@@ -100,6 +100,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         private const val KEY_DM_ALLOW_VIP_COLORFUL_DM = "dm_allow_vip_colorful_dm"
         private const val KEY_DM_SHOW_ADVANCED = "dm_show_advanced"
         private const val KEY_DM_MERGE_DUPLICATE = "dm_merge_duplicate"
+        private const val KEY_DM_SMART_SHIELD = "dm_smart_shield"
         private const val KEY_GAIA_VGATE_V_VOUCHER = "gaia_vgate_v_voucher"
         private const val KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS = "gaia_vgate_v_voucher_saved_at_ms"
         private const val KEY_IPV4_ONLY = "ipv4_only"
@@ -213,7 +214,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             SettingModel(getString(R.string.dm_filter_weight), "关"),
             SettingModel(getString(R.string.allow_vip_colorful_dm), "开"),
             SettingModel(getString(R.string.dm_show_advanced), "开"),
-            SettingModel(getString(R.string.dm_merge_duplicate), "开")
+            SettingModel(getString(R.string.dm_merge_duplicate), "开"),
+            SettingModel(getString(R.string.dm_smart_shield), "开")
         )
 
         deviceSettings.add(SettingModel("应用版本", BuildConfig.VERSION_NAME))
@@ -383,6 +385,9 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             }
             10 -> toggleSetting(dmSettings, 10, KEY_DM_MERGE_DUPLICATE) { value ->
                 appSettings.putStringAsync(KEY_DM_MERGE_DUPLICATE, value)
+            }
+            11 -> toggleSetting(dmSettings, 11, KEY_DM_SMART_SHIELD) { value ->
+                appSettings.putStringAsync(KEY_DM_SMART_SHIELD, value)
             }
         }
     }
@@ -755,6 +760,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         applySavedValue(dmSettings, 8, KEY_DM_ALLOW_VIP_COLORFUL_DM)
         applySavedValue(dmSettings, 9, KEY_DM_SHOW_ADVANCED)
         applySavedValue(dmSettings, 10, KEY_DM_MERGE_DUPLICATE)
+        applySavedValue(dmSettings, 11, KEY_DM_SMART_SHIELD)
     }
 
     private fun applySavedValue(target: MutableList<SettingModel>, index: Int, key: String) {

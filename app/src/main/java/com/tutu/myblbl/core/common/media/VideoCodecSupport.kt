@@ -1,14 +1,23 @@
 package com.tutu.myblbl.core.common.media
 
+import android.content.Context
+import android.hardware.display.DisplayManager
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.os.Build
+import android.view.Display
 import com.tutu.myblbl.model.video.quality.VideoCodecEnum
 
 object VideoCodecSupport {
 
     @Volatile
     private var cachedHardwareCodecs: Set<VideoCodecEnum>? = null
+
+    @Volatile
+    private var cachedHdrSupported: Boolean? = null
+
+    @Volatile
+    private var cachedDolbyVisionSupported: Boolean? = null
 
     private val codecPriorityOrder = listOf(
         VideoCodecEnum.AV1,
@@ -124,5 +133,66 @@ object VideoCodecSupport {
 
     private fun codecPriority(codec: VideoCodecEnum): Int {
         return codecPriorityOrder.indexOf(codec).takeIf { it >= 0 } ?: Int.MAX_VALUE
+    }
+
+    fun isHdrSupported(context: Context? = null): Boolean {
+        cachedHdrSupported?.let { return it }
+        val decoderOk = hasDecoder("video/hevc")
+        if (!decoderOk) {
+            cachedHdrSupported = false
+            return false
+        }
+        if (context == null) {
+            return decoderOk
+        }
+        val displayOk = hasHdrDisplaySupport(context)
+        val result = displayOk
+        cachedHdrSupported = result
+        return result
+    }
+
+    fun isDolbyVisionSupported(context: Context? = null): Boolean {
+        cachedDolbyVisionSupported?.let { return it }
+        val decoderOk = hasDecoder("video/dolby-vision") ||
+            hasDecoder("video/dvhe") ||
+            hasDecoder("video/dvav")
+        if (!decoderOk) {
+            cachedDolbyVisionSupported = false
+            return false
+        }
+        if (context == null) {
+            return true
+        }
+        val result = hasDolbyVisionDisplaySupport(context)
+        cachedDolbyVisionSupported = result
+        return result
+    }
+
+    private fun hasDecoder(mimeType: String): Boolean {
+        return runCatching {
+            MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+                .any { !it.isEncoder && mimeType.lowercase() in it.supportedTypes.map { t -> t.lowercase() } }
+        }.getOrDefault(false)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun hasHdrDisplaySupport(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        val display = getDisplay(context) ?: return false
+        val hdrCaps = display.hdrCapabilities ?: return false
+        return hdrCaps.supportedHdrTypes.isNotEmpty()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun hasDolbyVisionDisplaySupport(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        val display = getDisplay(context) ?: return false
+        val hdrCaps = display.hdrCapabilities ?: return false
+        return hdrCaps.supportedHdrTypes.contains(Display.HdrCapabilities.HDR_TYPE_DOLBY_VISION)
+    }
+
+    private fun getDisplay(context: Context): Display? {
+        val dm = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager ?: return null
+        return dm.getDisplay(Display.DEFAULT_DISPLAY)
     }
 }

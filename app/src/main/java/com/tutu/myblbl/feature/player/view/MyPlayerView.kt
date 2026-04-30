@@ -29,6 +29,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.kuaishou.akdanmaku.ui.DanmakuView
 import com.tutu.myblbl.R
+import com.tutu.myblbl.model.dm.DmMaskRepository
 import com.tutu.myblbl.model.dm.DmModel
 import com.tutu.myblbl.model.dm.SpecialDanmakuModel
 import com.tutu.myblbl.model.player.VideoSnapshotData
@@ -127,6 +128,11 @@ class MyPlayerView @JvmOverloads constructor(
     )
     private val specialDanmakuController = MyPlayerSpecialDanmakuController(
         overlayViewProvider = { specialDmkOverlayView }
+    )
+    private val dmMaskController = DmMaskController(
+        danmakuViewProvider = { dmkView },
+        specialOverlayProvider = { specialDmkOverlayView },
+        repository = DmMaskRepository()
     )
     private var downTouchX = 0f
     private var downTouchY = 0f
@@ -365,6 +371,10 @@ class MyPlayerView @JvmOverloads constructor(
 
             override fun onDmMergeDuplicate(merge: Boolean) {
                 syncDanmakuSettings()
+            }
+
+            override fun onDmSmartShield(enabled: Boolean) {
+                dmMaskController.setEnabled(enabled)
             }
         })
         syncDanmakuSettings()
@@ -1415,6 +1425,7 @@ class MyPlayerView @JvmOverloads constructor(
         handler.removeCallbacksAndMessages(null)
         danmakuController.release()
         specialDanmakuController.release()
+        dmMaskController.release()
     }
 
     fun cancelInDoubleTapMode() {
@@ -1505,6 +1516,24 @@ class MyPlayerView @JvmOverloads constructor(
     fun syncDanmakuPosition(positionMs: Long, forceSeek: Boolean = false) {
         danmakuController.syncPosition(positionMs, forceSeek)
         specialDanmakuController.syncPosition(positionMs, forceSeek)
+        dmMaskController.onViewSizeChanged(dmkView?.width ?: 0, dmkView?.height ?: 0)
+        dmMaskController.onPositionChanged(positionMs)
+    }
+
+    suspend fun loadDmMask(maskUrl: String, cid: Long, fps: Int): Boolean {
+        val success = dmMaskController.loadMask(maskUrl, cid, fps)
+        if (success) {
+            dmMaskController.onViewSizeChanged(dmkView?.width ?: 0, dmkView?.height ?: 0)
+        }
+        return success
+    }
+
+    fun releaseDmMask() {
+        dmMaskController.release()
+    }
+
+    fun setDmSmartShieldEnabled(enabled: Boolean) {
+        dmMaskController.setEnabled(enabled)
     }
 
     fun setUseController(use: Boolean) {

@@ -135,6 +135,11 @@ object WebmaskParser {
         return results
     }
 
+    /**
+     * SVG transform: translate(0, viewHeight) scale(0.1, -0.1)
+     * 反变换: pixelX = svgX * 0.1, pixelY = viewHeight - svgY * 0.1
+     * Path 直接存储像素坐标（320x180 坐标系），DmMaskController 渲染时再缩放到实际尺寸。
+     */
     private fun svgPathToAndroidPath(d: String, viewWidth: Float, viewHeight: Float): Path? {
         try {
             val path = Path()
@@ -162,42 +167,45 @@ object WebmaskParser {
                 when (currentCommand) {
                     'M' -> {
                         if (i + 1 >= tokens.size) break
-                        val (nx, ny) = normalize(tokens[i].toFloat(), tokens[i + 1].toFloat(), viewWidth, viewHeight)
-                        path.moveTo(nx * viewWidth, ny * viewHeight)
+                        val px = tokens[i].toFloat() * 0.1f
+                        val py = viewHeight - tokens[i + 1].toFloat() * 0.1f
+                        path.moveTo(px, py)
                         i += 2
                     }
                     'L' -> {
                         if (i + 1 >= tokens.size) break
-                        val (nx, ny) = normalize(tokens[i].toFloat(), tokens[i + 1].toFloat(), viewWidth, viewHeight)
-                        path.lineTo(nx * viewWidth, ny * viewHeight)
+                        val px = tokens[i].toFloat() * 0.1f
+                        val py = viewHeight - tokens[i + 1].toFloat() * 0.1f
+                        path.lineTo(px, py)
                         i += 2
                     }
                     'm' -> {
                         if (i + 1 >= tokens.size) break
-                        val (dx, dy) = normalize(tokens[i].toFloat(), tokens[i + 1].toFloat(), viewWidth, viewHeight)
-                        path.rMoveTo(dx * viewWidth, dy * viewHeight)
+                        // 相对坐标：dx * 0.1, dy * -0.1（Y 轴反向）
+                        path.rMoveTo(tokens[i].toFloat() * 0.1f, tokens[i + 1].toFloat() * -0.1f)
                         i += 2
                     }
                     'l' -> {
                         if (i + 1 >= tokens.size) break
-                        val (dx, dy) = normalize(tokens[i].toFloat(), tokens[i + 1].toFloat(), viewWidth, viewHeight)
-                        path.rLineTo(dx * viewWidth, dy * viewHeight)
+                        path.rLineTo(tokens[i].toFloat() * 0.1f, tokens[i + 1].toFloat() * -0.1f)
                         i += 2
                     }
                     'C' -> {
                         if (i + 5 >= tokens.size) break
-                        val (x1, y1) = normalize(tokens[i].toFloat(), tokens[i + 1].toFloat(), viewWidth, viewHeight)
-                        val (x2, y2) = normalize(tokens[i + 2].toFloat(), tokens[i + 3].toFloat(), viewWidth, viewHeight)
-                        val (x3, y3) = normalize(tokens[i + 4].toFloat(), tokens[i + 5].toFloat(), viewWidth, viewHeight)
-                        path.cubicTo(x1 * viewWidth, y1 * viewHeight, x2 * viewWidth, y2 * viewHeight, x3 * viewWidth, y3 * viewHeight)
+                        path.cubicTo(
+                            tokens[i].toFloat() * 0.1f, viewHeight - tokens[i + 1].toFloat() * 0.1f,
+                            tokens[i + 2].toFloat() * 0.1f, viewHeight - tokens[i + 3].toFloat() * 0.1f,
+                            tokens[i + 4].toFloat() * 0.1f, viewHeight - tokens[i + 5].toFloat() * 0.1f
+                        )
                         i += 6
                     }
                     'c' -> {
                         if (i + 5 >= tokens.size) break
-                        val (dx1, dy1) = normalize(tokens[i].toFloat(), tokens[i + 1].toFloat(), viewWidth, viewHeight)
-                        val (dx2, dy2) = normalize(tokens[i + 2].toFloat(), tokens[i + 3].toFloat(), viewWidth, viewHeight)
-                        val (dx3, dy3) = normalize(tokens[i + 4].toFloat(), tokens[i + 5].toFloat(), viewWidth, viewHeight)
-                        path.rCubicTo(dx1 * viewWidth, dy1 * viewHeight, dx2 * viewWidth, dy2 * viewHeight, dx3 * viewWidth, dy3 * viewHeight)
+                        path.rCubicTo(
+                            tokens[i].toFloat() * 0.1f, tokens[i + 1].toFloat() * -0.1f,
+                            tokens[i + 2].toFloat() * 0.1f, tokens[i + 3].toFloat() * -0.1f,
+                            tokens[i + 4].toFloat() * 0.1f, tokens[i + 5].toFloat() * -0.1f
+                        )
                         i += 6
                     }
                     else -> i++
@@ -208,12 +216,6 @@ object WebmaskParser {
             AppLog.e(TAG, "SVG path parse error: ${e.message}")
             return null
         }
-    }
-
-    private fun normalize(svgX: Float, svgY: Float, viewWidth: Float, viewHeight: Float): Pair<Float, Float> {
-        val pixelX = svgX * 0.1f
-        val pixelY = viewHeight - svgY * 0.1f
-        return (pixelX / viewWidth).coerceIn(0f, 1f) to (pixelY / viewHeight).coerceIn(0f, 1f)
     }
 
     private fun extractFloat(text: String, pattern: String): Float? {

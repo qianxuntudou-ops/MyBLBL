@@ -883,6 +883,19 @@ class VideoPlayerFragment : Fragment() {
                 }
 
                 launch {
+                    viewModel.dmMaskState.collect { state ->
+                        if (state is VideoPlayerViewModel.DmMaskState.Ready) {
+                            playerView.setDmMaskRepository(viewModel.dmMaskRepository)
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                playerView.loadDmMask(state.maskUrl, state.cid, state.fps)
+                            }
+                        } else if (state is VideoPlayerViewModel.DmMaskState.Idle) {
+                            playerView.releaseDmMask()
+                        }
+                    }
+                }
+
+                launch {
                     viewModel.specialDanmaku.collect { data ->
                         PlaybackStartupTrace.log(
                             traceId = activeStartupTraceId,

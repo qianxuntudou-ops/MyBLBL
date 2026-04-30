@@ -1520,6 +1520,10 @@ class MyPlayerView @JvmOverloads constructor(
         dmMaskController.onPositionChanged(positionMs)
     }
 
+    fun setDmMaskRepository(repository: com.tutu.myblbl.model.dm.DmMaskRepository) {
+        dmMaskController.setRepository(repository)
+    }
+
     suspend fun loadDmMask(maskUrl: String, cid: Long, fps: Int): Boolean {
         val success = dmMaskController.loadMask(maskUrl, cid, fps)
         if (success) {

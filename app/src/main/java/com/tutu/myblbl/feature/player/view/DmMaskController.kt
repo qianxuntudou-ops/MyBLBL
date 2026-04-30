@@ -13,7 +13,7 @@ import com.tutu.myblbl.model.dm.MaskFrame
 class DmMaskController(
     private val danmakuViewProvider: () -> DanmakuView?,
     private val specialOverlayProvider: () -> SpecialDanmakuOverlayView?,
-    private val repository: DmMaskRepository
+    private var repository: DmMaskRepository
 ) {
     companion object {
         private const val TAG = "DmMaskController"
@@ -32,7 +32,6 @@ class DmMaskController(
         style = Paint.Style.FILL
         color = Color.WHITE
     }
-    private val scratchCanvas = Canvas()
 
     fun setEnabled(enabled: Boolean) {
         if (this.enabled == enabled) return
@@ -76,6 +75,10 @@ class DmMaskController(
         lastFrame = null
     }
 
+    fun setRepository(repository: DmMaskRepository) {
+        this.repository = repository
+    }
+
     fun release() {
         currentCid = 0L
         maskReady = false
@@ -84,15 +87,18 @@ class DmMaskController(
     }
 
     private fun updateMaskBitmap(paths: List<Path>) {
-        val smallSize = SVG_CANVAS_SIZE
-        val smallBmp = Bitmap.createBitmap(smallSize, smallSize, Bitmap.Config.ALPHA_8)
-        scratchCanvas.setBitmap(smallBmp)
+        // SVG 原始坐标是 320x180，保持宽高比
+        val svgWidth = SVG_CANVAS_SIZE
+        val svgHeight = (SVG_CANVAS_SIZE * 9 / 16) // 320 * 9/16 = 180
+        val canvas = Canvas()
+        val smallBmp = Bitmap.createBitmap(svgWidth, svgHeight, Bitmap.Config.ARGB_8888)
+        canvas.setBitmap(smallBmp)
         smallBmp.eraseColor(0)
 
         for (path in paths) {
-            scratchCanvas.drawPath(path, fillPaint)
+            canvas.drawPath(path, fillPaint)
         }
-        scratchCanvas.setBitmap(null)
+        canvas.setBitmap(null)
 
         val scaled = Bitmap.createScaledBitmap(smallBmp, viewWidth, viewHeight, true)
         smallBmp.recycle()

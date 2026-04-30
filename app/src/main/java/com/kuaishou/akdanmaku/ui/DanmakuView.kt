@@ -23,8 +23,12 @@
 
 package com.kuaishou.akdanmaku.ui
 
-import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.content.Context
 import android.util.AttributeSet
 import android.view.View
 
@@ -44,6 +48,12 @@ class DanmakuView : View {
   var danmakuPlayer: DanmakuPlayer? = null
   internal val displayer: ViewDisplayer = ViewDisplayer()
 
+  private val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
+  }
+
+  var maskBitmap: Bitmap? = null
+
   init {
     context.resources.displayMetrics?.let { metrics ->
       displayer.density = metrics.density
@@ -56,10 +66,18 @@ class DanmakuView : View {
   override fun onDraw(canvas: Canvas) {
     val width = measuredWidth
     val height = measuredHeight
-    // 部分机型存在长按时大小为零的问题（Flyme）
     if (width == 0 || height == 0) return
     danmakuPlayer?.notifyDisplayerSizeChanged(width, height)
-    danmakuPlayer?.draw(canvas)
+
+    val mask = maskBitmap
+    if (mask != null) {
+      val saveCount = canvas.saveLayer(null, null)
+      danmakuPlayer?.draw(canvas)
+      canvas.drawBitmap(mask, 0f, 0f, maskPaint)
+      canvas.restoreToCount(saveCount)
+    } else {
+      danmakuPlayer?.draw(canvas)
+    }
   }
 
   override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

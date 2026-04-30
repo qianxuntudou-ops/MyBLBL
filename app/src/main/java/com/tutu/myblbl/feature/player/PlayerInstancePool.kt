@@ -28,8 +28,8 @@ object PlayerInstancePool {
     // WiFi 下的缓冲参数：更快起播
     private const val WIFI_MIN_BUFFER_MS = 8_000
     private const val WIFI_MAX_BUFFER_MS = 30_000
-    private const val WIFI_BUFFER_FOR_PLAYBACK_MS = 1_000
-    private const val WIFI_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1_500
+    private const val WIFI_BUFFER_FOR_PLAYBACK_MS = 500
+    private const val WIFI_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 1_000
 
     // 移动数据下的缓冲参数：更保守，减少卡顿
     private const val CELLULAR_MIN_BUFFER_MS = 12_000

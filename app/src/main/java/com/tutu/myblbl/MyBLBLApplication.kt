@@ -5,6 +5,7 @@ import android.os.SystemClock
 import com.bumptech.glide.Glide
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
+import com.tutu.myblbl.core.lifecycle.AppBackgroundMonitor
 import com.tutu.myblbl.di.appModules
 import com.tutu.myblbl.feature.home.RecommendFeedRepository
 import com.tutu.myblbl.feature.player.PlayerInstancePool
@@ -42,6 +43,7 @@ class MyBLBLApplication : Application() {
         trace("initKoin", startMs) { initKoin() }
         trace("initSettings", startMs) { initSettings() }
         trace("initNetwork", startMs) { initNetwork() }
+        trace("initBackgroundMonitor", startMs) { AppBackgroundMonitor.init(this) }
         AppLog.i(TAG, "Application.onCreate end elapsed=${SystemClock.elapsedRealtime() - startMs}ms")
     }
 

@@ -131,6 +131,58 @@ class VideoPlayerViewModel(
                 recentlyPlayedCids.remove(recentlyPlayedCids.first())
             }
         }
+
+        // 同视频零开销复用：缓存最近一次完整准备好的播放状态
+        @UnstableApi
+        internal data class CachedPlayback(
+            val bvid: String?,
+            val cid: Long,
+            val mediaSource: MediaSource,
+            val playInfo: PlayInfoModel,
+            val selectionSnapshot: VideoPlayerStreamResolver.SelectionSnapshot,
+            val expiresAtMs: Long
+        )
+        @Volatile
+        private var lastPlayback: CachedPlayback? = null
+        private const val LAST_PLAYBACK_TTL_MS = 30_000L
+
+        @Synchronized
+        internal fun getCachedPlayback(bvid: String?, cid: Long): CachedPlayback? {
+            val cached = lastPlayback ?: return null
+            if (System.currentTimeMillis() > cached.expiresAtMs) {
+                lastPlayback = null
+                return null
+            }
+            if (cached.bvid != bvid || cached.cid != cid) return null
+            return cached
+        }
+
+        @UnstableApi
+        @Synchronized
+        internal fun putCachedPlayback(
+            bvid: String?,
+            cid: Long,
+            mediaSource: MediaSource,
+            playInfo: PlayInfoModel,
+            selectionSnapshot: VideoPlayerStreamResolver.SelectionSnapshot
+        ) {
+            lastPlayback = CachedPlayback(
+                bvid = bvid,
+                cid = cid,
+                mediaSource = mediaSource,
+                playInfo = playInfo,
+                selectionSnapshot = selectionSnapshot,
+                expiresAtMs = System.currentTimeMillis() + LAST_PLAYBACK_TTL_MS
+            )
+        }
+
+        @Synchronized
+        fun clearCachedPlayback() {
+            lastPlayback = null
+        }
+
+        @Synchronized
+        fun hasCachedPlayback(): Boolean = lastPlayback != null
     }
 
     data class PlayableEpisode(
@@ -1414,6 +1466,52 @@ class VideoPlayerViewModel(
             !initialIdentity.bvid.isNullOrBlank()
 
         if (isSameVideoReplay) {
+            // ── Zero-overhead reuse: same bvid+cid, player still has MediaSource ──
+            val cachedPlayback = getCachedPlayback(initialIdentity!!.bvid, initialIdentity.cid)
+            if (cachedPlayback != null) {
+                PlaybackStartupTrace.log(
+                    traceId = currentStartupTraceId,
+                    startElapsedMs = currentStartupTraceStartElapsedMs,
+                    step = "zero_overhead_reuse",
+                    message = "bvid=${initialIdentity.bvid} cid=${initialIdentity.cid}"
+                )
+                applySelectionSnapshot(cachedPlayback.selectionSnapshot)
+                currentPlayInfo = cachedPlayback.playInfo
+                _playbackRequest.value = PlaybackRequest(
+                    mediaSource = cachedPlayback.mediaSource,
+                    seekPositionMs = pendingSeekPositionMs,
+                    playWhenReady = true,
+                    replaceInPlace = false,
+                    startupTraceId = currentStartupTraceId,
+                    startupTraceStartElapsedMs = currentStartupTraceStartElapsedMs
+                )
+                _error.value = null
+                // Fetch detail in background
+                viewModelScope.launch {
+                    val detailResponse = apiService.getVideoDetail(currentAid, currentBvid)
+                    if (detailResponse.isSuccess && detailResponse.data != null) {
+                        val detail = detailResponse.data
+                        _videoInfo.value = detail
+                        currentAid = detail.view?.aid ?: currentAid
+                        currentBvid = detail.view?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
+                        val episodeItems = episodeCatalogBuilder.buildUgcEpisodes(detail)
+                        _episodes.value = episodeItems
+                        _selectedEpisodeIndex.value = episodeItems.indexOfFirst {
+                            it.cid == currentCid || (it.bvid.isNotBlank() && it.bvid == currentBvid)
+                        }.takeIf { it >= 0 } ?: 0
+                        val related = detail.related.orEmpty()
+                        _subtitles.value = detail.view?.subtitle?.list
+                            ?.map { it.toSubtitleInfoModel() }
+                            .orEmpty()
+                        if (related.isNotEmpty()) {
+                            _relatedVideos.value = related
+                        }
+                    }
+                }
+                return@coroutineScope
+            }
+            // ── End zero-overhead reuse ──────────────────────────────
+
             val cachedPlayInfo = initialIdentity!!.bvid!!.let { bvid ->
                 VideoPlayerPlayInfoCache.get(bvid = bvid, cid = initialIdentity.cid)
             }?.takeIf(::hasPlayableMedia)
@@ -1805,6 +1903,13 @@ class VideoPlayerViewModel(
             replaceInPlace = preparedPlayback.replaceInPlace,
             startupTraceId = preparedPlayback.startupTraceId,
             startupTraceStartElapsedMs = preparedPlayback.startupTraceStartElapsedMs
+        )
+        putCachedPlayback(
+            bvid = preparedPlayback.identity.bvid,
+            cid = preparedPlayback.identity.cid,
+            mediaSource = preparedPlayback.mediaSource,
+            playInfo = preparedPlayback.playInfo,
+            selectionSnapshot = preparedPlayback.selectionSnapshot
         )
         PlaybackStartupTrace.log(
             traceId = preparedPlayback.startupTraceId,

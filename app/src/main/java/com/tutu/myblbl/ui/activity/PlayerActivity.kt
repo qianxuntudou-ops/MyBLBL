@@ -35,6 +35,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.core.lifecycle.AppBackgroundMonitor
 import com.tutu.myblbl.core.common.time.TimeUtils
 import com.tutu.myblbl.core.ui.base.BaseActivity
 import com.tutu.myblbl.core.ui.system.ViewUtils
@@ -218,6 +219,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private var player: ExoPlayer? = null
     private val uiCoordinator = PlaybackUiCoordinator()
     private val overlayCoordinator = PlayerOverlayCoordinator()
+    private var backgroundListener: AppBackgroundMonitor.BackgroundStateListener? = null
 
     private lateinit var playerView: MyPlayerView
     private lateinit var bottomProgressBar: ProgressBar
@@ -705,6 +707,26 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             }
             override fun onDmEnableChange(enabled: Boolean) { playerView.setDanmakuEnabled(enabled) }
         })
+        backgroundListener = object : AppBackgroundMonitor.BackgroundStateListener {
+            override fun onAppBackgroundStateChanged(isInBackground: Boolean) {
+                val p = player ?: return
+                if (isInBackground) {
+                    p.trackSelectionParameters = p.trackSelectionParameters
+                        .buildUpon()
+                        .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, true)
+                        .build()
+                } else {
+                    val pos = p.currentPosition
+                    p.trackSelectionParameters = p.trackSelectionParameters
+                        .buildUpon()
+                        .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_VIDEO, false)
+                        .build()
+                    if (p.playbackState == Player.STATE_READY || p.playbackState == Player.STATE_BUFFERING) {
+                        p.seekTo(pos)
+                    }
+                }
+            }
+        }.also(AppBackgroundMonitor::addListener)
         renderControllerChrome(View.GONE)
     }
 
@@ -1026,6 +1048,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         playerView.removeCallbacks(resumePlaybackRunnable)
         stopProgressUpdates()
         resumeHintController.release()
+        backgroundListener?.let(AppBackgroundMonitor::removeListener)
+        backgroundListener = null
         player?.removeListener(playerListener)
         playerView.destroy()
         playerView.stopDanmaku()

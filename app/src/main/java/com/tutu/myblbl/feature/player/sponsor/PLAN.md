@@ -28,6 +28,8 @@
 - `app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerSettingView.kt` - 添加设置项常量和处理
 - `app/src/main/res/values/strings.xml` - 添加中文字符串
 
+> **注意：Task 1-10 只写代码不提交。所有代码完成后，Task 11 统一编译验证，通过后再提交。**
+
 ---
 
 ### Task 1: 数据模型 - SponsorSegment
@@ -35,7 +37,17 @@
 **Files:**
 - Create: `app/src/main/java/com/tutu/myblbl/feature/player/sponsor/SponsorSegment.kt`
 
-- [ ] **Step 1: 创建 SponsorSegment 数据模型**
+- [ ] **Step 1: 检查 kotlinx.serialization 依赖**
+
+Run: `grep -r "kotlinx.serialization" app/build.gradle.kts`
+- 如果不存在，在 `app/build.gradle.kts` 的 dependencies 中添加：
+  ```
+  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+  ```
+  并在 `plugins` 块中添加 `id("org.jetbrains.kotlin.plugin.serialization")`
+- 如果已存在，跳过
+
+- [ ] **Step 2: 创建 SponsorSegment 数据模型**
 
 ```kotlin
 package com.tutu.myblbl.feature.player.sponsor
@@ -77,23 +89,6 @@ data class SponsorSegment(
         val ALL_CATEGORIES = listOf(CATEGORY_SPONSOR, CATEGORY_INTRO, CATEGORY_OUTRO)
     }
 }
-```
-
-- [ ] **Step 2: 检查 kotlinx.serialization 依赖是否已存在**
-
-Run: `grep -r "kotlinx.serialization" app/build.gradle.kts`
-- 如果不存在，在 `app/build.gradle.kts` 的 dependencies 中添加：
-  ```
-  implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-  ```
-  并在 `plugins` 块中添加 `id("org.jetbrains.kotlin.plugin.serialization")`
-- 如果已存在，跳过
-
-- [ ] **Step 3: 提交**
-
-```bash
-git add app/src/main/java/com/tutu/myblbl/feature/player/sponsor/SponsorSegment.kt
-git commit -m "feat(sponsor): add SponsorSegment data model"
 ```
 
 ---
@@ -189,13 +184,6 @@ object SponsorBlockRepository {
             .sortedBy { it.startTimeMs }
     }
 }
-```
-
-- [ ] **Step 2: 提交**
-
-```bash
-git add app/src/main/java/com/tutu/myblbl/feature/player/sponsor/SponsorBlockRepository.kt
-git commit -m "feat(sponsor): add SponsorBlockRepository with API client"
 ```
 
 ---
@@ -327,13 +315,6 @@ class SponsorBlockUseCase {
 }
 ```
 
-- [ ] **Step 2: 提交**
-
-```bash
-git add app/src/main/java/com/tutu/myblbl/feature/player/sponsor/SponsorBlockUseCase.kt
-git commit -m "feat(sponsor): add SponsorBlockUseCase with skip logic"
-```
-
 ---
 
 ### Task 4: 设置字段 - PlayerSettingsStore
@@ -385,13 +366,6 @@ git commit -m "feat(sponsor): add SponsorBlockUseCase with skip logic"
             )
 ```
 
-- [ ] **Step 5: 提交**
-
-```bash
-git add app/src/main/java/com/tutu/myblbl/feature/player/settings/PlayerSettingsStore.kt
-git commit -m "feat(sponsor): add sponsor block settings to PlayerSettingsStore"
-```
-
 ---
 
 ### Task 5: ViewModel 集成
@@ -424,13 +398,6 @@ import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
     private val _sponsorSkipState = MutableStateFlow<SponsorSkipUiState>(SponsorSkipUiState.Hidden)
     val sponsorSkipState: StateFlow<SponsorSkipUiState> = _sponsorSkipState
 
-    val sponsorSegments: StateFlow<List<SponsorSegment>>
-        get() = MutableStateFlow(sponsorBlockUseCase.getSegments())
-```
-
-注意：`sponsorSegments` 改为用字段：
-
-```kotlin
     private val _sponsorSegments = MutableStateFlow<List<SponsorSegment>>(emptyList())
     val sponsorSegments: StateFlow<List<SponsorSegment>> = _sponsorSegments
 ```
@@ -487,14 +454,6 @@ import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
             result.action == SponsorBlockUseCase.SkipAction.AUTO_SKIP -> {
                 _sponsorSkipState.value = SponsorSkipUiState.AutoSkipped(result.segment)
                 pendingSeekPositionMs = result.segment.endTimeMs
-                _playbackRequest.value = PlaybackRequest(
-                    mediaSource = null,
-                    seekPositionMs = result.segment.endTimeMs,
-                    playWhenReady = true,
-                    replaceInPlace = true,
-                    startupTraceId = PlaybackStartupTrace.NO_TRACE,
-                    startupTraceStartElapsedMs = 0L
-                )
             }
             result.action == SponsorBlockUseCase.SkipAction.SHOW_BUTTON -> {
                 _sponsorSkipState.value = SponsorSkipUiState.ShowButton(result.segment)
@@ -503,13 +462,7 @@ import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
     }
 ```
 
-注意：这里 `_playbackRequest` 用于 seek 可能不合适。更合理的方式是通过 Fragment/View 层直接调用 `player.seekTo()`。后续 Task 7 会在 View 层处理实际的 seek 操作。ViewModel 只需要暴露一个 `seekForSponsor` 方法：
-
-```kotlin
-    fun seekForSponsor(positionMs: Long) {
-        pendingSeekPositionMs = positionMs
-    }
-```
+注意：`AUTO_SKIP` 不直接设置 `_playbackRequest`，seek 操作在 Fragment/View 层监听到 `AutoSkipped` 状态后调用 `player.seekTo()` 执行。
 
 - [ ] **Step 5: 添加手动跳过和忽略方法**
 
@@ -531,16 +484,9 @@ import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
     }
 ```
 
-- [ ] **Step 6: 在切换分P时重置空降状态**
+- [ ] **Step 6: 确认切换分P时重置空降状态**
 
-搜索所有调用 `loadVideoInfo` 切换分P的地方（如 `selectEpisode`、`playInteractionChoice`），确保新加载时空降状态自动重置（已在 Step 3 中 `loadVideoInfo` 内处理）。
-
-- [ ] **Step 7: 提交**
-
-```bash
-git add app/src/main/java/com/tutu/myblbl/feature/player/VideoPlayerViewModel.kt
-git commit -m "feat(sponsor): integrate SponsorBlockUseCase into VideoPlayerViewModel"
-```
+`loadVideoInfo` 入口处已统一重置（Step 3），所有调用 `loadVideoInfo` 的路径（`selectEpisode`、`playInteractionChoice` 等）都会自动重置。
 
 ---
 
@@ -564,8 +510,6 @@ import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.View
-import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -678,7 +622,6 @@ class SponsorSkipOverlayView @JvmOverloads constructor(
         skipContainer.animate()
             .alpha(1f)
             .setDuration(200)
-            .setInterpolator(AccelerateDecelerateInterpolator())
             .start()
     }
 
@@ -687,7 +630,6 @@ class SponsorSkipOverlayView @JvmOverloads constructor(
         skipContainer.animate()
             .alpha(0f)
             .setDuration(200)
-            .setInterpolator(AccelerateDecelerateInterpolator())
             .setListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     skipContainer.visibility = GONE
@@ -737,13 +679,6 @@ class SponsorSkipOverlayView @JvmOverloads constructor(
 }
 ```
 
-- [ ] **Step 2: 提交**
-
-```bash
-git add app/src/main/java/com/tutu/myblbl/feature/player/sponsor/SponsorSkipOverlayView.kt
-git commit -m "feat(sponsor): add SponsorSkipOverlayView for skip button and toast"
-```
-
 ---
 
 ### Task 7: 进度条标记 - SponsorProgressMarkerView
@@ -761,7 +696,6 @@ package com.tutu.myblbl.feature.player.sponsor
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
 import android.view.View
 
@@ -805,13 +739,6 @@ class SponsorProgressMarkerView @JvmOverloads constructor(
 }
 ```
 
-- [ ] **Step 2: 提交**
-
-```bash
-git add app/src/main/java/com/tutu/myblbl/feature/player/sponsor/SponsorProgressMarkerView.kt
-git commit -m "feat(sponsor): add SponsorProgressMarkerView for progress bar markers"
-```
-
 ---
 
 ### Task 8: 集成 UI 到 MyPlayerView 和 MyPlayerControlView
@@ -821,6 +748,13 @@ git commit -m "feat(sponsor): add SponsorProgressMarkerView for progress bar mar
 - Modify: `app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerControlView.kt`
 
 - [ ] **Step 1: 在 MyPlayerView 中添加 SponsorSkipOverlayView**
+
+添加 import：
+
+```kotlin
+import com.tutu.myblbl.feature.player.sponsor.SponsorSkipOverlayView
+import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
+```
 
 在 `MyPlayerView` 类中，`specialDmkOverlayView` 声明之后添加字段：
 
@@ -861,16 +795,17 @@ git commit -m "feat(sponsor): add SponsorProgressMarkerView for progress bar mar
     }
 ```
 
+- [ ] **Step 2: 在 MyPlayerControlView 中添加 SponsorProgressMarkerView**
+
 添加 import：
 
 ```kotlin
-import com.tutu.myblbl.feature.player.sponsor.SponsorSkipOverlayView
+import android.view.ViewGroup
+import com.tutu.myblbl.feature.player.sponsor.SponsorProgressMarkerView
 import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
 ```
 
-- [ ] **Step 2: 在 MyPlayerControlView 中添加 SponsorProgressMarkerView**
-
-在 `MyPlayerControlView` 类中，`timeBar` 初始化之后添加：
+在 `MyPlayerControlView` 类中，`timeBar` 声明之后添加：
 
 ```kotlin
     private var sponsorMarkerView: SponsorProgressMarkerView? = null
@@ -879,14 +814,12 @@ import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
 在 `initViews` 方法中，`timeBar = findViewById(R.id.exo_progress)` 之后添加：
 
 ```kotlin
-        // 在 timeBar 上方叠加空降标记
         sponsorMarkerView = SponsorProgressMarkerView(context).apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, dp(3)).apply {
                 bottomMargin = dp(0)
                 gravity = Gravity.BOTTOM
             }
         }
-        // 将 marker 添加为 timeBar 的同级，位于 timeBar 正上方
         (timeBar.parent as? ViewGroup)?.addView(sponsorMarkerView)
 ```
 
@@ -906,31 +839,16 @@ import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
     }
 ```
 
-添加 import：
-
-```kotlin
-import com.tutu.myblbl.feature.player.sponsor.SponsorProgressMarkerView
-import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
-```
-
-- [ ] **Step 3: 提交**
-
-```bash
-git add app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerView.kt
-git add app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerControlView.kt
-git commit -m "feat(sponsor): integrate overlay and progress marker views"
-```
-
 ---
 
 ### Task 9: Fragment 绑定 - 连接 ViewModel 和 View
 
 **Files:**
-- Modify: `app/src/main/java/com/tutu/myblbl/feature/player/VideoPlayerFragment.kt` (或播放器 Activity/Fragment)
+- Modify: `app/src/main/java/com/tutu/myblbl/feature/player/VideoPlayerFragment.kt`
 
-- [ ] **Step 1: 找到播放器 Fragment/Activity 中监听 ViewModel 状态的位置**
+- [ ] **Step 1: 找到播放器 Fragment 中监听 ViewModel 状态的位置**
 
-搜索 `VideoPlayerFragment.kt` 中 `currentPosition` 或 `updatePlaybackPosition` 的收集逻辑。
+搜索 `VideoPlayerFragment.kt` 中 `currentPosition` 或 `updatePlaybackPosition` 的收集逻辑，确定插入位置。
 
 - [ ] **Step 2: 添加 sponsorSkipState 的收集**
 
@@ -960,9 +878,53 @@ git commit -m "feat(sponsor): integrate overlay and progress marker views"
 
 ```kotlin
         playerView.setSponsorListeners(
-            onSkip = { viewModel.sponsorSkip() },
+            onSkip = {
+                viewModel.sponsorSkip()
+                val targetMs = viewModel.sponsorSkipState.value.let {
+                    // seek 在 Fragment 层执行，因为 ViewModel 无法直接访问 player
+                }
+            },
             onDismiss = { viewModel.sponsorDismiss() }
         )
+```
+
+实际实现需调整为：
+
+```kotlin
+        playerView.setSponsorListeners(
+            onSkip = {
+                // ViewModel 更新状态，Fragment 负责实际 seek
+                viewModel.sponsorSkip()
+            },
+            onDismiss = { viewModel.sponsorDismiss() }
+        )
+```
+
+需要在 Fragment 中添加一个观察者监听手动跳过后的 seek：通过观察 `sponsorSkipState` 变化或直接在 `onSkip` 回调中执行 `player.player?.seekTo()`。
+
+最终方案：在 Fragment 中维护 `sponsorSkip` 方法：
+
+```kotlin
+    private fun onSponsorSkip() {
+        val targetMs = viewModel.sponsorSkip() ?: return
+        player.player?.seekTo(targetMs)
+    }
+
+    private fun onSponsorDismiss() {
+        viewModel.sponsorDismiss()
+    }
+```
+
+需要将 ViewModel 的 `sponsorSkip()` 改为返回 `Long?`：
+
+```kotlin
+    // VideoPlayerViewModel.kt
+    fun sponsorSkip(): Long? {
+        val targetMs = sponsorBlockUseCase.skipCurrent() ?: return null
+        _sponsorSkipState.value = SponsorSkipUiState.Hidden
+        pendingSeekPositionMs = targetMs
+        return targetMs
+    }
 ```
 
 - [ ] **Step 4: 收集片段数据更新进度条标记**
@@ -977,17 +939,10 @@ git commit -m "feat(sponsor): integrate overlay and progress marker views"
 
 - [ ] **Step 5: 在用户手动 seek 时通知 ViewModel**
 
-找到 Fragment/View 中用户 seek 的位置（scrub stop、快进快退），调用：
+找到 Fragment/View 中用户 seek 的位置（`onSeekCommit` 回调、快进快退），添加：
 
 ```kotlin
 viewModel.sponsorUserSeek(positionMs)
-```
-
-- [ ] **Step 6: 提交**
-
-```bash
-git add <fragment-file>
-git commit -m "feat(sponsor): bind ViewModel state to player overlay views"
 ```
 
 ---
@@ -997,7 +952,6 @@ git commit -m "feat(sponsor): bind ViewModel state to player overlay views"
 **Files:**
 - Modify: `app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerSettingView.kt`
 - Modify: `app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerSettingMenuBuilder.kt`
-- Modify: `app/src/main/res/values/strings.xml`
 
 - [ ] **Step 1: 在 MyPlayerSettingView 中添加常量**
 
@@ -1024,13 +978,15 @@ git commit -m "feat(sponsor): bind ViewModel state to player overlay views"
                 id = MyPlayerSettingView.ITEM_SPONSOR_BLOCK_ENABLED,
                 title = "空降助手",
                 value = state.sponsorBlockEnabled.toOpenCloseLabel(),
-                iconRes = R.drawable.ic_dm_enable  // 复用图标或创建新图标
+                iconRes = R.drawable.ic_dm_enable
             ),
 ```
 
-- [ ] **Step 4: 在 buildDmChoiceMenu 中处理新设置项**
+- [ ] **Step 4: 添加空降助手二级菜单**
 
-在 `ITEM_DM_SMART_SHIELD` 分支之后添加：
+当用户点击"空降助手"时，进入二级菜单显示开关选项。需要添加 `ITEM_SPONSOR_BLOCK_ENABLED` 到主菜单点击的分发逻辑中（进入二级），并添加 `buildSponsorBlockMenu` 方法。
+
+在 `buildDmChoiceMenu` 中添加处理（或将 `buildDmChoiceMenu` 改为通用的子菜单构建方法）：
 
 ```kotlin
             MyPlayerSettingView.ITEM_SPONSOR_BLOCK_ENABLED -> buildBooleanChoiceMenu(
@@ -1049,35 +1005,48 @@ git commit -m "feat(sponsor): bind ViewModel state to player overlay views"
 
 找到处理 `ITEM_DM_*` 的地方（`onItemClick` 或类似方法），添加 `ITEM_SPONSOR_BLOCK_ENABLED` 和 `ITEM_SPONSOR_BLOCK_AUTO_SKIP` 的处理，通过 `PlayerSettingsStore` 保存到 DataStore。
 
-- [ ] **Step 6: 提交**
-
-```bash
-git add app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerSettingView.kt
-git add app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerSettingMenuBuilder.kt
-git commit -m "feat(sponsor): add sponsor block settings to player menu"
-```
-
 ---
 
-### Task 11: 编译验证和修复
+### Task 11: 编译验证与提交
+
+> **前置条件：Task 1-10 全部完成**
 
 - [ ] **Step 1: 编译项目**
 
-Run: `./gradlew assembleDebug 2>&1 | tail -50`
+Run: `cd G:/MyTool/MyBLBL && ./gradlew assembleDebug 2>&1 | tail -80`
 Expected: BUILD SUCCESSFUL
 
-如果编译失败，根据错误信息修复。
-
-- [ ] **Step 2: 修复编译问题**
+- [ ] **Step 2: 如果编译失败，修复问题**
 
 常见问题：
 - import 遗漏：补充缺失的 import
 - 类型不匹配：调整方法签名
 - View 层级问题：调整 addView 的时机和参数
+- 方法签名变更：同步 ViewModel 的 `sponsorSkip()` 返回值变更到 Fragment
 
-- [ ] **Step 3: 提交修复**
+反复执行 Step 1 直到 BUILD SUCCESSFUL。
+
+- [ ] **Step 3: 用户验收**
+
+通知用户验收以下功能：
+1. 播放器设置中出现"空降助手"选项
+2. 开启后播放有恰饭片段的视频，进度条出现彩色标记
+3. 自动跳过模式下，进入恰饭片段自动跳转并显示 Toast
+4. 手动模式下，进入恰饭片段显示跳过按钮
+5. 点击跳过按钮正常跳转
+6. 点击忽略按钮正常隐藏
+
+- [ ] **Step 4: 验收通过后提交**
 
 ```bash
-git add -A
-git commit -m "fix(sponsor): resolve compilation issues"
+cd G:/MyTool/MyBLBL
+git add app/src/main/java/com/tutu/myblbl/feature/player/sponsor/
+git add app/src/main/java/com/tutu/myblbl/feature/player/settings/PlayerSettingsStore.kt
+git add app/src/main/java/com/tutu/myblbl/feature/player/VideoPlayerViewModel.kt
+git add app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerView.kt
+git add app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerControlView.kt
+git add app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerSettingMenuBuilder.kt
+git add app/src/main/java/com/tutu/myblbl/feature/player/view/MyPlayerSettingView.kt
+git add app/build.gradle.kts  # 如果修改了依赖
+git commit -m "feat(sponsor): add SponsorBlock (空降助手) feature"
 ```

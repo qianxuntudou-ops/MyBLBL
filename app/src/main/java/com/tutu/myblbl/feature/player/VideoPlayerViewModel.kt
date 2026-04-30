@@ -432,7 +432,12 @@ class VideoPlayerViewModel(
     private val _dmMaskState = MutableStateFlow<DmMaskState>(DmMaskState.Idle)
     val dmMaskState: StateFlow<DmMaskState> = _dmMaskState
 
-    val dmMaskRepository = DmMaskRepository()
+    var onDmMaskReady: ((maskUrl: String, cid: Long, fps: Int) -> Unit)? = null
+    var onDmMaskReset: (() -> Unit)? = null
+
+    val dmMaskRepository = DmMaskRepository().also {
+        it.setCacheDir(appContext.cacheDir)
+    }
 
     private val _videoSnapshot = MutableStateFlow<VideoSnapshotData?>(null)
     val videoSnapshot: StateFlow<VideoSnapshotData?> = _videoSnapshot
@@ -671,6 +676,7 @@ class VideoPlayerViewModel(
             clearDanmaku()
             _dmMaskState.value = DmMaskState.Idle
             dmMaskRepository.clearAll()
+            onDmMaskReset?.invoke()
             _interactionModel.value = null
             _videoSnapshot.value = null
             _error.value = null
@@ -1497,9 +1503,10 @@ class VideoPlayerViewModel(
                 )
                 applySelectionSnapshot(cachedPlayback.selectionSnapshot)
                 currentPlayInfo = cachedPlayback.playInfo
+                val effectiveSeekMs = if (preferLastPlayTime) pendingSeekPositionMs else 0L
                 _playbackRequest.value = PlaybackRequest(
                     mediaSource = cachedPlayback.mediaSource,
-                    seekPositionMs = pendingSeekPositionMs,
+                    seekPositionMs = effectiveSeekMs,
                     playWhenReady = true,
                     replaceInPlace = false,
                     startupTraceId = currentStartupTraceId,
@@ -1527,6 +1534,9 @@ class VideoPlayerViewModel(
                             _relatedVideos.value = related
                         }
                     }
+                }
+                if (loadedPlayerExtrasCid != initialIdentity.cid) {
+                    pendingPlayerExtrasCid = initialIdentity.cid
                 }
                 return@coroutineScope
             }
@@ -2634,6 +2644,9 @@ class VideoPlayerViewModel(
                         cid = dmMask.cid,
                         fps = dmMask.fps
                     )
+                    AppLog.d(TAG, "dm_mask callback: onDmMaskReady=$onDmMaskReady, vm=${this.hashCode()}")
+                    onDmMaskReady?.invoke(dmMask.maskUrl, dmMask.cid, dmMask.fps)
+                    Unit
                 } else {
                     AppLog.d(TAG, "dm_mask unavailable for this video")
                     _dmMaskState.value = DmMaskState.Unavailable

@@ -80,6 +80,7 @@ fun Context.getHomeDefaultStartPageIndex(maxIndex: Int, defaultIndex: Int = 1): 
         "热门" -> 1
         "番剧" -> 2
         "影视" -> 3
+        "动态" -> clampedDefault
         else -> null
     }
     if (mappedFromLabel != null) {

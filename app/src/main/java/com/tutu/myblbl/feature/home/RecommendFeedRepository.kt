@@ -15,6 +15,27 @@ class RecommendFeedRepository(
         private const val TAG = "RecommendFeedRepository"
         private const val CACHE_KEY = "recommendCacheList"
         private const val MAX_CACHED_RECOMMEND_ITEMS = 24
+        private const val PRELOAD_PAGE_SIZE = 12
+    }
+
+    @Volatile
+    private var preloadedFirstPage: NetworkPage? = null
+
+    suspend fun preloadFirstPage() {
+        val startMs = SystemClock.elapsedRealtime()
+        AppLog.i(TAG, "APP_STARTUP recommend preload start")
+        loadNetworkPage(page = 1, pageSize = PRELOAD_PAGE_SIZE, freshIdx = 0)
+            .getOrNull()?.let { page ->
+                preloadedFirstPage = page
+                writeCache(page.items)
+            }
+        AppLog.i(TAG, "APP_STARTUP recommend preload end elapsed=${SystemClock.elapsedRealtime() - startMs}ms")
+    }
+
+    fun takePreloadedFirstPage(): NetworkPage? {
+        val result = preloadedFirstPage
+        preloadedFirstPage = null
+        return result
     }
 
     data class CachedFeed(

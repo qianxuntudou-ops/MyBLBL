@@ -44,6 +44,7 @@ import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.ui.navigation.TabBarView
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
+import com.tutu.myblbl.core.startup.AppStartupScheduler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -61,6 +62,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         private const val SETTINGS_OVERLAY_EXIT_ANIM_MS = 275L
         private const val SEARCH_TAB_INDEX = 5
         private const val STARTUP_TAG = "AppStartup"
+        private const val SPLASH_TIMEOUT_MS = 1400L
     }
 
     private val fragments = mutableListOf<Fragment>()
@@ -162,9 +164,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         refreshAvatar(allowNetworkFetch = false)
         updateNavigationVisibility()
         scheduleDeferredStartupTasks()
+        scheduleSplashTimeout()
         binding.root.post {
             AppLog.i(STARTUP_TAG, "MainActivity first root post elapsed=${SystemClock.elapsedRealtime() - activityCreateStartMs}ms")
-            dismissSplash()
             showUsageTipIfNeeded()
         }
         AppLog.i(STARTUP_TAG, "MainActivity.initData end elapsed=${SystemClock.elapsedRealtime() - startMs}ms")
@@ -330,6 +332,16 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
         window.setBackgroundDrawableResource(R.color.systemBackgroundColor)
     }
 
+    private fun scheduleSplashTimeout() {
+        lifecycleScope.launch {
+            delay(SPLASH_TIMEOUT_MS)
+            if (!splashDismissed) {
+                AppLog.i(STARTUP_TAG, "Splash timeout fallback")
+                dismissSplash()
+            }
+        }
+    }
+
     private fun refreshAvatar(allowNetworkFetch: Boolean = true) {
         if (!sessionGateway.isLoggedIn()) {
             binding.myTabView.setAvatarUrl(null)
@@ -373,24 +385,20 @@ class MainActivity : BaseActivity<ActivityMainBinding>(), TabBarView.OnTabClickL
             return
         }
         startupTasksScheduled = true
-        binding.root.post {
-            lifecycleScope.launch {
-                delay(2000L)
+        AppStartupScheduler()
+            .addTask("refreshAvatar", AppStartupScheduler.Phase.DELAYED, delayMs = 2000L) {
                 refreshAvatar(allowNetworkFetch = true)
             }
-            lifecycleScope.launch {
-                delay(10000L)
+            .addTask("playerPrewarm", AppStartupScheduler.Phase.DELAYED, delayMs = 10000L) {
                 PlayerInstancePool.prewarm(this@MainActivity)
             }
-            lifecycleScope.launch {
-                delay(5000L)
+            .addTask("sessionPrewarm", AppStartupScheduler.Phase.DELAYED, delayMs = 5000L) {
                 MyBLBLApplication.instance.scheduleDeferredSessionPrewarm(delayMillis = 0L)
             }
-            lifecycleScope.launch {
-                delay(7000L)
-                runCatching { sessionGateway.ensureWbiKeys() }
+            .addTask("wbiKeys", AppStartupScheduler.Phase.IDLE) {
+                lifecycleScope.launch { runCatching { sessionGateway.ensureWbiKeys() } }
             }
-        }
+            .execute()
     }
 
     fun focusLeftFunctionArea(sourceView: View? = currentFocus): Boolean {

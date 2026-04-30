@@ -68,6 +68,25 @@ class RecommendViewModel(
         fromInitial: Boolean = false,
         fromRefresh: Boolean = false
     ) {
+        if (page == 1 && replace && fromInitial) {
+            val preloaded = repository.takePreloadedFirstPage()
+            if (preloaded != null) {
+                val filteredItems = preloaded.items.filterForDisplay()
+                freshIndexTracker.markFirstPageLoaded()
+                currentPage = 1
+                _uiState.value = FeedUiState(
+                    items = filteredItems,
+                    source = FeedSource.NETWORK,
+                    listChange = FeedListChange.REPLACE,
+                    hasMore = preloaded.hasMore
+                )
+                if (filteredItems.isNotEmpty()) {
+                    repository.writeCache(repository.trimCacheItems(filteredItems))
+                }
+                return
+            }
+        }
+
         val current = _uiState.value
         _uiState.value = current.copy(
             loadingInitial = fromInitial,

@@ -1,9 +1,12 @@
 package com.tutu.myblbl.feature.player.view
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.Typeface
 import android.os.SystemClock
 import android.text.TextPaint
@@ -39,6 +42,10 @@ class SpecialDanmakuOverlayView @JvmOverloads constructor(
     private var isPlaying = false
     private var basePositionMs = 0L
     private var baseRealtimeMs = 0L
+    private val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
+    }
+    var maskBitmap: Bitmap? = null
 
     init {
         isClickable = false
@@ -115,6 +122,13 @@ class SpecialDanmakuOverlayView @JvmOverloads constructor(
             return
         }
 
+        val mask = maskBitmap
+        val useMask = mask != null
+
+        if (useMask) {
+            canvas.saveLayer(null, null)
+        }
+
         val currentPositionMs = currentPlaybackPositionMs()
         val maxDurationMs = items.maxOfOrNull { it.durationMs } ?: 0L
         val windowStart = currentPositionMs - maxDurationMs
@@ -140,6 +154,11 @@ class SpecialDanmakuOverlayView @JvmOverloads constructor(
                 continue
             }
             drawModel(canvas, model, state)
+        }
+
+        if (useMask && mask != null) {
+            canvas.drawBitmap(mask, 0f, 0f, maskPaint)
+            canvas.restore()
         }
 
         if (isPlaying && enabled) {

@@ -99,6 +99,7 @@ object PlayerInstancePool {
     fun releaseNow(reason: String) {
         cancelPendingRelease()
         isAttached = false
+        cachedPlayer?.let(PlayerAudioNormalizer::release)
         cachedPlayer?.release()
         cachedPlayer = null
     }
@@ -109,6 +110,7 @@ object PlayerInstancePool {
         val releaseRunnable = Runnable {
             synchronized(this) {
                 if (isAttached) return@synchronized
+                cachedPlayer?.let(PlayerAudioNormalizer::release)
                 cachedPlayer?.release()
                 cachedPlayer = null
                 pendingReleaseRunnable = null
@@ -168,6 +170,7 @@ object PlayerInstancePool {
             .setLoadControl(loadControl)
             .build()
             .also(PlayerPlaybackPolicy::apply)
+            .also(PlayerAudioNormalizer::attach)
     }
 
     private fun isOnFastNetwork(context: Context): Boolean {

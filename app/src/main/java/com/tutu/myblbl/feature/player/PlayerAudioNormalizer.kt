@@ -42,25 +42,7 @@ internal object PlayerAudioNormalizer {
         val dpSetEnabled: Method? = dpClass?.getMethod("setEnabled", Boolean::class.javaPrimitiveType)
         val dpSetInputGain: Method? = dpClass?.getMethod("setInputGainAllChannelsTo", Float::class.javaPrimitiveType)
         val dpGetChannelCount: Method? = dpClass?.getMethod("getChannelCount")
-        val dpGetMbc: Method? = dpClass?.getMethod("getMbcByChannelIndex", Int::class.javaPrimitiveType)
         val dpGetLimiter: Method? = dpClass?.getMethod("getLimiterByChannelIndex", Int::class.javaPrimitiveType)
-
-        val mbcBandClass: Class<*>? = runCatching {
-            Class.forName("android.media.audiofx.DynamicsProcessing\$MbcBand")
-        }.getOrNull()
-        val mbcBandCtor: Constructor<*>? = mbcBandClass?.getConstructor(mbcBandClass)
-        val mbcIsInUse: Method? = dpGetMbc?.returnType?.getMethod("isInUse")
-        val mbcSetEnabled: Method? = dpGetMbc?.returnType?.getMethod("setEnabled", Boolean::class.javaPrimitiveType)
-        val mbcGetBandCount: Method? = dpGetMbc?.returnType?.getMethod("getBandCount")
-        val mbcGetBand: Method? = dpGetMbc?.returnType?.getMethod("getBand", Int::class.javaPrimitiveType)
-        val mbcSetBand: Method? = dpGetMbc?.returnType?.getMethod("setBand", Int::class.javaPrimitiveType, mbcBandClass)
-        val bandSetEnabled: Method? = mbcBandClass?.getMethod("setEnabled", Boolean::class.javaPrimitiveType)
-        val bandSetAttackTime: Method? = mbcBandClass?.getMethod("setAttackTime", Float::class.javaPrimitiveType)
-        val bandSetReleaseTime: Method? = mbcBandClass?.getMethod("setReleaseTime", Float::class.javaPrimitiveType)
-        val bandSetRatio: Method? = mbcBandClass?.getMethod("setRatio", Float::class.javaPrimitiveType)
-        val bandSetThreshold: Method? = mbcBandClass?.getMethod("setThreshold", Float::class.javaPrimitiveType)
-        val bandSetKneeWidth: Method? = mbcBandClass?.getMethod("setKneeWidth", Float::class.javaPrimitiveType)
-        val bandSetPostGain: Method? = mbcBandClass?.getMethod("setPostGain", Float::class.javaPrimitiveType)
 
         val limiterClass: Class<*>? = dpGetLimiter?.returnType
         val limiterIsInUse: Method? = limiterClass?.getMethod("isInUse")
@@ -71,9 +53,6 @@ internal object PlayerAudioNormalizer {
         val limiterSetThreshold: Method? = limiterClass?.getMethod("setThreshold", Float::class.javaPrimitiveType)
         val limiterSetPostGain: Method? = limiterClass?.getMethod("setPostGain", Float::class.javaPrimitiveType)
 
-        val dpSetMbc: Method? = runCatching {
-            dpClass?.getMethod("setMbcByChannelIndex", Int::class.javaPrimitiveType, dpGetMbc?.returnType)
-        }.getOrNull()
         val dpSetLimiter: Method? = runCatching {
             dpClass?.getMethod("setLimiterByChannelIndex", Int::class.javaPrimitiveType, dpGetLimiter?.returnType)
         }.getOrNull()
@@ -97,22 +76,18 @@ internal object PlayerAudioNormalizer {
             private const val TAG = "PlayerAudioNormalizer"
             private const val AUDIO_SESSION_ID_UNSET = -1
 
-            private const val INPUT_GAIN_DB = 0.0f
+            // 温和提升安静内容
+            private const val INPUT_GAIN_DB = 2.0f
 
-            private const val COMPRESSOR_ATTACK_MS = 3.0f
-            private const val COMPRESSOR_RELEASE_MS = 80.0f
-            private const val COMPRESSOR_RATIO = 3.5f
-            private const val COMPRESSOR_THRESHOLD_DB = -24.0f
-            private const val COMPRESSOR_KNEE_WIDTH_DB = 8.0f
-            private const val COMPRESSOR_POST_GAIN_DB = 0.0f
-
-            private const val LIMITER_ATTACK_MS = 1.0f
-            private const val LIMITER_RELEASE_MS = 60.0f
-            private const val LIMITER_RATIO = 10.0f
-            private const val LIMITER_THRESHOLD_DB = -2.0f
+            // 峰值兜底限制器：仅防止削波，不追求响度最大化
+            private const val LIMITER_ATTACK_MS = 10.0f
+            private const val LIMITER_RELEASE_MS = 200.0f
+            private const val LIMITER_RATIO = 4.0f
+            private const val LIMITER_THRESHOLD_DB = -8.0f
             private const val LIMITER_POST_GAIN_DB = 0.0f
 
-            private const val FALLBACK_TARGET_GAIN_MB = 320
+            // 降级方案：温和增益
+            private const val FALLBACK_TARGET_GAIN_MB = 180
         }
 
         private var currentAudioSessionId = AUDIO_SESSION_ID_UNSET
@@ -156,7 +131,7 @@ internal object PlayerAudioNormalizer {
             val ctor = c.dpCtor ?: return false
             return runCatching {
                 val effect = ctor.newInstance(audioSessionId)
-                configureDynamicsProcessing(effect)
+                configureLimiter(effect)
                 c.dpSetEnabled?.invoke(effect, true)
                 dynamicsProcessing = effect
             }.onFailure { error ->
@@ -164,30 +139,11 @@ internal object PlayerAudioNormalizer {
             }.isSuccess
         }
 
-        private fun configureDynamicsProcessing(effect: Any) {
+        private fun configureLimiter(effect: Any) {
             val c = ReflectionCache
             c.dpSetInputGain?.invoke(effect, INPUT_GAIN_DB)
             val channelCount = (c.dpGetChannelCount?.invoke(effect) as? Int) ?: return
             repeat(channelCount) { channelIndex ->
-                val mbc = c.dpGetMbc?.invoke(effect, channelIndex) ?: return@repeat
-                if ((c.mbcIsInUse?.invoke(mbc) as? Boolean) == true) {
-                    c.mbcSetEnabled?.invoke(mbc, true)
-                    val bandCount = (c.mbcGetBandCount?.invoke(mbc) as? Int) ?: 0
-                    repeat(bandCount) { bandIndex ->
-                        val band = c.mbcGetBand?.invoke(mbc, bandIndex) ?: return@repeat
-                        val newBand = c.mbcBandCtor?.newInstance(band) ?: return@repeat
-                        c.bandSetEnabled?.invoke(newBand, true)
-                        c.bandSetAttackTime?.invoke(newBand, COMPRESSOR_ATTACK_MS)
-                        c.bandSetReleaseTime?.invoke(newBand, COMPRESSOR_RELEASE_MS)
-                        c.bandSetRatio?.invoke(newBand, COMPRESSOR_RATIO)
-                        c.bandSetThreshold?.invoke(newBand, COMPRESSOR_THRESHOLD_DB)
-                        c.bandSetKneeWidth?.invoke(newBand, COMPRESSOR_KNEE_WIDTH_DB)
-                        c.bandSetPostGain?.invoke(newBand, COMPRESSOR_POST_GAIN_DB)
-                        c.mbcSetBand?.invoke(mbc, bandIndex, newBand)
-                    }
-                    c.dpSetMbc?.invoke(effect, channelIndex, mbc)
-                }
-
                 val limiter = c.dpGetLimiter?.invoke(effect, channelIndex) ?: return@repeat
                 if ((c.limiterIsInUse?.invoke(limiter) as? Boolean) == true) {
                     c.limiterSetEnabled?.invoke(limiter, true)

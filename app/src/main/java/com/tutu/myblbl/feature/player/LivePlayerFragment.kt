@@ -180,6 +180,7 @@ class LivePlayerFragment : Fragment() {
             .build()
             .also {
                 PlayerPlaybackPolicy.apply(it)
+                PlayerAudioNormalizer.attach(it)
                 it.addListener(playerListener)
             }
         binding.playerView.setPlayer(player)
@@ -236,6 +237,7 @@ class LivePlayerFragment : Fragment() {
     private fun rebuildPlayer() {
         player?.removeListener(playerListener)
         binding.playerView.stopDanmaku()
+        PlayerAudioNormalizer.release(player)
         player?.release()
         player = null
         setupPlayer()
@@ -346,6 +348,7 @@ class LivePlayerFragment : Fragment() {
         player?.removeListener(playerListener)
         binding.playerView.stopDanmaku()
         binding.playerView.destroy()
+        PlayerAudioNormalizer.release(player)
         player?.release()
         activity?.let { ViewUtils.keepScreenOn(it, false) }
         player = null

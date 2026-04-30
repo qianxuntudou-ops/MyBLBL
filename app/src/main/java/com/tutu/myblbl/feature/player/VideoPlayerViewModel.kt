@@ -25,6 +25,8 @@ import com.tutu.myblbl.core.common.media.VideoCodecSupport
 import com.tutu.myblbl.feature.player.cache.PlayerMediaCache
 import com.tutu.myblbl.model.dm.AdvancedDanmakuParser
 import com.tutu.myblbl.model.dm.DmColorfulStyleParser
+import com.tutu.myblbl.model.dm.DmMaskInfo
+import com.tutu.myblbl.model.dm.DmMaskRepository
 import com.tutu.myblbl.model.dm.DmModel
 import com.tutu.myblbl.model.dm.SpecialDanmakuModel
 import com.tutu.myblbl.model.dm.SpecialDanmakuParser
@@ -420,6 +422,18 @@ class VideoPlayerViewModel(
     private val _interactionModel = MutableStateFlow<InteractionModel?>(null)
     val interactionModel: StateFlow<InteractionModel?> = _interactionModel
 
+    sealed class DmMaskState {
+        object Idle : DmMaskState()
+        object Loading : DmMaskState()
+        data class Ready(val maskUrl: String, val cid: Long, val fps: Int) : DmMaskState()
+        object Unavailable : DmMaskState()
+    }
+
+    private val _dmMaskState = MutableStateFlow<DmMaskState>(DmMaskState.Idle)
+    val dmMaskState: StateFlow<DmMaskState> = _dmMaskState
+
+    val dmMaskRepository = DmMaskRepository()
+
     private val _videoSnapshot = MutableStateFlow<VideoSnapshotData?>(null)
     val videoSnapshot: StateFlow<VideoSnapshotData?> = _videoSnapshot
 
@@ -655,6 +669,8 @@ class VideoPlayerViewModel(
             _currentSubtitleText.value = null
             currentSubtitleCueIndex = 0
             clearDanmaku()
+            _dmMaskState.value = DmMaskState.Idle
+            dmMaskRepository.clearAll()
             _interactionModel.value = null
             _videoSnapshot.value = null
             _error.value = null
@@ -756,6 +772,8 @@ class VideoPlayerViewModel(
         _selectedSubtitleIndex.value = -1
         _currentSubtitleText.value = null
         _interactionModel.value = null
+        _dmMaskState.value = DmMaskState.Idle
+        dmMaskRepository.clearAll()
         _videoSnapshot.value = null
         _error.value = null
         clearPreloadedPlaybackIfDifferent(currentPlayRequestIdentity(), cancelJob = false)
@@ -804,6 +822,8 @@ class VideoPlayerViewModel(
         currentSubtitleCueIndex = 0
         _selectedSubtitleIndex.value = -1
         _currentSubtitleText.value = null
+        _dmMaskState.value = DmMaskState.Idle
+        dmMaskRepository.clearAll()
         clearPreloadedPlaybackIfDifferent(currentPlayRequestIdentity(), cancelJob = false)
         loadPlayUrl(preferLastPlayTime = false)
         loadInteractionInfo(edgeId)
@@ -2604,6 +2624,16 @@ class VideoPlayerViewModel(
                 } else if (interaction == null) {
                     currentGraphVersion = 0L
                     _interactionModel.value = null
+                }
+                val dmMask = wrapper.dmMask
+                if (dmMask != null && dmMask.maskUrl.isNotBlank()) {
+                    _dmMaskState.value = DmMaskState.Ready(
+                        maskUrl = dmMask.maskUrl,
+                        cid = dmMask.cid,
+                        fps = dmMask.fps
+                    )
+                } else {
+                    _dmMaskState.value = DmMaskState.Unavailable
                 }
             } ?: AppLog.e(TAG, "loadPlayerExtras failed: cid=$cid")
 

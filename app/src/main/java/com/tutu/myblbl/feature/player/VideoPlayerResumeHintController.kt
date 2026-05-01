@@ -119,6 +119,14 @@ class VideoPlayerResumeHintController(
                 resumeHintTargetPositionMs
             }
             onClearResumeHint()
+            // setMediaSource(source, seekPositionMs) already starts the player at the
+            // resume position.  Seeking again after the 3 s toast window causes a backward
+            // jump + re-buffer; when the audio CDN is fast but the video CDN is slow this
+            // re-buffer introduces a persistent A/V offset.  Only seek when the player has
+            // drifted far from the target (e.g. the initial start-position was not applied).
+            if (kotlin.math.abs(player.currentPosition - clampedTargetPositionMs) <= SEEK_DELAY_MS + 1000L) {
+                return
+            }
             player.seekTo(clampedTargetPositionMs)
             return
         }

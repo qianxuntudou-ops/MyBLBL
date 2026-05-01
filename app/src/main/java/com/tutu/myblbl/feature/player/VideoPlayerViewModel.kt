@@ -1532,7 +1532,16 @@ class VideoPlayerViewModel(
                 )
                 applySelectionSnapshot(cachedPlayback.selectionSnapshot)
                 currentPlayInfo = cachedPlayback.playInfo
-                val effectiveSeekMs = if (preferLastPlayTime) pendingSeekPositionMs else 0L
+                val playInfo = cachedPlayback.playInfo
+                val resumePositionMs = if (preferLastPlayTime) {
+                    val cachedResume = VideoPlayerPlayInfoCache.get(
+                        initialIdentity.bvid.orEmpty(), initialIdentity.cid
+                    )?.lastPlayTime?.takeIf { it > 5000L }
+                    val serverResume = playInfo.lastPlayTime.takeIf { it > 5000L && playInfo.lastPlayCid == initialIdentity.cid }
+                    (cachedResume ?: serverResume ?: pendingSeekPositionMs)
+                        .takeIf { it > 5000L && (playInfo.timeLength - it) > 5000L }
+                } else null
+                val effectiveSeekMs = resumePositionMs ?: 0L
                 _playbackRequest.value = PlaybackRequest(
                     mediaSource = cachedPlayback.mediaSource,
                     seekPositionMs = effectiveSeekMs,
@@ -1542,6 +1551,10 @@ class VideoPlayerViewModel(
                     startupTraceStartElapsedMs = currentStartupTraceStartElapsedMs
                 )
                 _error.value = null
+                if (resumePositionMs != null) {
+                    didApplyLastPlayPosition = true
+                    showResumePositionToast(resumePositionMs)
+                }
                 // Fetch detail in background
                 viewModelScope.launch {
                     val detailResponse = apiService.getVideoDetail(currentAid, currentBvid)

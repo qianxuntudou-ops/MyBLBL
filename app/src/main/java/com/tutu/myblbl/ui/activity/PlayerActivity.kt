@@ -935,6 +935,17 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             }
         }
 
+        viewModel.onDmMaskReady = { maskUrl, cid, fps ->
+            playerView.setDmMaskRepository(viewModel.dmMaskRepository)
+            lifecycleScope.launch {
+                val success = playerView.loadDmMask(maskUrl, cid, fps)
+                AppLog.d(TAG, "loadDmMask result: $success, cid=$cid")
+            }
+        }
+        viewModel.onDmMaskReset = {
+            playerView.releaseDmMask()
+        }
+
         lifecycleScope.launch {
             viewModel.specialDanmaku.collect { data ->
                 PlaybackStartupTrace.log(

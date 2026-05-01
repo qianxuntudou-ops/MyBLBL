@@ -365,6 +365,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
     fun getDmAllowTop(): Boolean = panelState.dmAllowTop
     fun getDmAllowBottom(): Boolean = panelState.dmAllowBottom
     fun getDmMergeDuplicate(): Boolean = panelState.dmMergeDuplicate
+    fun getDmSmartShield(): Boolean = panelState.dmSmartShield
 
     fun setOnPlayerSettingChange(listener: OnPlayerSettingChange?) {
         onPlayerSettingChange = listener

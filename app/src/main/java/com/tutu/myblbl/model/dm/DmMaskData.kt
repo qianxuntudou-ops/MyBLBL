@@ -4,15 +4,20 @@ import android.graphics.Path
 
 data class DmMaskData(
     val fps: Int,
-    val segments: List<MaskSegment>
+    val rawSegments: List<LazyMaskSegment>
 )
 
-data class MaskSegment(
+data class LazyMaskSegment(
     val timeMs: Long,
-    val frames: List<MaskFrame>
-)
+    val startOffset: Int,
+    val endOffset: Int,
+    val rawData: ByteArray? = null
+) {
+    // 延迟解析的帧缓存
+    @Volatile
+    var cachedFrames: List<MaskFrame>? = null
+}
 
 data class MaskFrame(
-    val relativeTimeMs: Long,
     val paths: List<Path>
 )

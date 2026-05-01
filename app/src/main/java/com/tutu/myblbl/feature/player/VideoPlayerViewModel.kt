@@ -435,9 +435,7 @@ class VideoPlayerViewModel(
     var onDmMaskReady: ((maskUrl: String, cid: Long, fps: Int) -> Unit)? = null
     var onDmMaskReset: (() -> Unit)? = null
 
-    val dmMaskRepository = DmMaskRepository().also {
-        it.setCacheDir(appContext.cacheDir)
-    }
+    val dmMaskRepository = DmMaskRepository()
 
     private val _videoSnapshot = MutableStateFlow<VideoSnapshotData?>(null)
     val videoSnapshot: StateFlow<VideoSnapshotData?> = _videoSnapshot

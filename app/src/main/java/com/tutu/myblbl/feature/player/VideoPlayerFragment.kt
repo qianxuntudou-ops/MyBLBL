@@ -751,6 +751,21 @@ class VideoPlayerFragment : Fragment() {
             }
         }
 
+        AppLog.d(TAG, "setupObservers: viewModel=${viewModel.hashCode()}, onDmMaskReady was=${viewModel.onDmMaskReady}")
+        viewModel.onDmMaskReady = { maskUrl, cid, fps ->
+            AppLog.d(TAG, "onDmMaskReady callback: cid=$cid, fps=$fps, vm=${viewModel.hashCode()}")
+            playerView.setDmMaskRepository(viewModel.dmMaskRepository)
+            viewLifecycleOwner.lifecycleScope.launch {
+                AppLog.d(TAG, "loadDmMask: cid=$cid, fps=$fps")
+                val success = playerView.loadDmMask(maskUrl, cid, fps)
+                AppLog.d(TAG, "loadDmMask result: $success")
+            }
+        }
+        viewModel.onDmMaskReset = {
+            AppLog.d(TAG, "onDmMaskReset callback")
+            playerView.releaseDmMask()
+        }
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
@@ -879,22 +894,6 @@ class VideoPlayerFragment : Fragment() {
                 launch {
                     viewModel.danmaku.collect {
                         updateDanmakuSwitchVisibility()
-                    }
-                }
-
-                launch {
-                    viewModel.dmMaskState.collect { state ->
-                        com.tutu.myblbl.core.common.log.AppLog.d("DmMaskFragment", "dmMaskState collected: $state")
-                        if (state is VideoPlayerViewModel.DmMaskState.Ready) {
-                            playerView.setDmMaskRepository(viewModel.dmMaskRepository)
-                            viewLifecycleOwner.lifecycleScope.launch {
-                                com.tutu.myblbl.core.common.log.AppLog.d("DmMaskFragment", "Calling loadDmMask: cid=${state.cid}, fps=${state.fps}")
-                                val success = playerView.loadDmMask(state.maskUrl, state.cid, state.fps)
-                                com.tutu.myblbl.core.common.log.AppLog.d("DmMaskFragment", "loadDmMask result: $success")
-                            }
-                        } else if (state is VideoPlayerViewModel.DmMaskState.Idle) {
-                            playerView.releaseDmMask()
-                        }
                     }
                 }
 

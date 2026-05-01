@@ -133,7 +133,10 @@ class MyPlayerView @JvmOverloads constructor(
         danmakuViewProvider = { dmkView },
         specialOverlayProvider = { specialDmkOverlayView },
         repository = DmMaskRepository()
-    )
+    ).also {
+        it.playerPositionProvider = { player?.currentPosition ?: 0L }
+        // Choreographer vsync 驱动 mask 更新，不再依赖 DanmakuView.onDraw
+    }
     private var downTouchX = 0f
     private var downTouchY = 0f
     private var isSwipeSeeking = false
@@ -1517,6 +1520,9 @@ class MyPlayerView @JvmOverloads constructor(
         danmakuController.syncPosition(positionMs, forceSeek)
         specialDanmakuController.syncPosition(positionMs, forceSeek)
         dmMaskController.onViewSizeChanged(dmkView?.width ?: 0, dmkView?.height ?: 0)
+        if (forceSeek) {
+            dmMaskController.onSeek()
+        }
         dmMaskController.onPositionChanged(positionMs)
     }
 
@@ -1528,6 +1534,9 @@ class MyPlayerView @JvmOverloads constructor(
         val success = dmMaskController.loadMask(maskUrl, cid, fps)
         if (success) {
             dmMaskController.onViewSizeChanged(dmkView?.width ?: 0, dmkView?.height ?: 0)
+            // 从设置读取开关状态
+            val shieldEnabled = settingView?.getDmSmartShield() ?: true
+            dmMaskController.setEnabled(shieldEnabled)
         }
         return success
     }

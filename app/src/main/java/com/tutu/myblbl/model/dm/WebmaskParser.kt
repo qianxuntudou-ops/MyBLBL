@@ -12,7 +12,7 @@ object WebmaskParser {
 
     private const val TAG = "WebmaskParser"
 
-    fun parse(data: ByteArray): DmMaskData? {
+    fun parse(data: ByteArray, fps: Int = 0): DmMaskData? {
         if (data.size < 16) return null
         val buf = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN)
 
@@ -31,31 +31,44 @@ object WebmaskParser {
             return null
         }
 
-        // Read segment table
-        val segments = mutableListOf<Pair<Long, Int>>()
+        // 只读 segment 索引表，不解析帧数据
+        val segments = mutableListOf<LazyMaskSegment>()
         for (i in 0 until segmentCount) {
             val timeMs = buf.long
             val offset = buf.long.toInt()
-            segments.add(timeMs to offset)
+            val endOffset = if (i + 1 < segmentCount) {
+                // 需要知道下一个 segment 的 offset，先存临时值
+                offset // placeholder
+            } else {
+                data.size
+            }
+            segments.add(LazyMaskSegment(timeMs = timeMs, startOffset = offset, endOffset = 0))
         }
 
-        // Parse each segment
-        val parsedSegments = mutableListOf<MaskSegment>()
+        // 回填 endOffset
         for (i in segments.indices) {
-            val (timeMs, startOffset) = segments[i]
-            val endOffset = if (i + 1 < segments.size) segments[i + 1].second else data.size
-            if (startOffset < 0 || endOffset > data.size || startOffset >= endOffset) continue
-
-            val segBytes = data.copyOfRange(startOffset, endOffset)
-            val frames = parseSegment(segBytes, i) ?: continue
-            parsedSegments.add(MaskSegment(timeMs = timeMs, frames = frames))
+            val endOff = if (i + 1 < segments.size) segments[i + 1].startOffset else data.size
+            segments[i] = segments[i].copy(endOffset = endOff, rawData = data)
         }
 
-        if (parsedSegments.isEmpty()) return null
-        return DmMaskData(fps = 0, segments = parsedSegments)
+        if (segments.isEmpty()) return null
+
+        // 诊断日志
+        AppLog.d(TAG, "Lazy parse done: ${segments.size} segments indexed")
+        segments.take(3).forEach {
+            AppLog.d(TAG, "seg: timeMs=${it.timeMs}, bytes=${it.endOffset - it.startOffset}")
+        }
+
+        return DmMaskData(fps = fps, rawSegments = segments)
     }
 
-    private fun parseSegment(segBytes: ByteArray, segIndex: Int): List<MaskFrame>? {
+    fun parseSegmentFrames(segment: LazyMaskSegment, fps: Int): List<MaskFrame>? {
+        val data = segment.rawData ?: return null
+        val startOffset = segment.startOffset
+        val endOffset = segment.endOffset
+        if (startOffset < 0 || endOffset > data.size || startOffset >= endOffset) return null
+
+        val segBytes = data.copyOfRange(startOffset, endOffset)
         val decompressed = try {
             GZIPInputStream(segBytes.inputStream()).use { gzip ->
                 val out = ByteArrayOutputStream()
@@ -63,7 +76,7 @@ object WebmaskParser {
                 out.toByteArray()
             }
         } catch (e: Exception) {
-            AppLog.e(TAG, "GZIP decompress failed for segment $segIndex: ${e.message}")
+            AppLog.e(TAG, "GZIP decompress failed: ${e.message}")
             return null
         }
 
@@ -71,25 +84,40 @@ object WebmaskParser {
         val parts = splitBy(decompressed, separator)
         if (parts.size <= 1) return null
 
+        var diagLogged = false
+        var emptyCount = 0
         val frames = mutableListOf<MaskFrame>()
-        val frameIntervalMs = 33L // ~30fps default
-
         for (frameIdx in 1 until parts.size) {
             val b64Data = parts[frameIdx]
             val svgBytes = try {
                 Base64.decode(b64Data, Base64.DEFAULT)
             } catch (e: Exception) {
+                frames.add(MaskFrame(paths = emptyList()))
+                emptyCount++
                 continue
             }
             val svgText = svgBytes.toString(Charsets.UTF_8)
+            if (!diagLogged) {
+                AppLog.d(TAG, "SVG frame[0] preview: ${svgText.take(300).replace('\n', ' ')}")
+                diagLogged = true
+            }
             val paths = parseSvgPaths(svgText)
-            if (paths.isNotEmpty()) {
-                frames.add(MaskFrame(
-                    relativeTimeMs = (frameIdx - 1) * frameIntervalMs,
-                    paths = paths
-                ))
+            if (paths.isEmpty()) emptyCount++
+            frames.add(MaskFrame(paths = paths))
+        }
+
+        // 前向填充：空帧用前一个有 path 的帧替代，避免遮罩冻结
+        var lastPaths: List<Path>? = null
+        for (i in frames.indices) {
+            if (frames[i].paths.isNotEmpty()) {
+                lastPaths = frames[i].paths
+            } else if (lastPaths != null) {
+                frames[i] = MaskFrame(paths = lastPaths)
+                emptyCount--
             }
         }
+
+        AppLog.d(TAG, "parseSegmentFrames: total=${frames.size}, withPaths=${frames.size - emptyCount}, remainingEmpty=$emptyCount")
         return frames.takeIf { it.isNotEmpty() }
     }
 
@@ -135,22 +163,17 @@ object WebmaskParser {
         return results
     }
 
-    /**
-     * SVG transform: translate(0, viewHeight) scale(0.1, -0.1)
-     * 反变换: pixelX = svgX * 0.1, pixelY = viewHeight - svgY * 0.1
-     * Path 直接存储像素坐标（320x180 坐标系），DmMaskController 渲染时再缩放到实际尺寸。
-     */
     private fun svgPathToAndroidPath(d: String, viewWidth: Float, viewHeight: Float): Path? {
         try {
             val path = Path()
-            val tokens = d.trim().split(Regex("\\s+"))
+            val tokens = tokenizeSvgPath(d.trim())
             var i = 0
             var currentCommand = 'M'
 
             while (i < tokens.size) {
                 val token = tokens[i]
                 when {
-                    token.length == 1 && token[0] in "MLmlCc" -> {
+                    token.length == 1 && token[0] in "MLmlCcSsQqTtAaHhVv" -> {
                         currentCommand = token[0]
                         i++
                         continue
@@ -160,28 +183,23 @@ object WebmaskParser {
                         i++
                         continue
                     }
-                    token[0].isDigit() || token[0] == '-' -> { /* keep currentCommand, implicit */ }
+                    token[0].isDigit() || token[0] == '-' || token[0] == '.' -> { /* keep currentCommand */ }
                     else -> { i++; continue }
                 }
 
                 when (currentCommand) {
                     'M' -> {
                         if (i + 1 >= tokens.size) break
-                        val px = tokens[i].toFloat() * 0.1f
-                        val py = viewHeight - tokens[i + 1].toFloat() * 0.1f
-                        path.moveTo(px, py)
+                        path.moveTo(tokens[i].toFloat() * 0.1f, viewHeight - tokens[i + 1].toFloat() * 0.1f)
                         i += 2
                     }
                     'L' -> {
                         if (i + 1 >= tokens.size) break
-                        val px = tokens[i].toFloat() * 0.1f
-                        val py = viewHeight - tokens[i + 1].toFloat() * 0.1f
-                        path.lineTo(px, py)
+                        path.lineTo(tokens[i].toFloat() * 0.1f, viewHeight - tokens[i + 1].toFloat() * 0.1f)
                         i += 2
                     }
                     'm' -> {
                         if (i + 1 >= tokens.size) break
-                        // 相对坐标：dx * 0.1, dy * -0.1（Y 轴反向）
                         path.rMoveTo(tokens[i].toFloat() * 0.1f, tokens[i + 1].toFloat() * -0.1f)
                         i += 2
                     }
@@ -216,6 +234,33 @@ object WebmaskParser {
             AppLog.e(TAG, "SVG path parse error: ${e.message}")
             return null
         }
+    }
+
+    private fun tokenizeSvgPath(d: String): List<String> {
+        val tokens = mutableListOf<String>()
+        val sb = StringBuilder()
+        val commands = "MmLlCcSsQqTtAaHhVvZz"
+
+        for (ch in d) {
+            if (ch in commands) {
+                if (sb.isNotEmpty()) {
+                    tokens.add(sb.toString())
+                    sb.clear()
+                }
+                tokens.add(ch.toString())
+            } else if (ch.isWhitespace() || ch == ',') {
+                if (sb.isNotEmpty()) {
+                    tokens.add(sb.toString())
+                    sb.clear()
+                }
+            } else {
+                sb.append(ch)
+            }
+        }
+        if (sb.isNotEmpty()) {
+            tokens.add(sb.toString())
+        }
+        return tokens
     }
 
     private fun extractFloat(text: String, pattern: String): Float? {

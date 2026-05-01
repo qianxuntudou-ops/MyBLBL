@@ -16,6 +16,7 @@ import com.tutu.myblbl.R
 import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.core.common.format.NumberUtils
 import com.tutu.myblbl.core.ui.focus.VideoCardFocusHelper
+import com.tutu.myblbl.core.ui.focus.tv.TvFocusableAdapter
 import com.tutu.myblbl.databinding.CellVideoBinding
 import com.tutu.myblbl.model.live.LiveRoomItem
 import com.tutu.myblbl.model.video.Owner
@@ -25,7 +26,15 @@ import com.tutu.myblbl.ui.dialog.VideoCardMenuDialog
 class LiveRoomAdapter(
     private val onItemClick: (LiveRoomItem) -> Unit,
     private val onTopEdgeUp: (() -> Boolean)? = null
-) : ListAdapter<LiveRoomItem, LiveRoomAdapter.ViewHolder>(DiffCallback) {
+) : ListAdapter<LiveRoomItem, LiveRoomAdapter.ViewHolder>(DiffCallback), TvFocusableAdapter {
+
+    override fun focusableItemCount(): Int = itemCount
+
+    override fun stableKeyAt(position: Int): String? = getItem(position)?.roomId?.toString()
+
+    override fun findPositionByStableKey(key: String): Int =
+        currentList.indexOfFirst { it.roomId.toString() == key }
+            .takeIf { it >= 0 } ?: RecyclerView.NO_POSITION
 
     fun setData(list: List<LiveRoomItem>) {
         submitList(list)

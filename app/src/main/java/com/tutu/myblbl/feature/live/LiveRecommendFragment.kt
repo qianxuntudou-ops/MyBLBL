@@ -39,6 +39,7 @@ class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveT
     private val mainNavigationViewModel: MainNavigationViewModel by activityViewModels()
     private lateinit var adapter: LiveRecommendAdapter
     private var swipeRefreshLayout: androidx.swiperefreshlayout.widget.SwipeRefreshLayout? = null
+    private var capturedRoomId: Long? = null
 
     override fun getViewBinding(
         inflater: LayoutInflater,
@@ -144,6 +145,7 @@ class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveT
     }
 
     override fun onExplicitRefresh() {
+        capturedRoomId = null
         viewModel.loadData(forceRefresh = true)
     }
 
@@ -166,6 +168,86 @@ class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveT
 
     private fun focusLeftNav(): Boolean {
         return (activity as? com.tutu.myblbl.ui.activity.MainActivity)?.focusLeftFunctionArea() == true
+    }
+
+    override fun onPause() {
+        captureFocus()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        restoreFocus()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (!hidden) {
+            restoreFocus()
+        }
+    }
+
+    override fun onDestroyView() {
+        capturedRoomId = null
+        super.onDestroyView()
+    }
+
+    private fun captureFocus() {
+        val focused = activity?.currentFocus ?: return
+        capturedRoomId = findFocusedRoomId(focused)
+    }
+
+    private fun findFocusedRoomId(focused: View): Long? {
+        var view: View? = focused
+        while (view != null) {
+            val parent = view.parent
+            if (parent is RecyclerView) {
+                val holder = parent.findContainingViewHolder(view)
+                if (holder != null && parent.adapter is LiveRoomAdapter) {
+                    val position = holder.bindingAdapterPosition
+                    if (position != RecyclerView.NO_POSITION) {
+                        return (parent.adapter as LiveRoomAdapter)
+                            .currentList.getOrNull(position)?.roomId
+                    }
+                }
+            }
+            view = parent as? View
+        }
+        return null
+    }
+
+    private fun restoreFocus() {
+        val roomId = capturedRoomId ?: return
+        capturedRoomId = null
+        if (!isAdded || view == null) return
+
+        val sections = adapter.currentList
+        for ((sectionIndex, section) in sections.withIndex()) {
+            val roomIndex = section.rooms.indexOfFirst { it.roomId == roomId }
+            if (roomIndex >= 0) {
+                binding.recyclerView.post {
+                    scrollToSectionAndFocusRoom(sectionIndex, roomIndex)
+                }
+                return
+            }
+        }
+    }
+
+    private fun scrollToSectionAndFocusRoom(sectionIndex: Int, roomIndex: Int) {
+        if (!isAdded || view == null) return
+        val sectionHolder = binding.recyclerView.findViewHolderForAdapterPosition(sectionIndex)
+        if (sectionHolder is LiveRecommendAdapter.ViewHolder) {
+            sectionHolder.focusRoomAt(roomIndex)
+            return
+        }
+        binding.recyclerView.scrollToPosition(sectionIndex)
+        binding.recyclerView.post {
+            if (!isAdded || view == null) return@post
+            val holder = binding.recyclerView.findViewHolderForAdapterPosition(sectionIndex)
+            if (holder is LiveRecommendAdapter.ViewHolder) {
+                holder.focusRoomAt(roomIndex)
+            }
+        }
     }
 
     /**

@@ -6,6 +6,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.core.os.bundleOf
 import androidx.lifecycle.Lifecycle
+import androidx.recyclerview.widget.RecyclerView
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.tutu.myblbl.R
@@ -17,6 +18,9 @@ import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.feature.settings.SignInFragment
 import com.tutu.myblbl.core.ui.layout.WrapContentGridLayoutManager
 import com.tutu.myblbl.core.common.content.ContentFilter
+import com.tutu.myblbl.core.ui.focus.tv.GridTvFocusStrategy
+import com.tutu.myblbl.core.ui.focus.tv.TvDataChangeReason
+import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
 import com.tutu.myblbl.core.ui.navigation.navigateBackFromUi
 import com.tutu.myblbl.core.ui.refresh.SwipeRefreshHelper
 import com.tutu.myblbl.core.common.ext.toast
@@ -40,6 +44,7 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
     private var latestError: String? = null
     private var isFirstPageLoad = true
     private var needsLogin = false
+    private var tvFocusController: TvListFocusController? = null
 
     companion object {
         private const val ARG_AREA_ID = "area_id"
@@ -80,6 +85,32 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
         binding.recyclerView.adapter = adapter
         binding.recyclerView.itemAnimator = null
         binding.recyclerView.setHasFixedSize(true)
+
+        tvFocusController = TvListFocusController(
+            recyclerView = binding.recyclerView,
+            adapter = adapter,
+            strategy = GridTvFocusStrategy { 4 },
+            canLoadMore = { viewModel.hasMore.value },
+            loadMore = {
+                if (!viewModel.loading.value && viewModel.hasMore.value) {
+                    viewModel.loadNextPage()
+                }
+            }
+        )
+        adapter.registerAdapterDataObserver(object : RecyclerView.AdapterDataObserver() {
+            override fun onChanged() {
+                tvFocusController?.onDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
+            }
+            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) {
+                tvFocusController?.onDataChanged(TvDataChangeReason.APPEND)
+            }
+            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) {
+                tvFocusController?.onDataChanged(TvDataChangeReason.REMOVE_ITEM)
+            }
+            override fun onItemRangeChanged(positionStart: Int, itemCount: Int) {
+                tvFocusController?.onDataChanged(TvDataChangeReason.REPLACE_PRESERVE_ANCHOR)
+            }
+        })
         binding.tvTitle.text = title
         binding.buttonBack.setOnClickListener {
             navigateBackFromUi()
@@ -197,11 +228,35 @@ class LiveListFragment : BaseFragment<FragmentLiveListBinding>(), LiveTabPage {
         LivePlayerActivity.start(requireContext(), room.roomId)
     }
 
+    override fun onPause() {
+        tvFocusController?.captureCurrentAnchor()
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        tvFocusController?.restoreCapturedAnchor()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (!hidden) {
+            tvFocusController?.restoreCapturedAnchor()
+        }
+    }
+
+    override fun onDestroyView() {
+        tvFocusController?.release()
+        tvFocusController = null
+        super.onDestroyView()
+    }
+
     override fun scrollToTop() {
         binding.recyclerView.smoothScrollToPosition(0)
     }
 
     private fun reload() {
+        tvFocusController?.clearAnchorForUserRefresh()
         viewModel.startArea(parentAreaId, areaId, preserveExisting = adapter.itemCount > 0)
     }
 

@@ -82,5 +82,23 @@ class LiveRecommendAdapter(
         fun requestPrimaryFocus(): Boolean {
             return binding.topTitle.requestFocus()
         }
+
+        fun focusRoomAt(roomIndex: Int): Boolean {
+            val innerRv = binding.recyclerView
+            val holder = innerRv.findViewHolderForAdapterPosition(roomIndex)
+            if (holder != null && holder.itemView.isAttachedToWindow) {
+                return holder.itemView.requestFocus()
+            }
+            innerRv.scrollToPosition(roomIndex)
+            innerRv.post {
+                innerRv.findViewHolderForAdapterPosition(roomIndex)?.itemView?.requestFocus()
+            }
+            return true
+        }
+
+        fun findRoomPositionByRoomId(roomId: Long): Int {
+            return roomAdapter.currentList.indexOfFirst { it.roomId == roomId }
+                .takeIf { it >= 0 } ?: RecyclerView.NO_POSITION
+        }
     }
 }

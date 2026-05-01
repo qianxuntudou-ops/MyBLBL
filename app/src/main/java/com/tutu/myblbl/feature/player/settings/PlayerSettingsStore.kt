@@ -22,7 +22,9 @@ data class PlayerSettings(
     val showNextPrevious: Boolean = false,
     val showDanmakuSwitch: Boolean = false,
     val fastSeekSeconds: Int = 10,
-    val resumePlayback: Boolean = true
+    val resumePlayback: Boolean = true,
+    val sponsorBlockEnabled: Boolean = false,
+    val sponsorBlockAutoSkip: Boolean = true
 )
 
 private object VideoQualityDefaults {
@@ -54,6 +56,8 @@ object PlayerSettingsStore {
     private const val KEY_SHOW_DM_SWITCH = "show_dm_switch"
     private const val KEY_FF_SEEK_SECOND = "ff_seek_second"
     private const val KEY_RESUME_PLAYBACK = "resume_playback"
+    private const val KEY_SPONSOR_BLOCK_ENABLED = "sponsor_block_enabled"
+    private const val KEY_SPONSOR_BLOCK_AUTO_SKIP = "sponsor_block_auto_skip"
 
     fun load(context: Context): PlayerSettings {
         fun readSetting(key: String): String? = appSettings.getCachedString(key)
@@ -89,6 +93,10 @@ object PlayerSettingsStore {
             append(readSetting(KEY_FF_SEEK_SECOND).orEmpty())
             append("|")
             append(readSetting(KEY_RESUME_PLAYBACK).orEmpty())
+            append("|")
+            append(readSetting(KEY_SPONSOR_BLOCK_ENABLED).orEmpty())
+            append("|")
+            append(readSetting(KEY_SPONSOR_BLOCK_AUTO_SKIP).orEmpty())
         }
         if (snapshot == lastSettingsSnapshot) {
             return cachedSettings!!
@@ -156,6 +164,14 @@ object PlayerSettingsStore {
                 ?: 10,
             resumePlayback = parseToggle(
                 readSetting(KEY_RESUME_PLAYBACK),
+                defaultValue = true
+            ),
+            sponsorBlockEnabled = parseToggle(
+                readSetting(KEY_SPONSOR_BLOCK_ENABLED),
+                defaultValue = false
+            ),
+            sponsorBlockAutoSkip = parseToggle(
+                readSetting(KEY_SPONSOR_BLOCK_AUTO_SKIP),
                 defaultValue = true
             )
         )

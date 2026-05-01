@@ -3,6 +3,7 @@ package com.tutu.myblbl.feature.player.view
 import android.content.Context
 import android.graphics.Color
 import android.os.SystemClock
+import androidx.media3.common.Player
 import com.kuaishou.akdanmaku.DanmakuConfig
 import com.kuaishou.akdanmaku.data.DanmakuItemData
 import com.kuaishou.akdanmaku.data.DanmakuVipGradientStyle
@@ -21,6 +22,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
@@ -39,6 +41,14 @@ class MyPlayerDanmakuController(
         private const val MERGE_DUPLICATE_WINDOW_MS = 15_000
         private const val MERGE_DUPLICATE_MIN_COUNT = 2
         private const val MAX_SYNC_DRIFT_MS = 1200L
+        private const val DRIFT_SYNC_INTERVAL_NORMAL_MS = 3200L
+        private const val DRIFT_SYNC_INTERVAL_HIGH_MS = 900L
+        private const val DRIFT_SYNC_INTERVAL_MEDIUM_MS = 1200L
+        private const val DRIFT_SYNC_INTERVAL_SLOW_MS = 3000L
+        private const val DRIFT_TOLERANCE_HIGH_SPEED_MS = 500L
+        private const val DRIFT_TOLERANCE_NORMAL_MS = 1200L
+        private const val DRIFT_FORCE_RESYNC_TICKS_NORMAL = 6
+        private const val DRIFT_FORCE_RESYNC_TICKS_NON_NORMAL = 3
         private const val COLORFUL_VIP_GRADIENT = 0xEA61
         private const val SEEK_DEDUP_WINDOW_MS = 300L
         private const val SEEK_DEDUP_POSITION_TOLERANCE_MS = 80L
@@ -98,7 +108,13 @@ class MyPlayerDanmakuController(
     private var prepareJob: Job? = null
     private var preloadTextureJob: Job? = null
     private var progressiveJob: Job? = null
+    private var driftSyncJob: Job? = null
     private var prepareGeneration: Long = 0L
+    private var currentPlaybackSpeed: Float = 1f
+    private var driftTickCount: Int = 0
+    private var wasBufferingWhilePlaying: Boolean = false
+
+    var playerPositionProvider: (() -> Long)? = null
 
     fun setData(
         data: List<DmModel>,
@@ -382,7 +398,39 @@ class MyPlayerDanmakuController(
     }
 
     fun updatePlaybackSpeed(speed: Float) {
+        currentPlaybackSpeed = speed.coerceAtLeast(0.1f)
         danmakuPlayer?.updatePlaySpeed(speed)
+    }
+
+    fun notifyPlaybackStateChanged(playbackState: Int, isPlaying: Boolean) {
+        when (playbackState) {
+            Player.STATE_BUFFERING -> {
+                if (isPlaying) {
+                    wasBufferingWhilePlaying = true
+                }
+            }
+            Player.STATE_READY -> {
+                if (wasBufferingWhilePlaying && isPlaying) {
+                    wasBufferingWhilePlaying = false
+                    val provider = playerPositionProvider ?: return
+                    val player = danmakuPlayer ?: return
+                    if (!isDanmakuStarted || isDanmakuPaused) return
+                    val videoPos = provider().coerceAtLeast(0L)
+                    seekPlayerTo(
+                        player = player,
+                        targetPositionMs = videoPos,
+                        currentTimeMs = player.getCurrentTimeMs(),
+                        forceSeek = true,
+                        reason = "buffering_recovery"
+                    )
+                } else {
+                    wasBufferingWhilePlaying = false
+                }
+            }
+            Player.STATE_ENDED -> {
+                wasBufferingWhilePlaying = false
+            }
+        }
     }
 
     fun setEnabled(enabled: Boolean) {
@@ -403,6 +451,7 @@ class MyPlayerDanmakuController(
             return
         }
         isDanmakuPaused = true
+        stopDriftSync()
         danmakuPositionMs = danmakuPlayer?.getCurrentTimeMs() ?: danmakuPositionMs
         danmakuPlayer?.pause()
     }
@@ -418,6 +467,23 @@ class MyPlayerDanmakuController(
         }
         ensurePlayer()
         danmakuPlayer?.start(danmakuConfig)
+        val provider = playerPositionProvider
+        if (provider != null) {
+            val videoPos = provider().coerceAtLeast(0L)
+            danmakuPlayer?.let { player ->
+                val enginePos = player.getCurrentTimeMs()
+                if (abs(enginePos - videoPos) > MAX_SYNC_DRIFT_MS) {
+                    seekPlayerTo(
+                        player = player,
+                        targetPositionMs = videoPos,
+                        currentTimeMs = enginePos,
+                        forceSeek = true,
+                        reason = "resume_sync"
+                    )
+                }
+            }
+        }
+        startDriftSync()
     }
 
     fun stop() {
@@ -427,6 +493,7 @@ class MyPlayerDanmakuController(
         liveThrottleCount = 0
         liveFlushJob?.cancel()
         progressiveJob?.cancel()
+        stopDriftSync()
         liveMergeBuffer.clear()
         liveSentTimestamps.clear()
         danmakuPositionMs = 0L
@@ -460,6 +527,7 @@ class MyPlayerDanmakuController(
         prepareJob?.cancel()
         preloadTextureJob?.cancel()
         progressiveJob?.cancel()
+        driftSyncJob?.cancel()
         liveFlushJob?.cancel()
         liveMergeBuffer.clear()
         liveSentTimestamps.clear()
@@ -710,6 +778,68 @@ class MyPlayerDanmakuController(
         if (currentTime > danmakuPositionMs) {
             danmakuPositionMs = currentTime
         }
+    }
+
+    private fun resolveDriftSyncIntervalMs(): Long {
+        val speed = currentPlaybackSpeed
+        return when {
+            speed >= 1.75f -> DRIFT_SYNC_INTERVAL_HIGH_MS
+            speed >= 1.25f -> DRIFT_SYNC_INTERVAL_MEDIUM_MS
+            speed <= 0.75f -> DRIFT_SYNC_INTERVAL_SLOW_MS
+            else -> DRIFT_SYNC_INTERVAL_NORMAL_MS
+        }
+    }
+
+    private fun resolveDriftToleranceMs(): Long {
+        return if (currentPlaybackSpeed >= 1.5f) DRIFT_TOLERANCE_HIGH_SPEED_MS
+        else DRIFT_TOLERANCE_NORMAL_MS
+    }
+
+    private fun shouldForceResync(): Boolean {
+        if (driftTickCount <= 0) return false
+        val isNearNormal = abs(currentPlaybackSpeed - 1f) <= 0.02f
+        val interval = if (isNearNormal) DRIFT_FORCE_RESYNC_TICKS_NORMAL
+        else DRIFT_FORCE_RESYNC_TICKS_NON_NORMAL
+        return driftTickCount % interval == 0
+    }
+
+    private fun startDriftSync() {
+        driftSyncJob?.cancel()
+        driftTickCount = 0
+        val provider = playerPositionProvider
+        if (provider == null) return
+        driftSyncJob = controllerScope.launch {
+            while (isActive) {
+                delay(resolveDriftSyncIntervalMs())
+                try {
+                    withContext(Dispatchers.Main.immediate) {
+                        if (!isDanmakuStarted || isDanmakuPaused) return@withContext
+                        val player = danmakuPlayer ?: return@withContext
+                        val videoPos = provider().coerceAtLeast(0L)
+                        val enginePos = player.getCurrentTimeMs()
+                        val drift = abs(enginePos - videoPos)
+                        driftTickCount++
+                        if (shouldForceResync() || drift > resolveDriftToleranceMs()) {
+                            seekPlayerTo(
+                                player = player,
+                                targetPositionMs = videoPos,
+                                currentTimeMs = enginePos,
+                                forceSeek = true,
+                                reason = "drift_sync"
+                            )
+                        }
+                    }
+                } catch (_: Exception) {
+                    AppLog.w(TAG, "Drift sync tick failed, will retry")
+                }
+            }
+        }
+    }
+
+    private fun stopDriftSync() {
+        driftSyncJob?.cancel()
+        driftSyncJob = null
+        driftTickCount = 0
     }
 
     private fun releasePlayer() {

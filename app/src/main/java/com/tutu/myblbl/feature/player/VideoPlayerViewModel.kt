@@ -67,6 +67,8 @@ import kotlinx.coroutines.withContext
 import org.koin.mp.KoinPlatform
 import java.util.concurrent.TimeUnit
 import java.util.UUID
+import com.tutu.myblbl.feature.player.sponsor.SponsorBlockUseCase
+import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
 
 @UnstableApi
 class VideoPlayerViewModel(
@@ -374,6 +376,21 @@ class VideoPlayerViewModel(
     private val _currentPosition = MutableStateFlow(0L)
     val currentPosition: StateFlow<Long> = _currentPosition
 
+    private val sponsorBlockUseCase = SponsorBlockUseCase()
+
+    sealed interface SponsorSkipUiState {
+        data object Hidden : SponsorSkipUiState
+        data class ShowButton(val segment: SponsorSegment) : SponsorSkipUiState
+        data class AutoSkipped(val segment: SponsorSegment) : SponsorSkipUiState
+    }
+
+    private val _sponsorSkipState = MutableStateFlow<SponsorSkipUiState>(SponsorSkipUiState.Hidden)
+    val sponsorSkipState: StateFlow<SponsorSkipUiState> = _sponsorSkipState
+    private var sponsorSkipPending = false
+
+    private val _sponsorSegments = MutableStateFlow<List<SponsorSegment>>(emptyList())
+    val sponsorSegments: StateFlow<List<SponsorSegment>> = _sponsorSegments
+
     private val _duration = MutableStateFlow(0L)
     val duration: StateFlow<Long> = _duration
 
@@ -644,6 +661,14 @@ class VideoPlayerViewModel(
             preloadInitialDanmakuSegment(cid = cid, aid = aid ?: 0L, segmentIndex = resumeSegment)
         }
 
+        // 加载空降助手片段（不阻塞主流程）
+        if (bvid?.isNotBlank() == true && cid > 0L && currentSettings.sponsorBlockEnabled) {
+            viewModelScope.launch {
+                sponsorBlockUseCase.loadSegments(bvid, cid)
+                _sponsorSegments.value = sponsorBlockUseCase.getSegments()
+            }
+        }
+
         viewModelScope.launch {
             _isLoading.value = true
             currentPlayInfo = null
@@ -672,6 +697,9 @@ class VideoPlayerViewModel(
             _currentSubtitleText.value = null
             currentSubtitleCueIndex = 0
             clearDanmaku()
+            sponsorBlockUseCase.reset()
+            _sponsorSkipState.value = SponsorSkipUiState.Hidden
+            _sponsorSegments.value = emptyList()
             _dmMaskState.value = DmMaskState.Idle
             dmMaskRepository.clearAll()
             onDmMaskReset?.invoke()
@@ -894,7 +922,9 @@ class VideoPlayerViewModel(
     ) {
         val sanitizedPositionMs = positionMs.coerceAtLeast(0L)
         val sanitizedDurationMs = durationMs.takeIf { it > 0L } ?: 0L
-        pendingSeekPositionMs = sanitizedPositionMs
+        if (!sponsorSkipPending) {
+            pendingSeekPositionMs = sanitizedPositionMs
+        }
         if (publishProgressState) {
             if (_currentPosition.value != sanitizedPositionMs) {
                 _currentPosition.value = sanitizedPositionMs
@@ -904,6 +934,7 @@ class VideoPlayerViewModel(
             }
         }
         updateSubtitleText(sanitizedPositionMs)
+        checkSponsorBlock(sanitizedPositionMs)
         onDanmakuSegmentChanged(sanitizedPositionMs)
     }
 
@@ -3607,6 +3638,52 @@ class VideoPlayerViewModel(
             preconnectCdnHosts(videoUrls, audioUrls)
         } catch (e: Exception) {
         }
+    }
+
+    private fun checkSponsorBlock(positionMs: Long) {
+        val settings = currentSettings
+        if (!settings.sponsorBlockEnabled) return
+        if (sponsorSkipPending) {
+            if (positionMs >= pendingSeekPositionMs - 500L) {
+                sponsorSkipPending = false
+                pendingSeekPositionMs = positionMs
+            }
+            return
+        }
+        val result = sponsorBlockUseCase.checkPosition(positionMs, autoSkip = true)
+        when {
+            result == null -> {
+                val current = _sponsorSkipState.value
+                if (current is SponsorSkipUiState.ShowButton) {
+                    _sponsorSkipState.value = SponsorSkipUiState.Hidden
+                }
+            }
+            result.action == SponsorBlockUseCase.SkipAction.AUTO_SKIP -> {
+                _sponsorSkipState.value = SponsorSkipUiState.AutoSkipped(result.segment)
+                pendingSeekPositionMs = result.segment.endTimeMs
+                sponsorSkipPending = true
+            }
+            result.action == SponsorBlockUseCase.SkipAction.SHOW_BUTTON -> {
+                _sponsorSkipState.value = SponsorSkipUiState.ShowButton(result.segment)
+            }
+        }
+    }
+
+    fun sponsorSkip(): Long? {
+        val targetMs = sponsorBlockUseCase.skipCurrent() ?: return null
+        _sponsorSkipState.value = SponsorSkipUiState.Hidden
+        pendingSeekPositionMs = targetMs
+        return targetMs
+    }
+
+    fun sponsorDismiss() {
+        sponsorBlockUseCase.dismissCurrent()
+        _sponsorSkipState.value = SponsorSkipUiState.Hidden
+    }
+
+    fun sponsorUserSeek(positionMs: Long) {
+        sponsorBlockUseCase.onUserSeek(positionMs)
+        _sponsorSkipState.value = SponsorSkipUiState.Hidden
     }
 }
 

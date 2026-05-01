@@ -16,6 +16,7 @@ import android.widget.ProgressBar
 import android.widget.TextClock
 import android.widget.TextView
 import android.widget.Toast
+import com.tutu.myblbl.core.common.ext.toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.AppCompatImageView
@@ -713,6 +714,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             }
             override fun onDmEnableChange(enabled: Boolean) { playerView.setDanmakuEnabled(enabled) }
         })
+        playerView.onUserSeekListener = { positionMs ->
+            viewModel.sponsorUserSeek(positionMs)
+        }
         backgroundListener = object : AppBackgroundMonitor.BackgroundStateListener {
             override fun onAppBackgroundStateChanged(isInBackground: Boolean) {
                 val p = player ?: return
@@ -1013,6 +1017,32 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         lifecycleScope.launch {
             viewModel.currentCidLive.collect { cid ->
                 interactionView.setCurrentCid(cid)
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.sponsorSkipState.collect { state ->
+                when (state) {
+                    is VideoPlayerViewModel.SponsorSkipUiState.Hidden -> {}
+                    is VideoPlayerViewModel.SponsorSkipUiState.ShowButton -> {}
+                    is VideoPlayerViewModel.SponsorSkipUiState.AutoSkipped -> {
+                        toast("已跳过: ${state.segment.categoryName()}")
+                        player?.seekTo(state.segment.endTimeMs)
+                    }
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.sponsorSegments.collect { segments ->
+                val controller = playerView.getController()
+                controller?.setSponsorSegments(segments)
+                controller?.setSponsorDuration(viewModel.duration.value)
+            }
+        }
+        lifecycleScope.launch {
+            viewModel.duration.collect { durationMs ->
+                playerView.getController()?.setSponsorDuration(durationMs)
             }
         }
     }

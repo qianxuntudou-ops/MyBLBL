@@ -509,7 +509,9 @@ class MyPlayerSettingView @JvmOverloads constructor(
                 onPlayerSettingInnerChange?.onDmSmartShield(panelState.dmSmartShield)
             }
         }
-        showDmSettingMenu()
+        when (adapter.currentMenuKey) {
+            ITEM_DM_SETTING -> showDmSettingMenu()
+        }
     }
 
     private fun handleDmToggleClick(itemId: Int): Boolean {
@@ -550,7 +552,9 @@ class MyPlayerSettingView @JvmOverloads constructor(
         }
         val label = if (newValue) context.getString(R.string.on) else context.getString(R.string.off)
         Toast.makeText(context, "$title：$label", Toast.LENGTH_SHORT).show()
-        showDmSettingMenu(animateTransition = true)
+        when {
+            itemId in ITEM_DM_ENABLE..ITEM_DM_SMART_SHIELD -> showDmSettingMenu(animateTransition = true)
+        }
         return true
     }
 

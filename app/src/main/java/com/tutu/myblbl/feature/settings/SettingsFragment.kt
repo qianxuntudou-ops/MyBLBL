@@ -105,6 +105,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         private const val KEY_GAIA_VGATE_V_VOUCHER_SAVED_AT_MS = "gaia_vgate_v_voucher_saved_at_ms"
         private const val KEY_IPV4_ONLY = "ipv4_only"
         private const val KEY_RESUME_PLAYBACK = "resume_playback"
+        private const val KEY_SPONSOR_BLOCK_ENABLED = "sponsor_block_enabled"
         private const val COMMON_POSITION_RISK_CONTROL = 7
         private val DM_SMART_FILTER_OPTIONS = arrayOf("关", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10")
 
@@ -200,7 +201,8 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             SettingModel(getString(R.string.show_next_previous), "关"),
             SettingModel(getString(R.string.show_dm_switch), "关"),
             SettingModel(getString(R.string.ipv4_only), "开"),
-            SettingModel(getString(R.string.resume_playback), "开")
+            SettingModel(getString(R.string.resume_playback), "开"),
+            SettingModel("空降助手", "关")
         )
 
         dmSettings = mutableListOf(
@@ -358,6 +360,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             13 -> toggleSetting(playerSettings, 13, KEY_SHOW_DM_SWITCH)
             14 -> toggleSetting(playerSettings, 14, KEY_IPV4_ONLY)
             15 -> toggleSetting(playerSettings, 15, KEY_RESUME_PLAYBACK)
+            16 -> toggleSetting(playerSettings, 16, KEY_SPONSOR_BLOCK_ENABLED)
         }
     }
 
@@ -751,6 +754,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         applySavedValue(playerSettings, 13, KEY_SHOW_DM_SWITCH)
         applySavedValue(playerSettings, 14, KEY_IPV4_ONLY)
         applySavedValue(playerSettings, 15, KEY_RESUME_PLAYBACK)
+        applySavedValue(playerSettings, 16, KEY_SPONSOR_BLOCK_ENABLED)
 
         applySavedValue(dmSettings, 0, KEY_DM_SWITCH)
         applySavedValue(dmSettings, 1, KEY_DM_ALPHA)

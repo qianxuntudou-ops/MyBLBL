@@ -125,7 +125,9 @@ class MyPlayerView @JvmOverloads constructor(
     private val danmakuController = MyPlayerDanmakuController(
         context = context,
         danmakuViewProvider = { dmkView }
-    )
+    ).also {
+        it.playerPositionProvider = { player?.currentPosition ?: 0L }
+    }
     private val specialDanmakuController = MyPlayerSpecialDanmakuController(
         overlayViewProvider = { specialDmkOverlayView }
     )
@@ -184,6 +186,7 @@ class MyPlayerView @JvmOverloads constructor(
     var onResumeProgressCancelled: (() -> Boolean)? = null
     private var renderEventListener: RenderEventListener? = null
     var seekPreviewUpdateListener: SeekPreviewUpdateListener? = null
+    var onUserSeekListener: ((Long) -> Unit)? = null
 
     private val componentListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -208,6 +211,7 @@ class MyPlayerView @JvmOverloads constructor(
             updateErrorMessage()
             updateControllerVisibility()
             updatePauseIndicator()
+            danmakuController.notifyPlaybackStateChanged(playbackState, player?.isPlaying == true)
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -306,6 +310,7 @@ class MyPlayerView @JvmOverloads constructor(
                 }
             })
             controller?.setOnSeekCommitListener { positionMs ->
+                onUserSeekListener?.invoke(positionMs)
                 syncDanmakuPosition(positionMs, forceSeek = true)
             }
             controller?.setProgressOnlyUiEnabled(!persistentBottomProgressEnabled)
@@ -941,6 +946,7 @@ class MyPlayerView @JvmOverloads constructor(
             val wasTimebarSeek = timebarSeekActive
             val finalTarget = (tapAccumulateBaseMs + tapAccumulateDeltaMs).coerceIn(0L, p.duration.coerceAtLeast(0L))
             p.seekTo(finalTarget)
+            onUserSeekListener?.invoke(finalTarget)
             syncDanmakuPosition(finalTarget, forceSeek = true)
             controller?.cancelSeekPreview()
             tapOverlayView?.finishSwipeSeek()
@@ -1014,6 +1020,7 @@ class MyPlayerView @JvmOverloads constructor(
                 resetTapAccumulate()
                 if (timebarSeekActive && player != null) {
                     player?.seekTo(timebarSeekTargetMs)
+                    onUserSeekListener?.invoke(timebarSeekTargetMs)
                     syncDanmakuPosition(timebarSeekTargetMs, forceSeek = true)
                 }
                 controller?.cancelSeekPreview()
@@ -1359,6 +1366,7 @@ class MyPlayerView @JvmOverloads constructor(
         controller?.showHideTimeText(show)
     }
 
+
     fun showSettingButton(show: Boolean) {
         controller?.showSettingButton(show)
     }
@@ -1663,6 +1671,7 @@ class MyPlayerView @JvmOverloads constructor(
                     return false
                 }
                 currentPlayer.seekTo(swipeSeekTargetPositionMs)
+                onUserSeekListener?.invoke(swipeSeekTargetPositionMs)
                 syncDanmakuPosition(swipeSeekTargetPositionMs, forceSeek = true)
                 controller?.endSeekPreview(swipeSeekTargetPositionMs, 180L)
                 controller?.exitSeekProgressOnly()

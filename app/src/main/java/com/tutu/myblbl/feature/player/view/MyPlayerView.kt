@@ -1,11 +1,15 @@
 package com.tutu.myblbl.feature.player.view
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
 import android.graphics.Color
+import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
 import android.util.AttributeSet
+import android.view.FrameMetrics
 import android.view.GestureDetector
 import android.view.KeyEvent
 import android.view.LayoutInflater
@@ -15,17 +19,20 @@ import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewConfiguration
+import android.view.Window
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.annotation.OptIn
+import androidx.annotation.RequiresApi
 import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.video.VideoFrameMetadataListener
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.kuaishou.akdanmaku.ui.DanmakuView
 import com.tutu.myblbl.R
@@ -77,6 +84,7 @@ class MyPlayerView @JvmOverloads constructor(
     private var tapOverlayView: YouTubeOverlay? = null
     private var dmkView: DanmakuView? = null
     private var specialDmkOverlayView: SpecialDanmakuOverlayView? = null
+    private var dmkMaskHost: DanmakuMaskHostLayout? = null
     private var pauseIndicatorView: View? = null
 
     private var player: ExoPlayer? = null
@@ -132,13 +140,35 @@ class MyPlayerView @JvmOverloads constructor(
         overlayViewProvider = { specialDmkOverlayView }
     )
     private val dmMaskController = DmMaskController(
-        danmakuViewProvider = { dmkView },
-        specialOverlayProvider = { specialDmkOverlayView },
+        maskHostProvider = { dmkMaskHost },
         repository = DmMaskRepository()
     ).also {
         it.playerPositionProvider = { player?.currentPosition ?: 0L }
         // Choreographer vsync 驱动 mask 更新，不再依赖 DanmakuView.onDraw
     }
+
+    /**
+     * ExoPlayer 在 playback thread 上每帧调用一次，告诉我们"PTS=ptsUs 这一帧将于
+     * wall_clock=releaseNs release 到 surface"。把锚点推给 mask 控制器后，mask
+     * frameCallback 就能严格推算"自身上屏时刻视频显示的 PTS"。
+     *
+     * 性能：仅写 3 个 @Volatile 字段，<1µs/帧，30~60Hz 调用对 playback thread 无影响。
+     */
+    private val videoFrameAnchorListener = VideoFrameMetadataListener {
+        presentationTimeUs, releaseTimeNs, _, _ ->
+        dmMaskController.onVideoFrameAnchor(presentationTimeUs, releaseTimeNs)
+    }
+
+    /**
+     * Window FrameMetrics 处理：API 24+ 持续推送上一帧的渲染管道时延。我们把它实测值
+     * 推给 mask 控制器做 EMA，让"mask 上屏延迟估计"自适应当前设备/负载状态，
+     * 替代原来的硬编码 33ms。
+     *
+     * 在独立的 [HandlerThread] 上接收 metrics，避免主线程被 metric 计算挤占。
+     */
+    private var frameMetricsThread: HandlerThread? = null
+    private var frameMetricsHandler: Handler? = null
+    private var frameMetricsListener: Window.OnFrameMetricsAvailableListener? = null
     private var downTouchX = 0f
     private var downTouchY = 0f
     private var isSwipeSeeking = false
@@ -171,6 +201,16 @@ class MyPlayerView @JvmOverloads constructor(
     private var timebarSeekTargetMs = 0L
     private val timebarSeekIdleTimeoutMs = 200L
 
+    // 必须放在 init {} 之前，否则 init 中的 setupSurfaceView() 会先访问到 null 字段，
+    // 造成 ViewRoot performLayout 时 OnLayoutChangeListener 列表里有 null → NPE 崩溃。
+    private val maskBoundsUpdater = Runnable { updateMaskVideoBounds() }
+
+    private val maskBoundsLayoutListener = OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+        // post 到下一帧，等待 surface view 完成 layout 后再读尺寸，避免拿到中间状态。
+        handler.removeCallbacks(maskBoundsUpdater)
+        handler.post(maskBoundsUpdater)
+    }
+
     interface ControllerVisibilityListener {
         fun onVisibilityChanged(visibility: Int)
     }
@@ -197,6 +237,8 @@ class MyPlayerView @JvmOverloads constructor(
                 settingView?.setCurrentSpeed(speed)
                 danmakuController.updatePlaybackSpeed(speed)
                 specialDanmakuController.updatePlaybackSpeed(speed)
+                // mask 用 anchor 推算时按 speed 缩放时间差，倍速播放时也能严格对齐。
+                dmMaskController.setPlaybackSpeed(speed)
             }
         }
 
@@ -212,6 +254,27 @@ class MyPlayerView @JvmOverloads constructor(
             updateControllerVisibility()
             updatePauseIndicator()
             danmakuController.notifyPlaybackStateChanged(playbackState, player?.isPlaying == true)
+            // mask 控制器需要知道 player 是否真的在解码、可以输出新帧。
+            // STATE_READY 后再加一段稳定窗口才放开 mask 渲染，避免 seek 完成瞬间 mask 比视频先一帧。
+            dmMaskController.setPlaybackReady(playbackState == Player.STATE_READY)
+        }
+
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            // mask 控制器需要知道是否正在播放：播放时引入 lookahead 补偿管道延迟，暂停时严格对齐当前帧。
+            dmMaskController.setPlaying(isPlaying)
+        }
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) {
+            if (reason == Player.DISCONTINUITY_REASON_SEEK ||
+                reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT
+            ) {
+                // seek 后 video 解码追上前不渲染 mask，避免 200ms 错位窗口。
+                dmMaskController.onSeek()
+            }
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -220,6 +283,8 @@ class MyPlayerView @JvmOverloads constructor(
 
         override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
             updateAspectRatio()
+            // 视频分辨率/像素宽高比变化会让 letterbox 矩形改变，立即同步给 mask。
+            updateMaskVideoBounds()
         }
 
         override fun onRenderedFirstFrame() {
@@ -252,6 +317,7 @@ class MyPlayerView @JvmOverloads constructor(
         errorMessageView = findViewById(R.id.exo_error_message)
         dmkView = findViewById(R.id.dmk_view)
         specialDmkOverlayView = findViewById(R.id.special_dmk_overlay)
+        dmkMaskHost = findViewById(R.id.dmk_mask_host)
         pauseIndicatorView = findViewById(R.id.image_pause_indicator)
 
         setupSurfaceView()
@@ -277,6 +343,9 @@ class MyPlayerView @JvmOverloads constructor(
             surfaceView.layoutParams = layoutParams
             videoSurfaceView = surfaceView
             frame.addView(surfaceView, 0)
+            // 监听 video surface 与 mask host 的 layout，让 mask 缩放始终对齐视频实际显示矩形。
+            surfaceView.addOnLayoutChangeListener(maskBoundsLayoutListener)
+            dmkMaskHost?.addOnLayoutChangeListener(maskBoundsLayoutListener)
         }
     }
 
@@ -431,6 +500,8 @@ class MyPlayerView @JvmOverloads constructor(
     fun setPlayer(player: ExoPlayer?) {
         val previousPlayer = this.player
         previousPlayer?.removeListener(componentListener)
+        // 反注册 video frame metadata listener，避免泄漏到上一个 player。
+        previousPlayer?.clearVideoFrameMetadataListener(videoFrameAnchorListener)
         when (val surfaceView = videoSurfaceView) {
             is SurfaceView -> previousPlayer?.clearVideoSurfaceView(surfaceView)
             is TextureView -> previousPlayer?.clearVideoTextureView(surfaceView)
@@ -440,6 +511,11 @@ class MyPlayerView @JvmOverloads constructor(
         }
         this.player = player
         player?.addListener(componentListener)
+        // 注册到新 player：每帧拿到 (PTS, releaseTimeNs) 锚点驱动 mask 时间戳精确对齐。
+        player?.setVideoFrameMetadataListener(videoFrameAnchorListener)
+        // player 切换会带来新的播放参数，立即同步当前速度，避免 mask 在拿到首个
+        // PARAMETERS_CHANGED 事件前用旧速度推算。
+        player?.let { dmMaskController.setPlaybackSpeed(it.playbackParameters.speed) }
         when (val surfaceView = videoSurfaceView) {
             is SurfaceView -> player?.setVideoSurfaceView(surfaceView)
             is TextureView -> player?.setVideoTextureView(surfaceView)
@@ -493,6 +569,26 @@ class MyPlayerView @JvmOverloads constructor(
         val pixelWidthHeightRatio = videoSize.pixelWidthHeightRatio
         val aspectRatio = (width * pixelWidthHeightRatio) / height.toFloat()
         contentFrame?.setAspectRatio(aspectRatio)
+    }
+
+    /**
+     * 把 video surface 的当前显示矩形换算到 maskHost 坐标系，推送给 [DmMaskController]。
+     * 触发时机：video size 变化、resize mode 切换、surface view 重新 layout、mask host 自身 layout 变化。
+     */
+    private fun updateMaskVideoBounds() {
+        val surface = videoSurfaceView ?: return
+        val maskHost = dmkMaskHost ?: return
+        val w = surface.width
+        val h = surface.height
+        if (w <= 0 || h <= 0) return
+        // surface view 与 mask host 都以 player view 为根，可直接用 view-tree 内坐标差。
+        val surfaceLoc = IntArray(2)
+        val hostLoc = IntArray(2)
+        surface.getLocationInWindow(surfaceLoc)
+        maskHost.getLocationInWindow(hostLoc)
+        val left = surfaceLoc[0] - hostLoc[0]
+        val top = surfaceLoc[1] - hostLoc[1]
+        dmMaskController.setVideoBounds(left, top, w, h)
     }
 
     private fun updateBuffering() {
@@ -635,6 +731,7 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        android.util.Log.d("MyPlayerView", "dispatchKeyEvent: keyCode=${event.keyCode} action=${event.action} repeat=${event.repeatCount}")
         val isBackKey = event.keyCode == KeyEvent.KEYCODE_BACK
         if (player == null) return super.dispatchKeyEvent(event)
         if (controller == null) return false
@@ -677,7 +774,8 @@ class MyPlayerView @JvmOverloads constructor(
         }
 
         if (seekSession?.isActive() == true) {
-            if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+            if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_LEFT_COMPAT || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT) {
                 return handleSeekSessionKeyEvent(event)
             }
             // Non-seek key during active session (e.g. BACK): cancel session and clean up UI
@@ -714,26 +812,31 @@ class MyPlayerView @JvmOverloads constructor(
                     controller?.show()
                     controller?.startProgressUpdates()
                 }
+                uiCoordinator?.transition(com.tutu.myblbl.feature.player.UiEvent.SeekCancelled)
                 return true
             }
         }
 
         // Timebar-focused seek has priority: always route LEFT/RIGHT to timebar when it's focused
-        if (timebarSeekActive && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+        if (timebarSeekActive && (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_LEFT_COMPAT || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT)) {
             val forward = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT
             return handleTimebarSeekKeyEvent(event, forward)
         }
 
         // When tap accumulation is active (commit pending), controller is in progress-only mode.
         // Route seek keys to handleSeekSessionKeyEvent to avoid falling through to maybeShowController.
         if (tapCommitRunnable != null &&
-            (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_LEFT_COMPAT || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT)) {
             return handleSeekSessionKeyEvent(event)
         }
 
         if (gestureListener.isDoubleTapping) {
             if (event.action == KeyEvent.ACTION_DOWN &&
-                (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT)
+                (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                    || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_LEFT_COMPAT || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT)
             ) {
                 gestureListener.cancelInDoubleTapMode()
                 handleSeekSessionKeyEvent(event)
@@ -744,16 +847,24 @@ class MyPlayerView @JvmOverloads constructor(
         }
 
         val isDpadKey = isDpadKey(event.keyCode)
-        val isSeekKey = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+        val isSeekKey = event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+            || event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+            || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_LEFT_COMPAT
+            || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT
 
         if (isDpadKey && useController) {
             val controllerVisible = controller?.isFullyVisible() == true
+            val timebarFocused = controller?.isTimebarFocused() == true
+            android.util.Log.d("MyPlayerView", "  isSeekKey=$isSeekKey controllerVisible=$controllerVisible timebarFocused=$timebarFocused action=${event.action}")
             if (isSeekKey && controller?.isTimebarFocused() == true) {
+                android.util.Log.d("MyPlayerView", "  -> handleTimebarSeekKeyEvent")
                 val forward = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                    || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT
                 return handleTimebarSeekKeyEvent(event, forward)
             }
             if (isSeekKey && event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
                 if (!controllerVisible || controller?.isScrubbingTimeBar() == true) {
+                    android.util.Log.d("MyPlayerView", "  -> handleSeekSessionKeyEvent (hidden/scrubbing)")
                     return handleSeekSessionKeyEvent(event)
                 }
             } else if (isSeekKey && event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0) {
@@ -780,8 +891,10 @@ class MyPlayerView @JvmOverloads constructor(
                 return true
             }
             if (!controllerVisible) {
+                android.util.Log.d("MyPlayerView", "  -> !controllerVisible path, action=${event.action} isSeekKey=$isSeekKey")
                 if (event.action == KeyEvent.ACTION_DOWN) {
                     if (!gestureListener.handleKeyDown(event) && !gestureListener.isDoubleTapping) {
+                        android.util.Log.d("MyPlayerView", "  -> maybeShowController + focusButtonByKeyDown!")
                         maybeShowController(true)
                         controller?.focusButtonByKeyDown(event)
                     }
@@ -835,6 +948,7 @@ class MyPlayerView @JvmOverloads constructor(
     private fun handleSeekSessionKeyEvent(event: KeyEvent): Boolean {
         val session = seekSession ?: return false
         val forward = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+            || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT
 
         if (event.action == KeyEvent.ACTION_DOWN) {
             cancelPendingExitSeekProgressOnly()
@@ -956,8 +1070,10 @@ class MyPlayerView @JvmOverloads constructor(
                 controller?.show()
                 controller?.startProgressUpdates()
                 controller?.requestTimeBarFocus()
+                uiCoordinator?.transition(com.tutu.myblbl.feature.player.UiEvent.SeekFinished)
             } else {
                 controller?.exitSeekProgressOnly()
+                uiCoordinator?.transition(com.tutu.myblbl.feature.player.UiEvent.SeekFinished)
             }
             tapAccumulateDeltaMs = 0L
             tapAccumulateBaseMs = 0L
@@ -988,6 +1104,8 @@ class MyPlayerView @JvmOverloads constructor(
                 timebarSeekForward = forward
                 timebarSeekStartMs = 0L
                 controller?.enterSeekProgressOnly()
+                uiCoordinator?.transition(com.tutu.myblbl.feature.player.UiEvent.SeekTypeChanged(
+                    com.tutu.myblbl.feature.player.SeekType.TAP))
             }
             // Only schedule hold start on initial press (repeatCount == 0).
             // Repeat events would keep pushing the delay forward, preventing the hold from ever starting.
@@ -1088,6 +1206,7 @@ class MyPlayerView @JvmOverloads constructor(
                 timebarSeekStartMs = 0L
                 controller?.show()
                 controller?.startProgressUpdates()
+                uiCoordinator?.transition(com.tutu.myblbl.feature.player.UiEvent.SeekFinished)
             }
         }
         timebarSeekIdleRunnable = runnable
@@ -1128,6 +1247,10 @@ class MyPlayerView @JvmOverloads constructor(
     fun setResizeMode(resizeMode: Int) {
         contentFrame?.setResizeMode(resizeMode)
         settingView?.setCurrentScreenRatio(resizeMode)
+        // resize mode 变化会改变 letterbox 大小；surface view 完成 layout 后自然会回调
+        // maskBoundsLayoutListener，这里再 post 一次防止边界 case 漏掉。
+        handler.removeCallbacks(maskBoundsUpdater)
+        handler.post(maskBoundsUpdater)
     }
 
     fun setTitle(title: String?) {
@@ -1428,15 +1551,74 @@ class MyPlayerView @JvmOverloads constructor(
         controller?.clearVideoSettingChangeListener()
         val currentPlayer = player
         currentPlayer?.removeListener(componentListener)
+        currentPlayer?.clearVideoFrameMetadataListener(videoFrameAnchorListener)
         when (val surfaceView = videoSurfaceView) {
             is SurfaceView -> currentPlayer?.clearVideoSurfaceView(surfaceView)
             is TextureView -> currentPlayer?.clearVideoTextureView(surfaceView)
         }
         controller?.removeVisibilityListener(controllerComponentListener)
         handler.removeCallbacksAndMessages(null)
+        // 反注册 FrameMetrics 并停掉后台线程（onDetachedFromWindow 通常会先走，但 destroy 兜底）。
+        uninstallFrameMetricsListener()
         danmakuController.release()
         specialDanmakuController.release()
-        dmMaskController.release()
+        dmMaskController.dispose()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        // FrameMetrics API 24+，旧设备静默回退到 [DmMaskController] 内部硬编码默认值。
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            installFrameMetricsListener()
+        }
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        uninstallFrameMetricsListener()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.N)
+    private fun installFrameMetricsListener() {
+        if (frameMetricsListener != null) return
+        val activity = context as? Activity ?: return
+        val window = activity.window ?: return
+        val thread = HandlerThread("mask-frame-metrics", Thread.NORM_PRIORITY - 1).apply { start() }
+        val handler = Handler(thread.looper)
+        // 各阶段毫秒粒度延迟：合并起来 ≈ 应用层渲染管道总耗时。
+        // 不取 TOTAL_DURATION，因为它包含了"等待下一个 vsync"的空闲时间，会高估实际工作量。
+        val listener = Window.OnFrameMetricsAvailableListener { _, metrics, _ ->
+            try {
+                val draw = metrics.getMetric(FrameMetrics.DRAW_DURATION)
+                val sync = metrics.getMetric(FrameMetrics.SYNC_DURATION)
+                val issue = metrics.getMetric(FrameMetrics.COMMAND_ISSUE_DURATION)
+                val swap = metrics.getMetric(FrameMetrics.SWAP_BUFFERS_DURATION)
+                val app = draw + sync + issue + swap
+                if (app > 0L) {
+                    dmMaskController.onMaskFrameMetrics(app)
+                }
+            } catch (_: Throwable) {
+                // 某些 metric 在特定设备上不可用：忽略此帧，不影响主功能。
+            }
+        }
+        window.addOnFrameMetricsAvailableListener(listener, handler)
+        frameMetricsThread = thread
+        frameMetricsHandler = handler
+        frameMetricsListener = listener
+    }
+
+    private fun uninstallFrameMetricsListener() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val activity = context as? Activity
+            val listener = frameMetricsListener
+            if (activity != null && listener != null) {
+                activity.window?.removeOnFrameMetricsAvailableListener(listener)
+            }
+        }
+        frameMetricsThread?.quitSafely()
+        frameMetricsThread = null
+        frameMetricsHandler = null
+        frameMetricsListener = null
     }
 
     fun cancelInDoubleTapMode() {
@@ -1527,7 +1709,11 @@ class MyPlayerView @JvmOverloads constructor(
     fun syncDanmakuPosition(positionMs: Long, forceSeek: Boolean = false) {
         danmakuController.syncPosition(positionMs, forceSeek)
         specialDanmakuController.syncPosition(positionMs, forceSeek)
-        dmMaskController.onViewSizeChanged(dmkView?.width ?: 0, dmkView?.height ?: 0)
+        // mask buffer 的尺寸必须用 maskHost（最终绘制目标）而不是 dmkView，否则与
+        // [updateMaskVideoBounds] 推过去的 videoBounds（也是 maskHost 坐标系）不在同一参考系，
+        // path 缩放后会出现像素级偏移，看起来像"贴合不上"。
+        val host = dmkMaskHost
+        dmMaskController.onViewSizeChanged(host?.width ?: 0, host?.height ?: 0)
         if (forceSeek) {
             dmMaskController.onSeek()
         }

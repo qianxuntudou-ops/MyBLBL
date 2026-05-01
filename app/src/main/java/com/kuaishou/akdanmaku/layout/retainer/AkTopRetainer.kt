@@ -42,7 +42,29 @@ internal class AkTopRetainer(
     val top: Int,
     val bottom: Int,
     val items: MutableList<DanmakuItem> = mutableListOf()
-  )
+  ) {
+    /** 行内 timePosition 最大值；用于碰撞检测的 O(1) fast-path 判断。 */
+    var maxTimePosition: Long = Long.MIN_VALUE
+
+    fun addItem(item: DanmakuItem) {
+      items.add(item)
+      val ts = item.timePosition
+      if (ts > maxTimePosition) maxTimePosition = ts
+    }
+
+    fun removeItem(item: DanmakuItem): Boolean {
+      val removed = items.remove(item)
+      if (removed && item.timePosition == maxTimePosition) {
+        // maxTimePosition 失效，重算（行内 size 一般 <30，O(n) 可接受且不在热路径）。
+        var max = Long.MIN_VALUE
+        for (it in items) {
+          if (it.timePosition > max) max = it.timePosition
+        }
+        maxTimePosition = max
+      }
+      return removed
+    }
+  }
 
   private var maxEnd = 0
   private val rows = mutableListOf<Row>()
@@ -71,12 +93,19 @@ internal class AkTopRetainer(
 
       var bestRow: Row? = null
       var bestLoad = Int.MAX_VALUE
+      val drawItemTs = drawItem.timePosition
 
       for (row in rows) {
         if (itemHeight > row.bottom - row.top) continue
-        val hasCollision = row.items.any { existing ->
-          existing.willCollision(drawItem, displayer, currentTimeMills, duration, config.overlapFraction)
-        }
+        val hasCollision = checkRowCollision(
+          row,
+          drawItem,
+          drawItemTs,
+          displayer,
+          currentTimeMills,
+          duration,
+          config.overlapFraction
+        )
         if (!hasCollision && row.items.size < bestLoad) {
           bestLoad = row.items.size
           bestRow = row
@@ -84,14 +113,15 @@ internal class AkTopRetainer(
       }
 
       if (bestRow != null) {
-        bestRow.items.add(drawItem)
+        bestRow.addItem(drawItem)
         itemToRow[drawItem] = bestRow
         topPos = bestRow.top
         visibility = true
       } else {
         val gapTop = findGap(itemHeight, margin)
         if (gapTop >= 0) {
-          val newRow = Row(gapTop, gapTop + itemHeight, mutableListOf(drawItem))
+          val newRow = Row(gapTop, gapTop + itemHeight)
+          newRow.addItem(drawItem)
           insertRowSorted(newRow)
           itemToRow[drawItem] = newRow
           topPos = gapTop
@@ -111,6 +141,41 @@ internal class AkTopRetainer(
     if (!visibility) return -1f
     drawItem.drawState.positionY = topPos.toFloat()
     return topPos.toFloat()
+  }
+
+  /**
+   * 碰撞检测的快/慢双路径：
+   *  - 当 [drawItemTs] 不早于行内任意已存在弹幕时（即行 chronological 且新弹幕是最晚的），
+   *    只需检查最近一条；它若不碰撞，更早的必然不会碰撞（已先离开屏幕）。
+   *  - 否则（极少数乱序情形）回退到全扫描，保留原有正确性。
+   */
+  private fun checkRowCollision(
+    row: Row,
+    drawItem: DanmakuItem,
+    drawItemTs: Long,
+    displayer: DanmakuDisplayer,
+    currentTimeMills: Long,
+    duration: Long,
+    overlapFraction: Float
+  ): Boolean {
+    val items = row.items
+    if (items.isEmpty()) return false
+    if (drawItemTs >= row.maxTimePosition) {
+      val last = items[items.size - 1]
+      // 通常 last 即 maxTimePosition 持有者；若不是（罕见乱序），回退全扫描。
+      if (last.timePosition == row.maxTimePosition) {
+        return last.willCollision(drawItem, displayer, currentTimeMills, duration, overlapFraction)
+      }
+    }
+    var i = 0
+    val size = items.size
+    while (i < size) {
+      if (items[i].willCollision(drawItem, displayer, currentTimeMills, duration, overlapFraction)) {
+        return true
+      }
+      i++
+    }
+    return false
   }
 
   private fun findGap(itemHeight: Int, margin: Int): Int {
@@ -140,7 +205,7 @@ internal class AkTopRetainer(
 
   override fun remove(item: DanmakuItem) {
     val row = itemToRow.remove(item) ?: return
-    row.items.remove(item)
+    row.removeItem(item)
     if (row.items.isEmpty()) {
       rows.remove(row)
     }

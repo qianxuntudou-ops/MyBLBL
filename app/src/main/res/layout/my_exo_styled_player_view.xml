@@ -37,15 +37,20 @@
             android:layout_height="@dimen/exo_error_message_height"
             android:layout_marginBottom="@dimen/exo_error_message_margin_bottom"/>
     </androidx.media3.ui.AspectRatioFrameLayout>
-    <com.kuaishou.akdanmaku.ui.DanmakuView
+    <com.tutu.myblbl.feature.player.view.DanmakuMaskHostLayout
+        android:id="@+id/dmk_mask_host"
         android:layout_gravity="top"
-        android:id="@+id/dmk_view"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"/>
-    <com.tutu.myblbl.feature.player.view.SpecialDanmakuOverlayView
-        android:id="@+id/special_dmk_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"/>
+        android:layout_height="match_parent">
+        <com.kuaishou.akdanmaku.ui.DanmakuView
+            android:id="@+id/dmk_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+        <com.tutu.myblbl.feature.player.view.SpecialDanmakuOverlayView
+            android:id="@+id/special_dmk_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+    </com.tutu.myblbl.feature.player.view.DanmakuMaskHostLayout>
     <androidx.appcompat.widget.AppCompatImageView
         android:layout_gravity="end|bottom"
         android:id="@+id/image_pause_indicator"

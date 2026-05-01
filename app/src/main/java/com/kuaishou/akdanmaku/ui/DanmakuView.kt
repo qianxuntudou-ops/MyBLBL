@@ -1,11 +1,7 @@
 package com.kuaishou.akdanmaku.ui
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
 import android.util.AttributeSet
 import android.view.View
 
@@ -22,13 +18,6 @@ class DanmakuView @JvmOverloads constructor(
   var danmakuPlayer: DanmakuPlayer? = null
   internal val displayer: ViewDisplayer = ViewDisplayer()
 
-  private val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-    xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT)
-  }
-
-  @Volatile
-  var maskBitmap: Bitmap? = null
-
   init {
     context?.resources?.displayMetrics?.let { metrics ->
       displayer.density = metrics.density
@@ -43,16 +32,9 @@ class DanmakuView @JvmOverloads constructor(
     val height = measuredHeight
     if (width == 0 || height == 0) return
     danmakuPlayer?.notifyDisplayerSizeChanged(width, height)
-
-    val mask = maskBitmap
-    if (mask != null && !mask.isRecycled) {
-      val saveCount = canvas.saveLayer(null, null)
-      danmakuPlayer?.draw(canvas)
-      canvas.drawBitmap(mask, 0f, 0f, maskPaint)
-      canvas.restoreToCount(saveCount)
-    } else {
-      danmakuPlayer?.draw(canvas)
-    }
+    // 防挡蒙版的 PorterDuff 合成统一交给父级 DanmakuMaskHostLayout，
+    // 这里只负责把弹幕画到上层 canvas，不再单独 saveLayer。
+    danmakuPlayer?.draw(canvas)
   }
 
   override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

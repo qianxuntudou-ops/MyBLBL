@@ -45,8 +45,15 @@ class MyPlayerDanmakuController(
         private const val DRIFT_SYNC_INTERVAL_HIGH_MS = 900L
         private const val DRIFT_SYNC_INTERVAL_MEDIUM_MS = 1200L
         private const val DRIFT_SYNC_INTERVAL_SLOW_MS = 3000L
-        private const val DRIFT_TOLERANCE_HIGH_SPEED_MS = 500L
-        private const val DRIFT_TOLERANCE_NORMAL_MS = 1200L
+        // drift sync 三段阈值：
+        //  - drift <= NEUTRAL：完全忽略，弹幕引擎使用用户设定的播放速度。
+        //  - drift <= SOFT_SYNC：通过 timer factor 微调（±5%）软同步，避免清空 retainer。
+        //  - drift  > HARD_SEEK_NORMAL/HIGH：硬 seek，触发引擎重新布局。
+        private const val DRIFT_NEUTRAL_TOLERANCE_MS = 250L
+        private const val DRIFT_SOFT_SYNC_LIMIT_MS = 900L
+        private const val DRIFT_TOLERANCE_HIGH_SPEED_MS = 800L
+        private const val DRIFT_TOLERANCE_NORMAL_MS = 2000L
+        private const val DRIFT_SOFT_CORRECTION = 0.05f
         private const val COLORFUL_VIP_GRADIENT = 0xEA61
         private const val SEEK_DEDUP_WINDOW_MS = 300L
         private const val SEEK_DEDUP_POSITION_TOLERANCE_MS = 80L
@@ -106,9 +113,11 @@ class MyPlayerDanmakuController(
     private var prepareJob: Job? = null
     private var preloadTextureJob: Job? = null
     private var progressiveJob: Job? = null
+    private var batchUpdateJob: Job? = null
     private var driftSyncJob: Job? = null
     private var prepareGeneration: Long = 0L
     private var currentPlaybackSpeed: Float = 1f
+    private var appliedTimerFactor: Float = 1f
     private var wasBufferingWhilePlaying: Boolean = false
 
     var playerPositionProvider: (() -> Long)? = null
@@ -395,8 +404,10 @@ class MyPlayerDanmakuController(
     }
 
     fun updatePlaybackSpeed(speed: Float) {
-        currentPlaybackSpeed = speed.coerceAtLeast(0.1f)
-        danmakuPlayer?.updatePlaySpeed(speed)
+        val resolved = speed.coerceAtLeast(0.1f)
+        currentPlaybackSpeed = resolved
+        appliedTimerFactor = resolved
+        danmakuPlayer?.updatePlaySpeed(resolved)
     }
 
     fun notifyPlaybackStateChanged(playbackState: Int, isPlaying: Boolean) {
@@ -468,6 +479,8 @@ class MyPlayerDanmakuController(
         if (provider != null) {
             val videoPos = provider().coerceAtLeast(0L)
             danmakuPlayer?.let { player ->
+                // 上一段播放过程中如果 drift sync 留了软同步因子，恢复回用户设定的速度。
+                ensureTimerFactor(player, currentPlaybackSpeed)
                 val enginePos = player.getCurrentTimeMs()
                 if (abs(enginePos - videoPos) > MAX_SYNC_DRIFT_MS) {
                     seekPlayerTo(
@@ -490,6 +503,7 @@ class MyPlayerDanmakuController(
         liveThrottleCount = 0
         liveFlushJob?.cancel()
         progressiveJob?.cancel()
+        batchUpdateJob?.cancel()
         stopDriftSync()
         liveMergeBuffer.clear()
         liveSentTimestamps.clear()
@@ -524,6 +538,7 @@ class MyPlayerDanmakuController(
         prepareJob?.cancel()
         preloadTextureJob?.cancel()
         progressiveJob?.cancel()
+        batchUpdateJob?.cancel()
         driftSyncJob?.cancel()
         liveFlushJob?.cancel()
         liveMergeBuffer.clear()
@@ -682,19 +697,27 @@ class MyPlayerDanmakuController(
      * 将弹幕数据分批灌入引擎，每批 [BATCH_INSERT_SIZE] 条，间隔 [BATCH_INSERT_DELAY_MS]，
      * 避免单帧处理大量弹幕导致主线程冻结。
      * 数据已按 position 排序，前几批优先覆盖当前播放位置附近的弹幕。
+     *
+     * 旧实现里每个 batch 各自 `launch + delay` 会让所有协程几乎同时唤醒并涌向主线程，
+     * 起不到分批限流效果，反而瞬间造成主线程消息洪峰。改为单协程顺序消费。
      */
     private fun scheduleBatchUpdate(
         player: com.kuaishou.akdanmaku.ui.DanmakuPlayer,
         data: List<com.kuaishou.akdanmaku.data.DanmakuItemData>,
         generation: Long
     ) {
-        val batches = data.chunked(BATCH_INSERT_SIZE)
-        batches.forEachIndexed { index, batch ->
-            controllerScope.launch {
-                if (index > 0) delay(BATCH_INSERT_DELAY_MS)
+        val previousJob = batchUpdateJob
+        batchUpdateJob = controllerScope.launch {
+            previousJob?.join()
+            val batches = data.chunked(BATCH_INSERT_SIZE)
+            for ((index, batch) in batches.withIndex()) {
+                if (prepareGeneration != generation) return@launch
                 withContext(Dispatchers.Main.immediate) {
                     if (prepareGeneration != generation) return@withContext
                     player.updateData(batch)
+                }
+                if (index < batches.lastIndex) {
+                    delay(BATCH_INSERT_DELAY_MS)
                 }
             }
         }
@@ -801,20 +824,7 @@ class MyPlayerDanmakuController(
                 delay(resolveDriftSyncIntervalMs())
                 try {
                     withContext(Dispatchers.Main.immediate) {
-                        if (!isDanmakuStarted || isDanmakuPaused) return@withContext
-                        val player = danmakuPlayer ?: return@withContext
-                        val videoPos = provider().coerceAtLeast(0L)
-                        val enginePos = player.getCurrentTimeMs()
-                        val drift = abs(enginePos - videoPos)
-                        if (drift > resolveDriftToleranceMs()) {
-                            seekPlayerTo(
-                                player = player,
-                                targetPositionMs = videoPos,
-                                currentTimeMs = enginePos,
-                                forceSeek = true,
-                                reason = "drift_sync"
-                            )
-                        }
+                        applyDriftSyncTick(provider)
                     }
                 } catch (_: Exception) {
                     AppLog.w(TAG, "Drift sync tick failed, will retry")
@@ -823,9 +833,61 @@ class MyPlayerDanmakuController(
         }
     }
 
+    /**
+     * 三段 drift 处理策略，避免每隔几秒就 hard seek 引发 retainer 重建：
+     *  1. drift <= NEUTRAL：完全恢复正常 timer factor。
+     *  2. drift <= SOFT_SYNC：通过 timer factor 软纠正（基础速度 ± 5%）。
+     *  3. drift  > HARD：先恢复 factor，再调用 player.seekTo（仍会触发重布局，但频次大幅下降）。
+     */
+    private fun applyDriftSyncTick(provider: () -> Long) {
+        if (!isDanmakuStarted || isDanmakuPaused) return
+        val player = danmakuPlayer ?: return
+        val videoPos = provider().coerceAtLeast(0L)
+        val enginePos = player.getCurrentTimeMs()
+        val signedDrift = enginePos - videoPos
+        val absDrift = abs(signedDrift)
+        val hardThreshold = resolveDriftToleranceMs()
+        val baseFactor = currentPlaybackSpeed
+        when {
+            absDrift > hardThreshold -> {
+                ensureTimerFactor(player, baseFactor)
+                seekPlayerTo(
+                    player = player,
+                    targetPositionMs = videoPos,
+                    currentTimeMs = enginePos,
+                    forceSeek = true,
+                    reason = "drift_sync"
+                )
+            }
+            absDrift > DRIFT_SOFT_SYNC_LIMIT_MS -> {
+                // 软同步处理不了的中等偏差，继续观察一拍即可（下次 tick 会重新评估）。
+                ensureTimerFactor(player, baseFactor)
+            }
+            absDrift > DRIFT_NEUTRAL_TOLERANCE_MS -> {
+                val correction = if (signedDrift > 0) {
+                    1f - DRIFT_SOFT_CORRECTION
+                } else {
+                    1f + DRIFT_SOFT_CORRECTION
+                }
+                ensureTimerFactor(player, baseFactor * correction)
+            }
+            else -> {
+                ensureTimerFactor(player, baseFactor)
+            }
+        }
+    }
+
+    private fun ensureTimerFactor(player: DanmakuPlayer, factor: Float) {
+        val safe = factor.coerceAtLeast(0.1f)
+        if (abs(appliedTimerFactor - safe) < 1e-3f) return
+        appliedTimerFactor = safe
+        player.updatePlaySpeed(safe)
+    }
+
     private fun stopDriftSync() {
         driftSyncJob?.cancel()
         driftSyncJob = null
+        appliedTimerFactor = currentPlaybackSpeed
     }
 
     private fun releasePlayer() {

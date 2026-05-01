@@ -86,19 +86,25 @@ internal class LayoutSystem(
       verifier.layoutFilters = config.layoutFilter.toList()
     }
     val currentTimeMills = currentTimeMs
+    val measureGen = config.measureGeneration
+    val layoutGen = config.layoutGeneration
     var needSync = false
 
-    getEntities()
-      .filter { entity ->
-        val filter = entity.filter ?: return@filter false
-        !filter.filtered  // 过滤
-      }
-      .onEach { entity ->
-        val item = entity.dataComponent?.item ?: return@onEach
-        if (item.state == ItemState.Measuring) {
-          return@onEach
-        }
-        val needRemeasure = !item.drawState.isMeasured(config.measureGeneration)
+    // 单遍循环：合并原本的 .filter().onEach().filter().forEach() 链，避免每帧分配多个临时
+    // List。语义等价：先决定是否需要 measure，再处理已 measured 的 layout 阶段。
+    val entities = getEntities()
+    val total = entities.size
+    var i = 0
+    while (i < total) {
+      val entity = entities[i]
+      i++
+      val filterComp = entity.filter ?: continue
+      if (filterComp.filtered) continue
+      val item = entity.dataComponent?.item ?: continue
+
+      // 阶段一：measure 调度
+      if (item.state != ItemState.Measuring) {
+        val needRemeasure = !item.drawState.isMeasured(measureGen)
         if (item.state < ItemState.Measuring || needRemeasure) {
           if (needRemeasure && item.state >= ItemState.Measuring) {
             Log.v(DanmakuEngine.TAG, "[Layout] re-measure ${item.data}")
@@ -108,32 +114,32 @@ internal class LayoutSystem(
           needSync = true
         }
       }
-      .filter { entity ->
-        val item = entity.dataComponent?.item ?: return@filter false
-        item.state >= ItemState.Measured
+
+      // 阶段二：已 measured 才能 layout（刚被改成 Measuring 的不会进入这里）
+      if (item.state < ItemState.Measured) continue
+
+      val drawState = item.drawState
+      val layout = entity.layout
+        ?: createComponent(LayoutComponent::class.java, entity, item)
+        ?: continue
+      val needRelayout = drawState.layoutGeneration != layoutGen
+      if (needRelayout) {
+        drawState.visibility = false
+        layout.visibility = layouter.preLayout(item, currentTimeMills, displayer, config)
       }
-      .forEach { entity ->
-        val item = entity.dataComponent?.item ?: return@forEach
-        val drawState = item.drawState
-        val layout = entity.layout ?: createComponent(LayoutComponent::class.java, entity, item) ?: return@forEach
-        val needRelayout = drawState.layoutGeneration != config.layoutGeneration
-        if (needRelayout) {
-          drawState.visibility = false
-          layout.visibility = layouter.preLayout(item, currentTimeMills, displayer, config)
-        }
-        if (layout.visibility) {
-          synchronized(item.state) {
-            if (item.state < ItemState.Rendering) {
-              needSync = true
-              item.state = ItemState.Rendering
-              cacheManager.requestBuildCache(item, displayer, config)
-            }
+      if (layout.visibility) {
+        synchronized(item.state) {
+          if (item.state < ItemState.Rendering) {
+            needSync = true
+            item.state = ItemState.Rendering
+            cacheManager.requestBuildCache(item, displayer, config)
           }
-          layouter.layout(item, currentTimeMills, displayer, config)
-          drawState.layoutGeneration = config.layoutGeneration
         }
-        layout.position.set(drawState.positionX, drawState.positionY)
+        layouter.layout(item, currentTimeMills, displayer, config)
+        drawState.layoutGeneration = layoutGen
       }
+      layout.position.set(drawState.positionX, drawState.positionY)
+    }
     if (isPaused) {
       if (needSync) {
         cacheManager.requestBuildSign()

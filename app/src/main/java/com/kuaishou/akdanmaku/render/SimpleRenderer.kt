@@ -101,7 +101,7 @@ open class SimpleRenderer : DanmakuRenderer {
     strokePaint.typeface = textPaint.typeface
     strokePaint.color = resolveStandardStrokeColor(textPaint.color)
     strokePaint.style = Paint.Style.STROKE
-    strokePaint.strokeWidth = (textPaint.textSize * 0.085f).coerceIn(1.6f, 3.1f)
+    strokePaint.strokeWidth = (textPaint.textSize * 0.06f).coerceIn(1.2f, 2.5f)
     strokePaint.strokeJoin = Paint.Join.ROUND
     strokePaint.strokeCap = Paint.Cap.ROUND
   }
@@ -176,15 +176,17 @@ open class SimpleRenderer : DanmakuRenderer {
     val palette = resolveVipPalette(danmakuItemData.textColor)
     val leadingColor = lightenColor(palette.first(), 0.35f)
     val trailingColor = darkenColor(palette.last(), 0.05f)
+    // 旧实现用 setShadowLayer 制造光晕，但 setShadowLayer 内部会强制走 BlurMaskFilter 软件路径，
+    // 在 TV 上 buildCache 时单条弹幕可能要 1~3ms，弹幕高峰期累加直接打爆 act 线程。
+    // 改成"先画一层更宽的暗色外描边 + 一层基础描边"做廉价描边光晕近似。
     strokePaint.style = Paint.Style.STROKE
-    strokePaint.strokeWidth = (textPaint.textSize * 0.14f).coerceAtLeast(2f)
-    strokePaint.color = withAlpha(darkenColor(leadingColor, 0.55f), 220)
-    strokePaint.setShadowLayer(
-      textPaint.textSize * 0.12f,
-      0f,
-      textPaint.textSize * 0.04f,
-      withAlpha(darkenColor(trailingColor, 0.4f), 100)
-    )
+    strokePaint.strokeJoin = Paint.Join.ROUND
+    strokePaint.strokeCap = Paint.Cap.ROUND
+    strokePaint.shader = null
+    strokePaint.clearShadowLayer()
+
+    val outerStrokeWidth = (textPaint.textSize * 0.22f).coerceAtLeast(3f)
+    val innerStrokeWidth = (textPaint.textSize * 0.14f).coerceAtLeast(2f)
 
     val shaderKey = "${leadingColor}_${trailingColor}_${textWidth}_${textHeight}"
     textPaint.shader = vipShaderCache.getOrPut(shaderKey) {
@@ -203,17 +205,19 @@ open class SimpleRenderer : DanmakuRenderer {
         Shader.TileMode.CLAMP
       )
     }
-    textPaint.setShadowLayer(
-      textPaint.textSize * 0.04f,
-      0f,
-      textPaint.textSize * 0.03f,
-      withAlpha(Color.WHITE, 96)
-    )
+    textPaint.clearShadowLayer()
 
+    // 外发光层：宽且半透明，模拟 setShadowLayer 的柔和光晕。
+    strokePaint.color = withAlpha(darkenColor(trailingColor, 0.45f), 96)
+    strokePaint.strokeWidth = outerStrokeWidth
     canvas.drawText(text, startX, baselineY, strokePaint)
+    // 主描边层：实色不透明，决定边缘清晰度。
+    strokePaint.color = withAlpha(darkenColor(leadingColor, 0.55f), 220)
+    strokePaint.strokeWidth = innerStrokeWidth
+    canvas.drawText(text, startX, baselineY, strokePaint)
+
     canvas.drawText(text, startX, baselineY, textPaint)
     textPaint.shader = null
-    textPaint.clearShadowLayer()
     strokePaint.clearShadowLayer()
   }
 
@@ -278,23 +282,7 @@ open class SimpleRenderer : DanmakuRenderer {
   }
 
   private fun resolveStandardStrokeColor(textColor: Int): Int {
-    val resolved = textColor or Color.argb(255, 0, 0, 0)
-    if (isDarkTextColor(resolved)) {
-      return withAlpha(Color.WHITE, 238)
-    }
-    if ((resolved and 0x00FFFFFF) == 0x00FFFFFF) {
-      return withAlpha(Color.BLACK, 232)
-    }
-    return withAlpha(Color.WHITE, 200)
-  }
-
-  private fun isDarkTextColor(color: Int): Boolean {
-    val luminance = (
-      Color.red(color) * 0.299f +
-        Color.green(color) * 0.587f +
-        Color.blue(color) * 0.114f
-      ) / 255f
-    return luminance < 0.33f
+    return withAlpha(Color.BLACK, 230)
   }
 
   private fun lightenColor(color: Int, amount: Float): Int {

@@ -81,6 +81,39 @@ internal class RenderSystem(context: DanmakuContext) : DanmakuEntitySystem(conte
 
   var cacheHit = Fraction(1, 1)
 
+  /**
+   * 复用的 RenderObject 列表池（ArrayList 实例池），每帧 act() 都需要一个
+   * `List<RenderObject>` 给主线程 draw 用。RenderResult 在 draw/discard 后通过
+   * [recycleResultList] 把 list 还回池子，避免重复分配 500 容量的对象数组。
+   */
+  private val resultListPool: ArrayDeque<ArrayList<RenderObject>> = ArrayDeque()
+
+  /** 滚动弹幕先画（底层），固定弹幕后画（顶层）。 */
+  private val renderOrderComparator = Comparator<RenderObject> { a, b ->
+    val aRolling = if (a.item.data.mode == DanmakuItemData.DANMAKU_MODE_ROLLING) 0 else 1
+    val bRolling = if (b.item.data.mode == DanmakuItemData.DANMAKU_MODE_ROLLING) 0 else 1
+    aRolling - bRolling
+  }
+
+  private fun acquireResultList(initialCapacity: Int): ArrayList<RenderObject> {
+    val list = resultListPool.removeLastOrNull()
+    if (list != null) {
+      list.clear()
+      list.ensureCapacity(initialCapacity)
+      return list
+    }
+    return ArrayList(initialCapacity.coerceAtLeast(16))
+  }
+
+  @Suppress("UNCHECKED_CAST")
+  private fun recycleResultList(list: List<RenderObject>) {
+    if (list !is ArrayList<*>) return
+    list.clear()
+    if (resultListPool.size < RESULT_LIST_POOL_MAX) {
+      resultListPool.addLast(list as ArrayList<RenderObject>)
+    }
+  }
+
   override fun update(deltaTime: Float) {
     val config = danmakuContext.config
     if (isPaused && config.allGeneration == lastAllGeneration) {
@@ -95,51 +128,64 @@ internal class RenderSystem(context: DanmakuContext) : DanmakuEntitySystem(conte
     lastAllGeneration = config.allGeneration
     releaseDiscardResults()
 
-    val newRenderObjects = entities
-      .filter { entity ->
-        val item = entity.dataComponent?.item ?: return@filter false
-        val drawState = item.drawState
-        entity.filter?.filtered == false &&
-          item.state >= ItemState.Measured &&
-          drawState.visibility &&
-          drawState.measureGeneration == config.measureGeneration &&
-          drawState.layoutGeneration == config.layoutGeneration
-      }
-      .mapNotNullTo(ArrayList(maxOf(entities.size(), 16))) { entity ->
-        val item = entity.dataComponent?.item ?: return@mapNotNullTo null
-        val drawState = item.drawState
-        val cache = item.drawState.drawingCache
-        val action = entity.action
-        if (listener != null && item.shownGeneration != config.firstShownGeneration) {
-          item.shownGeneration = config.firstShownGeneration
-          callbackHandler.obtainMessage(MSG_DANMAKU_SHOWN, item).sendToTarget()
-        }
-        renderObjectPool.obtain().apply {
-          cache.increaseReference()
-          this.item = item
-          drawingCache = cache
-          transform.reset()
-          if (action != null) {
-            position.set(action.position)
-            rect.setEmpty()
-            action.toTransformMatrix(transform)
-            alpha = action.alpha
-            transform.postConcat(drawState.transform)
-          } else {
-            transform.set(drawState.transform)
-          }
-          position.set(drawState.positionX, drawState.positionY)
-          rect.set(drawState.rect)
-          if (item.isHolding) {
-            alpha = 1f
-            holding = true
-          }
-        }
+    val measureGen = config.measureGeneration
+    val layoutGen = config.layoutGeneration
+    val firstShownGen = config.firstShownGeneration
+    val hasListener = listener != null
+
+    val newRenderObjects = acquireResultList(entities.size())
+
+    // 单遍循环：filter + map + create RenderObject 全部就地完成，避免 .filter / .mapNotNullTo
+    // 链式调用每帧产生的两次 ArrayList 分配。
+    var i = 0
+    val total = entities.size()
+    while (i < total) {
+      val entity = entities[i]
+      i++
+      val item = entity.dataComponent?.item ?: continue
+      val filterComp = entity.filter ?: continue
+      if (filterComp.filtered) continue
+      val drawState = item.drawState
+      if (item.state < ItemState.Measured) continue
+      if (!drawState.visibility) continue
+      if (drawState.measureGeneration != measureGen) continue
+      if (drawState.layoutGeneration != layoutGen) continue
+
+      val cache = drawState.drawingCache
+      val action = entity.action
+
+      if (hasListener && item.shownGeneration != firstShownGen) {
+        item.shownGeneration = firstShownGen
+        callbackHandler.obtainMessage(MSG_DANMAKU_SHOWN, item).sendToTarget()
       }
 
-    // 按弹幕类型排序：滚动弹幕先绘制（底层），顶部/底部弹幕后绘制（顶层）
-    newRenderObjects.sortBy { obj ->
-      if (obj.item.data.mode == DanmakuItemData.DANMAKU_MODE_ROLLING) 0 else 1
+      val obj = renderObjectPool.obtain()
+      cache.increaseReference()
+      obj.item = item
+      obj.drawingCache = cache
+      obj.transform.reset()
+      if (action != null) {
+        obj.position.set(action.position)
+        obj.rect.setEmpty()
+        action.toTransformMatrix(obj.transform)
+        obj.alpha = action.alpha
+        obj.transform.postConcat(drawState.transform)
+      } else {
+        obj.transform.set(drawState.transform)
+      }
+      obj.position.set(drawState.positionX, drawState.positionY)
+      obj.rect.set(drawState.rect)
+      if (item.isHolding) {
+        obj.alpha = 1f
+        obj.holding = true
+      }
+      newRenderObjects.add(obj)
+    }
+
+    // 按弹幕类型排序：滚动弹幕先绘制（底层），顶部/底部弹幕后绘制（顶层）。
+    // 使用提前缓存的 Comparator 避免每帧分配 lambda。
+    if (newRenderObjects.size > 1) {
+      newRenderObjects.sortWith(renderOrderComparator)
     }
 
     synchronized(this) {
@@ -163,13 +209,15 @@ internal class RenderSystem(context: DanmakuContext) : DanmakuEntitySystem(conte
 
   private fun releaseDiscardResults() {
     val results = synchronized(this) {
+      if (pendingDiscardResults.isEmpty()) return
       val results = pendingDiscardResults.toList()
       pendingDiscardResults.clear()
       results
     }
 
-    results.forEach {
-      it.renderObjects.forEach(renderObjectPool::free)
+    results.forEach { result ->
+      result.renderObjects.forEach(renderObjectPool::free)
+      recycleResultList(result.renderObjects)
     }
   }
 
@@ -355,6 +403,7 @@ internal class RenderSystem(context: DanmakuContext) : DanmakuEntitySystem(conte
   companion object {
     private const val MAX_RENDER_OBJECT_POOL_SIZE = 500
     private const val INITIAL_POOL_SIZE = 200
+    private const val RESULT_LIST_POOL_MAX = 4
 
     private const val OVERLOAD_INTERVAL = 20
 

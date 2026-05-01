@@ -400,7 +400,7 @@ class MyPlayerControlView @JvmOverloads constructor(
 
     fun isScrubbingTimeBar(): Boolean = isScrubbing
 
-    fun isTimebarFocused(): Boolean = ::timeBar.isInitialized && timeBar.hasFocus()
+    fun isTimebarFocused(): Boolean = ::timeBar.isInitialized && timeBar.hasFocus() && isFullyVisible()
 
     fun enterSeekProgressOnly() {
         controlViewLayoutManager.enterSeekProgressOnly()

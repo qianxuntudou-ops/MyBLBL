@@ -109,13 +109,17 @@ class MyBLBLApplication : Application() {
         when {
             level >= 80 -> { // TRIM_MEMORY_COMPLETE
                 Glide.get(this).clearMemory()
-                PlayerInstancePool.releaseNow("trimMemory_complete")
+                if (!PlayerInstancePool.isAttached()) {
+                    PlayerInstancePool.releaseNow("trimMemory_complete")
+                }
             }
             level >= 60 -> { // TRIM_MEMORY_MODERATE
                 Glide.get(this).clearMemory()
             }
             level >= 10 -> { // TRIM_MEMORY_RUNNING_LOW
-                PlayerInstancePool.releaseNow("trimMemory_running_low")
+                if (!PlayerInstancePool.isAttached()) {
+                    PlayerInstancePool.releaseNow("trimMemory_running_low")
+                }
             }
         }
     }

@@ -55,6 +55,9 @@ object PlayerInstancePool {
     }
 
     @Synchronized
+    fun isAttached(): Boolean = isAttached
+
+    @Synchronized
     fun acquire(context: Context): ExoPlayer {
         cancelPendingRelease()
         val player = cachedPlayer ?: buildPlayer(context.applicationContext).also {

@@ -47,8 +47,6 @@ class MyPlayerDanmakuController(
         private const val DRIFT_SYNC_INTERVAL_SLOW_MS = 3000L
         private const val DRIFT_TOLERANCE_HIGH_SPEED_MS = 500L
         private const val DRIFT_TOLERANCE_NORMAL_MS = 1200L
-        private const val DRIFT_FORCE_RESYNC_TICKS_NORMAL = 6
-        private const val DRIFT_FORCE_RESYNC_TICKS_NON_NORMAL = 3
         private const val COLORFUL_VIP_GRADIENT = 0xEA61
         private const val SEEK_DEDUP_WINDOW_MS = 300L
         private const val SEEK_DEDUP_POSITION_TOLERANCE_MS = 80L
@@ -111,7 +109,6 @@ class MyPlayerDanmakuController(
     private var driftSyncJob: Job? = null
     private var prepareGeneration: Long = 0L
     private var currentPlaybackSpeed: Float = 1f
-    private var driftTickCount: Int = 0
     private var wasBufferingWhilePlaying: Boolean = false
 
     var playerPositionProvider: (() -> Long)? = null
@@ -795,17 +792,8 @@ class MyPlayerDanmakuController(
         else DRIFT_TOLERANCE_NORMAL_MS
     }
 
-    private fun shouldForceResync(): Boolean {
-        if (driftTickCount <= 0) return false
-        val isNearNormal = abs(currentPlaybackSpeed - 1f) <= 0.02f
-        val interval = if (isNearNormal) DRIFT_FORCE_RESYNC_TICKS_NORMAL
-        else DRIFT_FORCE_RESYNC_TICKS_NON_NORMAL
-        return driftTickCount % interval == 0
-    }
-
     private fun startDriftSync() {
         driftSyncJob?.cancel()
-        driftTickCount = 0
         val provider = playerPositionProvider
         if (provider == null) return
         driftSyncJob = controllerScope.launch {
@@ -818,8 +806,7 @@ class MyPlayerDanmakuController(
                         val videoPos = provider().coerceAtLeast(0L)
                         val enginePos = player.getCurrentTimeMs()
                         val drift = abs(enginePos - videoPos)
-                        driftTickCount++
-                        if (shouldForceResync() || drift > resolveDriftToleranceMs()) {
+                        if (drift > resolveDriftToleranceMs()) {
                             seekPlayerTo(
                                 player = player,
                                 targetPositionMs = videoPos,
@@ -839,7 +826,6 @@ class MyPlayerDanmakuController(
     private fun stopDriftSync() {
         driftSyncJob?.cancel()
         driftSyncJob = null
-        driftTickCount = 0
     }
 
     private fun releasePlayer() {

@@ -731,7 +731,6 @@ class MyPlayerView @JvmOverloads constructor(
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        android.util.Log.d("MyPlayerView", "dispatchKeyEvent: keyCode=${event.keyCode} action=${event.action} repeat=${event.repeatCount}")
         val isBackKey = event.keyCode == KeyEvent.KEYCODE_BACK
         if (player == null) return super.dispatchKeyEvent(event)
         if (controller == null) return false
@@ -854,24 +853,13 @@ class MyPlayerView @JvmOverloads constructor(
 
         if (isDpadKey && useController) {
             val controllerVisible = controller?.isFullyVisible() == true
-            val timebarFocused = controller?.isTimebarFocused() == true
-            android.util.Log.d("MyPlayerView", "  isSeekKey=$isSeekKey controllerVisible=$controllerVisible timebarFocused=$timebarFocused action=${event.action}")
             if (isSeekKey && controller?.isTimebarFocused() == true) {
-                android.util.Log.d("MyPlayerView", "  -> handleTimebarSeekKeyEvent")
                 val forward = event.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
                     || event.keyCode == KEYCODE_SYSTEM_NAVIGATION_RIGHT_COMPAT
                 return handleTimebarSeekKeyEvent(event, forward)
             }
-            if (isSeekKey && event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            if (isSeekKey && event.action == KeyEvent.ACTION_DOWN) {
                 if (!controllerVisible || controller?.isScrubbingTimeBar() == true) {
-                    android.util.Log.d("MyPlayerView", "  -> handleSeekSessionKeyEvent (hidden/scrubbing)")
-                    return handleSeekSessionKeyEvent(event)
-                }
-            } else if (isSeekKey && event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0) {
-                // Only route repeats to seek session if it's already active
-                // (started by the initial ACTION_DOWN in hidden UI / scrubbing mode).
-                // Otherwise, let repeat events fall through to normal focus navigation.
-                if (seekSession?.isActive() == true) {
                     return handleSeekSessionKeyEvent(event)
                 }
             } else if (isSeekKey && event.action == KeyEvent.ACTION_UP) {
@@ -891,10 +879,8 @@ class MyPlayerView @JvmOverloads constructor(
                 return true
             }
             if (!controllerVisible) {
-                android.util.Log.d("MyPlayerView", "  -> !controllerVisible path, action=${event.action} isSeekKey=$isSeekKey")
                 if (event.action == KeyEvent.ACTION_DOWN) {
                     if (!gestureListener.handleKeyDown(event) && !gestureListener.isDoubleTapping) {
-                        android.util.Log.d("MyPlayerView", "  -> maybeShowController + focusButtonByKeyDown!")
                         maybeShowController(true)
                         controller?.focusButtonByKeyDown(event)
                     }
@@ -956,7 +942,10 @@ class MyPlayerView @JvmOverloads constructor(
                 heldSeekKeyCodes.add(event.keyCode)
             }
             if (!session.isActive()) {
+                uiCoordinator?.transition(com.tutu.myblbl.feature.player.UiEvent.SeekTypeChanged(
+                    com.tutu.myblbl.feature.player.SeekType.HOLD))
                 controller?.enterSeekProgressOnly()
+                controller?.requestTimeBarFocus()
                 session.startHoldSeek(forward)
                 // Delay tick loop start so short press can be detected
                 cancelPendingHoldStart()
@@ -1103,9 +1092,9 @@ class MyPlayerView @JvmOverloads constructor(
                 timebarSeekActive = true
                 timebarSeekForward = forward
                 timebarSeekStartMs = 0L
-                controller?.enterSeekProgressOnly()
                 uiCoordinator?.transition(com.tutu.myblbl.feature.player.UiEvent.SeekTypeChanged(
                     com.tutu.myblbl.feature.player.SeekType.TAP))
+                controller?.enterSeekProgressOnly()
             }
             // Only schedule hold start on initial press (repeatCount == 0).
             // Repeat events would keep pushing the delay forward, preventing the hold from ever starting.
@@ -1822,11 +1811,10 @@ class MyPlayerView @JvmOverloads constructor(
                     }
                     isSwipeSeeking = true
                     swipeSeekUsesControllerPreview = true
-                    controller?.enterSeekProgressOnly()
-                    uiCoordinator?.transition(com.tutu.myblbl.feature.player.UiEvent.SeekStarted)
                     uiCoordinator?.transition(com.tutu.myblbl.feature.player.UiEvent.SeekTypeChanged(
                         com.tutu.myblbl.feature.player.SeekType.SWIPE
                     ))
+                    controller?.enterSeekProgressOnly()
                     parent?.requestDisallowInterceptTouchEvent(true)
                     val deltaMs = (deltaX / width.coerceAtLeast(1)) * currentPlayer.duration
                     renderSwipeSeekPreview(
@@ -1860,6 +1848,7 @@ class MyPlayerView @JvmOverloads constructor(
                 onUserSeekListener?.invoke(swipeSeekTargetPositionMs)
                 syncDanmakuPosition(swipeSeekTargetPositionMs, forceSeek = true)
                 controller?.endSeekPreview(swipeSeekTargetPositionMs, 180L)
+                uiCoordinator?.transition(com.tutu.myblbl.feature.player.UiEvent.SeekFinished)
                 controller?.exitSeekProgressOnly()
                 tapOverlayView?.finishSwipeSeek()
                 isSwipeSeeking = false
@@ -1873,9 +1862,9 @@ class MyPlayerView @JvmOverloads constructor(
                     return false
                 }
                 controller?.cancelSeekPreview()
-                controller?.exitSeekProgressOnly()
                 uiCoordinator?.clearSeekPreview()
                 uiCoordinator?.transition(com.tutu.myblbl.feature.player.UiEvent.SeekCancelled)
+                controller?.exitSeekProgressOnly()
                 tapOverlayView?.cancelSwipeSeek()
                 isSwipeSeeking = false
                 swipeSeekUsesControllerPreview = false

@@ -1704,10 +1704,14 @@ class MyPlayerView @JvmOverloads constructor(
         // path 缩放后会出现像素级偏移，看起来像"贴合不上"。
         val host = dmkMaskHost
         dmMaskController.onViewSizeChanged(host?.width ?: 0, host?.height ?: 0)
+        // 关键：mask 的连续播放更新由 [DmMaskController.frameCallback] 独占（vsync 60Hz +
+        // 视频帧 anchor 精确推算）。这里**只在 seek 时**额外推一次位置，让 mask 立即清空旧内容
+        // 并按目标位置重渲染；非 seek 路径若并行 push 会与 frameCallback 用不同的 lookahead 公式
+        // 互相打架，导致 mask 帧在两个相邻帧之间"瞬移跳变"，肉眼即"对不齐 / 抖动"。
         if (forceSeek) {
             dmMaskController.onSeek()
+            dmMaskController.onPositionChanged(positionMs)
         }
-        dmMaskController.onPositionChanged(positionMs)
     }
 
     fun setDmMaskRepository(repository: com.tutu.myblbl.model.dm.DmMaskRepository) {

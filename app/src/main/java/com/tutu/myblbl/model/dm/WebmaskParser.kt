@@ -101,23 +101,35 @@ object WebmaskParser {
                 AppLog.d(TAG, "SVG frame[0] preview: ${svgText.take(300).replace('\n', ' ')}")
                 diagLogged = true
             }
-            val paths = parseSvgPaths(svgText)
-            if (paths.isEmpty()) emptyCount++
-            frames.add(MaskFrame(paths = paths))
+            val parsed = parseSvgPaths(svgText)
+            if (parsed.paths.isEmpty()) emptyCount++
+            frames.add(
+                MaskFrame(
+                    paths = parsed.paths,
+                    svgWidth = parsed.width,
+                    svgHeight = parsed.height,
+                )
+            )
         }
 
-        // 前向填充：空帧用前一个有 path 的帧替代，避免遮罩冻结
-        var lastPaths: List<Path>? = null
+        // 前向填充：空帧用前一个有 path 的帧替代，避免遮罩冻结。
+        // 直接复用整个 MaskFrame 对象，paths 与 svgWidth/svgHeight 一并继承，确保竖屏数据
+        // 的 SVG 标定尺寸不会因为 forward fill 而丢失。
+        var lastFrame: MaskFrame? = null
         for (i in frames.indices) {
             if (frames[i].paths.isNotEmpty()) {
-                lastPaths = frames[i].paths
-            } else if (lastPaths != null) {
-                frames[i] = MaskFrame(paths = lastPaths)
+                lastFrame = frames[i]
+            } else if (lastFrame != null) {
+                frames[i] = lastFrame
                 emptyCount--
             }
         }
 
-        AppLog.d(TAG, "parseSegmentFrames: total=${frames.size}, withPaths=${frames.size - emptyCount}, remainingEmpty=$emptyCount")
+        // 用第一个非空帧的 svgSize 作诊断——首帧若为空，svgWidth/Height 都是 0，
+        // 显示 0x0 会误导调试。
+        val sampleSize = frames.firstOrNull { it.svgWidth > 0 }
+            ?.let { "${it.svgWidth}x${it.svgHeight}" } ?: "?"
+        AppLog.d(TAG, "parseSegmentFrames: total=${frames.size}, withPaths=${frames.size - emptyCount}, remainingEmpty=$emptyCount, svgSize=$sampleSize")
         return frames.takeIf { it.isNotEmpty() }
     }
 
@@ -145,10 +157,18 @@ object WebmaskParser {
         return result
     }
 
-    private fun parseSvgPaths(svgText: String): List<Path> {
-        val viewWidth = extractFloat(svgText, """width="([\d.]+)px"""") ?: return emptyList()
-        val viewHeight = extractFloat(svgText, """height="([\d.]+)px"""") ?: return emptyList()
-        if (viewWidth <= 0f || viewHeight <= 0f) return emptyList()
+    /**
+     * 解析 SVG 文本，返回 path 列表与 SVG 标定尺寸。SVG 尺寸是渲染时缩放的关键——
+     * 横屏视频常见 320×180、竖屏可能是 180×320，硬编码会导致严重错位。
+     */
+    private data class ParsedSvg(val paths: List<Path>, val width: Int, val height: Int)
+
+    private fun parseSvgPaths(svgText: String): ParsedSvg {
+        val viewWidth = extractFloat(svgText, """width="([\d.]+)px"""")
+            ?: return ParsedSvg(emptyList(), 0, 0)
+        val viewHeight = extractFloat(svgText, """height="([\d.]+)px"""")
+            ?: return ParsedSvg(emptyList(), 0, 0)
+        if (viewWidth <= 0f || viewHeight <= 0f) return ParsedSvg(emptyList(), 0, 0)
 
         val pathRegex = Regex("""<path\s+d="([^"]+)"""")
         val results = mutableListOf<Path>()
@@ -160,7 +180,7 @@ object WebmaskParser {
                 results.add(path)
             }
         }
-        return results
+        return ParsedSvg(results, viewWidth.toInt(), viewHeight.toInt())
     }
 
     private fun svgPathToAndroidPath(d: String, viewWidth: Float, viewHeight: Float): Path? {

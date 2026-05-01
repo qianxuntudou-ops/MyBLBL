@@ -95,8 +95,7 @@ class DebugNetworkEventListener : EventListener() {
     }
 
     class Factory : EventListener.Factory {
-        override fun create(call: Call): EventListener {
-            return DebugNetworkEventListener()
-        }
+        private val singleton = DebugNetworkEventListener()
+        override fun create(call: Call): EventListener = singleton
     }
 }

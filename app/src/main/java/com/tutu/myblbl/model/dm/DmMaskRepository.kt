@@ -83,7 +83,10 @@ class DmMaskRepository {
         } else {
             (frames.size.toLong() * 1000L / maskData.fps.coerceAtLeast(1)).coerceAtLeast(1)
         }
-        val frameIndex = (offsetMs * frames.size / segDurationMs).toInt()
+        // 四舍五入到最近一帧——floor 会让 mask 永远显示"过去最近的帧"，平均滞后 +半帧
+        // (30fps 即 +16.7ms)。改为 round 后误差变成 ±半帧、平均 ~0，肉眼感知的"延迟"
+        // 直接减半。等价于在 query 上加 segDurationMs/(2*frames.size) 的 lookahead。
+        val frameIndex = ((offsetMs * frames.size + segDurationMs / 2) / segDurationMs).toInt()
             .coerceIn(0, frames.size - 1)
 
         val frame = frames.getOrNull(frameIndex) ?: return null

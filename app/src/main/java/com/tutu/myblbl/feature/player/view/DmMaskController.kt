@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.view.Choreographer
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.model.dm.DmMaskRepository
+import com.tutu.myblbl.model.dm.MaskFrame
 
 /**
  * 弹幕防挡蒙版控制器。
@@ -59,6 +60,26 @@ class DmMaskController(
          * 33ms 是物理推导值，预期最贴合。
          */
         private const val MASK_PIPELINE_DELAY_MS = 33L
+
+        /**
+         * **音视频上屏延迟经验补偿**：master clock（ExoPlayer.currentPosition）≠ 屏幕显示的 video PTS。
+         *
+         * ExoPlayer 的 master clock 来自 AudioTrack 的播放进度。在 Android 上 audio→实际发声有：
+         *   - AudioTrack 软件 buffer：30~50ms（应用 → AudioFlinger 队列）
+         *   - 硬件 audio 通路：10~30ms（DAC、混音器、扬声器/HDMI）
+         * video 帧也是被同步到 master clock 后再 release 给 SurfaceFlinger，再过 1 vsync 才上屏。
+         *
+         * 总效果：**屏幕上你眼睛看到的 video 帧 PTS ≈ master_clock + 30~80ms**。
+         * 我们的 anchor.releaseTimeNs 是 ExoPlayer 决定 release 的 wall-clock 时刻，但**实际上屏**
+         * 还要经过 audio buffer + 1 vsync 的延迟，平均 50ms 左右是绝大多数 Android 设备的中位数。
+         *
+         * 不补偿这个量的话，即使 mask 与 master clock 严格同步（diff≈0），视觉上仍会感到 mask
+         * 滞后人物移动方向 30-80ms——肉眼一帧就 16ms，30-80ms 就是 2-5 帧的明显错位。
+         *
+         * 50ms 是 Android TV / 手机的典型值；高端硬件可能 30ms，蓝牙音频可能 100ms+。
+         * 后续可暴露到设置让用户按设备微调。
+         */
+        private const val AUDIO_VIDEO_LATENCY_MS = 50L
 
         /**
          * STATE_READY 之后再等一段稳定窗口才放开 mask 渲染。READY 仅意味着"解码器有新数据"，
@@ -124,6 +145,28 @@ class DmMaskController(
     private var measuredPipelineDelayNs: Long = MASK_PIPELINE_DELAY_MS * 1_000_000L
 
     /**
+     * **实测视频帧间隔（纳秒）**：从 [onVideoFrameAnchor] 推送间隔反推。
+     *
+     * VideoFrameMetadataListener 在每解码完一帧视频时回调一次，所以两次 release 时刻的差
+     * 就是该视频的实际帧间隔（VFR 视频会动态变化）。
+     *
+     * 用 EMA(α=1/8) 平滑、过滤 5~150ms 范围（200fps~6.7fps）外的异常值。0 表示尚未测得。
+     */
+    @Volatile
+    private var videoFrameIntervalNs: Long = 0L
+    private var lastReleaseForFpsNs: Long = 0L
+
+    /**
+     * Mask 帧间隔（毫秒）：由 [loadMask] 时根据 mask fps 计算。30fps → 33ms。
+     *
+     * 与 [videoFrameIntervalNs] 配合做"运动补偿"——video 帧率高于 mask 时，每个 mask 帧
+     * "覆盖"多个 video 帧，第二个及之后 video 帧时 mask 已陈旧。补偿量 =
+     * (maskFrame - videoFrame) / 2 平均滞后。
+     */
+    @Volatile
+    private var maskFrameIntervalMs: Long = 33L
+
+    /**
      * seek 状态机：
      *  - [awaitingSeekReady]：seek 已触发，但视频尚未呈现"新位置首帧"。期间 mask 保持清空。
      *  - [seekReadyAt]：进入 STATE_READY 后再加 [SEEK_READY_STABILIZE_MS] 的解封时刻。
@@ -176,6 +219,34 @@ class DmMaskController(
         }
     }
 
+    /**
+     * **总 lookahead = 三个分量的物理累加**，每一项都对应一个具体的延迟来源：
+     *
+     * 1. [AUDIO_VIDEO_LATENCY_MS]（典型 50ms）—— **master clock 与屏幕显示的差**。ExoPlayer
+     *    给的 master clock 是 audio clock，但 audio 经过 AudioTrack buffer + 硬件通路才发声，
+     *    video 也被同步到此 clock 再过 1 vsync 才上屏。我们对齐到 master clock 实际上比屏幕
+     *    显示早 30-80ms，必须补回来，否则视觉上 mask 永远滞后人物。
+     *
+     * 2. **半个 mask 帧（maskDt/2）** —— mask 数据 30fps 离散，让 query 落在帧间中点时
+     *    显示下一帧，相当于把 mask 帧切换从"边沿"挪到"中点"，平均滞后 ±maskDt/2 而非 0~maskDt。
+     *
+     * 3. **fps 不匹配覆盖补偿（(maskDt - videoDt)/2）** —— video 帧率高于 mask 时（例如
+     *    60fps video + 30fps mask），每个 mask 帧覆盖多个 video 帧，第二个 video 帧时 mask
+     *    已经"陈旧"，平均滞后 (maskDt - videoDt)/2。
+     *
+     * 实测帧率（[videoFrameIntervalNs]）由 [onVideoFrameAnchor] 推送间隔实时算出，
+     * VFR 视频会自然跟随、倍速播放也会反映在 release 间隔上。
+     */
+    private fun computeMotionLookaheadMs(): Long {
+        val maskMs = maskFrameIntervalMs
+        if (maskMs <= 0L) return AUDIO_VIDEO_LATENCY_MS
+        val videoMs = videoFrameIntervalNs / 1_000_000L
+        // 还没测到视频帧率（首帧前）：先用 audio-video 补偿 + 半 mask 帧。
+        if (videoMs <= 0L) return AUDIO_VIDEO_LATENCY_MS + maskMs / 2
+        val coverage = (maskMs - videoMs).coerceAtLeast(0L)
+        return AUDIO_VIDEO_LATENCY_MS + maskMs / 2 + coverage / 2
+    }
+
     private val frameCallback = Choreographer.FrameCallback { frameTimeNanos ->
         if (!enabled || !maskReady) return@FrameCallback
         // 严格时间戳对齐——和 ExoPlayer 的音视频对齐共用同一套机制：
@@ -193,6 +264,7 @@ class DmMaskController(
         //    用这个 PTS query mask 帧 → mask 与视频在同一时刻显示同一 PTS 的内容，**严格对齐**。
         //
         // 暂停时 master clock 冻结，按当前位置严格渲染（无 lookahead，避免暂停瞬间出现"超前"轮廓）。
+        val motionLookahead = computeMotionLookaheadMs()
         val pos = if (!isPlaying) {
             playerPositionProvider?.invoke() ?: return@FrameCallback
         } else if (hasVideoAnchor) {
@@ -201,7 +273,8 @@ class DmMaskController(
             // 时间差按当前播放速度缩放——倍速播放时视频时间走得更快。
             val deltaScaledNs = (deltaNs * playbackSpeed).toLong()
             val ptsAtMaskNs = anchorPresentationTimeUs * 1_000L + deltaScaledNs
-            (ptsAtMaskNs / 1_000_000L).coerceAtLeast(0L)
+            // 加运动补偿 lookahead（动态值，根据实测视频帧率自适应）。
+            (ptsAtMaskNs / 1_000_000L + motionLookahead).coerceAtLeast(0L)
         } else {
             // 锚点尚未到达（首帧前）。回退到旧的"vsync + 经验延迟"估计，让 mask 在视频
             // 第一帧之前就能基本对齐；anchor 一到达就切到精确推算。
@@ -209,7 +282,7 @@ class DmMaskController(
             val nowNanos = System.nanoTime()
             val toVsyncMs = ((frameTimeNanos - nowNanos) / 1_000_000L)
                 .coerceIn(0L, VSYNC_INTERVAL_MS)
-            rawPos + toVsyncMs + MASK_PIPELINE_DELAY_MS
+            rawPos + toVsyncMs + MASK_PIPELINE_DELAY_MS + motionLookahead
         }
         scheduleMaskUpdate(pos)
     }
@@ -231,6 +304,11 @@ class DmMaskController(
         AppLog.d(TAG, "loadMask: cid=$cid, fps=$fps, enabled=$enabled")
         currentCid = cid
         maskReady = false
+        // 记下 mask 帧间隔，用于动态计算运动补偿 lookahead。
+        maskFrameIntervalMs = if (fps > 0) (1000L / fps).coerceAtLeast(1L) else 33L
+        // 切换视频时清空旧视频帧率历史，让新视频的 anchor 间隔重新积累 EMA。
+        videoFrameIntervalNs = 0L
+        lastReleaseForFpsNs = 0L
         invalidate()
 
         val data = repository.downloadAndParse(maskUrl, cid, fps)
@@ -238,7 +316,7 @@ class DmMaskController(
         if (!maskReady) {
             AppLog.d(TAG, "Mask load failed for cid=$cid")
         } else {
-            AppLog.d(TAG, "Mask loaded OK: segments=${data?.rawSegments?.size}")
+            AppLog.d(TAG, "Mask loaded OK: segments=${data?.rawSegments?.size}, maskDt=${maskFrameIntervalMs}ms")
             if (enabled) startFrameCallback()
         }
         return maskReady
@@ -300,6 +378,19 @@ class DmMaskController(
         anchorPresentationTimeUs = presentationTimeUs
         anchorReleaseTimeNs = releaseTimeNs
         hasVideoAnchor = true
+
+        // 顺便测量视频帧间隔（每帧 release 时刻的差）。EMA(α=1/8) 平滑 + 异常过滤。
+        // VFR 视频会自然跟着变化，倍速也会自动反映（release 间隔随 speed 缩放）。
+        val prev = lastReleaseForFpsNs
+        lastReleaseForFpsNs = releaseTimeNs
+        if (prev > 0L) {
+            val interval = releaseTimeNs - prev
+            // 5~150ms 对应 200~6.7fps，外面的不是正常视频帧（可能 seek 跳变 / 渲染节流）
+            if (interval in 5_000_000L..150_000_000L) {
+                val current = videoFrameIntervalNs
+                videoFrameIntervalNs = if (current == 0L) interval else (current * 7 + interval) / 8
+            }
+        }
     }
 
     /**
@@ -347,6 +438,9 @@ class DmMaskController(
         }
         seekHardDeadlineMs = SystemClock.elapsedRealtime() + SEEK_RECOVER_HARD_TIMEOUT_MS
         diagCount = 0
+        // seek 后 anchor 时间会跳变，下一对 anchor 间隔不能反映真实帧率，丢弃以避免污染 EMA。
+        lastReleaseForFpsNs = 0L
+        hasVideoAnchor = false
         invalidate()
         clearMask()
     }
@@ -358,7 +452,13 @@ class DmMaskController(
      * vsync。用与 [frameCallback] 相同的 [MASK_PIPELINE_DELAY_MS] 补偿，避免两条路径写不同帧。
      */
     fun onPositionChanged(positionMs: Long) {
-        val pos = if (isPlaying) positionMs + MASK_PIPELINE_DELAY_MS else positionMs
+        // 与 [frameCallback] 保持一致：播放中走管道延迟 + 运动补偿（动态根据视频帧率），
+        // 暂停时严格按当前位置（无 lookahead，避免暂停瞬间出现"超前"轮廓）。
+        val pos = if (isPlaying) {
+            positionMs + MASK_PIPELINE_DELAY_MS + computeMotionLookaheadMs()
+        } else {
+            positionMs
+        }
         scheduleMaskUpdate(pos)
     }
 
@@ -483,17 +583,23 @@ class DmMaskController(
             val maskFrameTimeMs = if (framesInSeg > 0 && segDurMs > 0)
                 segStartMs + result.frameIndex * segDurMs / framesInSeg else -1
             val diff = positionMs - maskFrameTimeMs
+            // 输出实测视频帧率与算出的运动补偿，便于看清动态自适应的实际值。
+            val videoMs = videoFrameIntervalNs / 1_000_000L
+            val videoFps = if (videoMs > 0) 1000L / videoMs else 0
+            val lookahead = computeMotionLookaheadMs()
             AppLog.d(
                 TAG,
                 "sync: video=${positionMs}ms mask=${maskFrameTimeMs}ms diff=${diff}ms " +
                     "seg=${result.segIndex}[${result.frameIndex}/${framesInSeg}] " +
+                    "videoFps=${videoFps}(dt=${videoMs}ms) maskDt=${maskFrameIntervalMs}ms " +
+                    "lookahead=${lookahead}ms(av=${AUDIO_VIDEO_LATENCY_MS}+half=${maskFrameIntervalMs / 2}+cov=${(maskFrameIntervalMs - videoMs).coerceAtLeast(0L) / 2}) " +
                     "videoBounds=($vL,$vT,${vW}x$vH) playing=$isPlaying"
             )
             diagCount++
         }
 
-        val paths = result.frame.paths
-        if (paths.isEmpty()) {
+        val frame = result.frame
+        if (frame.paths.isEmpty()) {
             if (enabled) startFrameCallback()
             return
         }
@@ -518,7 +624,7 @@ class DmMaskController(
 
         renderingInFlight = true
         postToRender {
-            renderOnBackground(targetBmp, paths, w, h, vL, vT, vW, vH, expectedCid)
+            renderOnBackground(targetBmp, frame, w, h, vL, vT, vW, vH, expectedCid)
         }
 
         if (enabled) startFrameCallback()
@@ -526,7 +632,7 @@ class DmMaskController(
 
     private fun renderOnBackground(
         targetBmp: Bitmap,
-        paths: List<Path>,
+        frame: MaskFrame,
         w: Int,
         h: Int,
         videoL: Int,
@@ -545,6 +651,11 @@ class DmMaskController(
             return
         }
 
+        // SVG 标定尺寸——横屏 320×180、竖屏 180×320 等都需要按帧自带尺寸缩放。
+        // 为 0（旧数据 / 解析失败）时回退到默认 320×180 兼容横屏。
+        val svgW = if (frame.svgWidth > 0) frame.svgWidth else SVG_W
+        val svgH = if (frame.svgHeight > 0) frame.svgHeight else SVG_H
+
         val started = SystemClock.elapsedRealtime()
         try {
             val canvas = Canvas(targetBmp)
@@ -554,9 +665,10 @@ class DmMaskController(
             // 视频显示矩形内填充 alpha=255 → 默认不显示弹幕。
             canvas.translate(videoL.toFloat(), videoT.toFloat())
             canvas.drawRect(0f, 0f, videoW.toFloat(), videoH.toFloat(), videoFillPaint)
-            // 按视频实际显示矩形把 path 坐标系映射上去（webmask 协议是 SVG_W × SVG_H 标定）。
-            canvas.scale(videoW / SVG_W.toFloat(), videoH / SVG_H.toFloat())
-            for (path in paths) {
+            // 按视频实际显示矩形把 path 坐标系映射上去——竖屏视频 SVG 是 180×320 之类，
+            // 用每帧自带的 svgW/H 而不是硬编码 320×180，否则横纵向缩放比错乱致错位。
+            canvas.scale(videoW / svgW.toFloat(), videoH / svgH.toFloat())
+            for (path in frame.paths) {
                 canvas.drawPath(path, clearPaint)
             }
             canvas.restore()
@@ -580,7 +692,7 @@ class DmMaskController(
                 host.invalidate()
             }
             if (cost > 16) {
-                AppLog.d(TAG, "mask render cost ${cost}ms (paths=${paths.size})")
+                AppLog.d(TAG, "mask render cost ${cost}ms (paths=${frame.paths.size}, svg=${svgW}x${svgH})")
             }
         }
     }

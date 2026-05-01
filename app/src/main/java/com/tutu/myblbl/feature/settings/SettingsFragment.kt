@@ -217,7 +217,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             SettingModel(getString(R.string.allow_vip_colorful_dm), "开"),
             SettingModel(getString(R.string.dm_show_advanced), "开"),
             SettingModel(getString(R.string.dm_merge_duplicate), "开"),
-            SettingModel(getString(R.string.dm_smart_shield), "开")
+            SettingModel(getString(R.string.dm_smart_shield), "关")
         )
 
         deviceSettings.add(SettingModel("应用版本", BuildConfig.VERSION_NAME))

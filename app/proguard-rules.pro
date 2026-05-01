@@ -94,3 +94,10 @@
 -keepclassmembers class * implements android.os.Parcelable {
     public static final ** CREATOR;
 }
+
+# Coil 3.x
+-keep class coil3.** { *; }
+-keep interface coil3.** { *; }
+-dontwarn coil3.**
+-keep class okio.** { *; }
+-dontwarn okio.**

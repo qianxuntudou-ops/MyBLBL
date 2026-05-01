@@ -5,7 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.RecyclerView
 import androidx.media3.common.util.UnstableApi
-import com.bumptech.glide.Glide
+import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellEpisodeListBinding
 
@@ -71,13 +71,10 @@ class PlayerEpisodePanelAdapter(
             }
             if (isSelected) {
                 binding.iconPlaying.visibility = View.VISIBLE
-                Glide.with(binding.root)
-                    .asGif()
-                    .load(R.drawable.playing)
-                    .into(binding.iconPlaying)
+                ImageLoader.loadDrawableRes(binding.iconPlaying, R.drawable.playing)
             } else {
                 binding.iconPlaying.visibility = View.GONE
-                Glide.with(binding.root).clear(binding.iconPlaying)
+                ImageLoader.clear(binding.iconPlaying)
             }
             binding.clickView.isSelected = isSelected
             binding.root.isSelected = isSelected

@@ -15,6 +15,7 @@ import com.tutu.myblbl.model.live.LiveListWrapper
 import com.tutu.myblbl.model.live.LiveRecommendSection
 import com.tutu.myblbl.ui.activity.LivePlayerActivity
 import com.tutu.myblbl.core.ui.base.BaseFragment
+import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.ui.fragment.main.MainNavigationViewModel
 import com.tutu.myblbl.core.common.content.ContentFilter
 import com.tutu.myblbl.core.ui.focus.SpatialFocusNavigator
@@ -28,6 +29,8 @@ import org.koin.androidx.viewmodel.ext.android.viewModel
 class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveTabPage {
     companion object {
         private const val CACHE_TTL_MS = 10 * 60 * 1000L
+        private const val PREFETCH_SECTION_COUNT = 2
+        private const val PREFETCH_PER_SECTION = 8
 
         fun newInstance(): LiveRecommendFragment = LiveRecommendFragment()
     }
@@ -69,6 +72,7 @@ class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveT
                 viewModel.recommendData.collectLatest { data ->
                     swipeRefreshLayout?.isRefreshing = false
                     val sections = buildSections(data)
+                    prefetchFirstScreenCovers(sections)
                     adapter.setData(sections)
                 }
             }
@@ -162,6 +166,23 @@ class LiveRecommendFragment : BaseFragment<FragmentLiveBaseListBinding>(), LiveT
 
     private fun focusLeftNav(): Boolean {
         return (activity as? com.tutu.myblbl.ui.activity.MainActivity)?.focusLeftFunctionArea() == true
+    }
+
+    /**
+     * 列表是「纵向多个 section，每个 section 内部 4 列网格」的结构，第一屏通常只能完整显示
+     * 第一个 section（4 列），其余 section 上半部分露出 1~2 行。提前把前 [PREFETCH_SECTION_COUNT]
+     * 个 section 的前 [PREFETCH_PER_SECTION] 张房间封面塞进 Coil 缓存，
+     * 避免列表 onBind 才发起网络请求导致首屏图片延迟。
+     */
+    private fun prefetchFirstScreenCovers(sections: List<LiveRecommendSection>) {
+        if (sections.isEmpty() || !isAdded) return
+        val urls = sections.asSequence()
+            .take(PREFETCH_SECTION_COUNT)
+            .flatMap { it.rooms.asSequence().take(PREFETCH_PER_SECTION) }
+            .map { it.cover }
+            .toList()
+        if (urls.isEmpty()) return
+        ImageLoader.prefetchVideoCovers(requireContext(), urls)
     }
 
     private fun buildSections(data: LiveListWrapper?): List<LiveRecommendSection> {

@@ -7,8 +7,8 @@ import com.google.gson.FieldAttributes
 import com.tutu.myblbl.BuildConfig
 import com.tutu.myblbl.model.adapter.FlexibleIntAdapter
 import com.tutu.myblbl.model.adapter.FlexibleLongAdapter
+import com.tutu.myblbl.network.interceptor.DeflateInterceptor
 import com.tutu.myblbl.network.interceptor.HeaderInterceptor
-import com.tutu.myblbl.network.interceptor.HttpCacheInterceptor
 import com.tutu.myblbl.network.cookie.CookieManager
 import java.io.File
 import java.net.Inet4Address
@@ -42,7 +42,7 @@ object NetworkClientFactory {
                     acceptLanguageProvider = acceptLanguageProvider
                 )
             )
-            .addInterceptor(HttpCacheInterceptor())
+            .addInterceptor(DeflateInterceptor())
             .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
             .retryOnConnectionFailure(true)
             .connectTimeout(10, TimeUnit.SECONDS)

@@ -12,14 +12,10 @@ import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.content.ContextCompat
 import androidx.core.widget.TextViewCompat
 import androidx.media3.common.Player
-import com.bumptech.glide.Glide
-import com.bumptech.glide.load.model.GlideUrl
-import com.bumptech.glide.load.model.LazyHeaders
-import com.bumptech.glide.request.target.CustomTarget
-import com.bumptech.glide.request.transition.Transition
+import coil3.request.Disposable
+import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.R
 import com.tutu.myblbl.model.player.VideoSnapshotData
-import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.core.common.format.NumberUtils
 import com.tutu.myblbl.feature.player.PlaybackUiCoordinator
 import com.tutu.myblbl.feature.player.UiEvent
@@ -61,7 +57,7 @@ class YouTubeOverlay @JvmOverloads constructor(
     private var currentPreviewFrameKey: String? = null
     private var lastQuantizedFrameMs: Long = -1L
     private var previewRequestToken = 0
-    private var currentPreviewTarget: CustomTarget<Bitmap>? = null
+    private var currentPreviewDisposable: Disposable? = null
     private val previewBitmapCache = object : LruCache<String, Bitmap>(24) {}
 
     private val hideOverlayRunnable = Runnable {
@@ -461,30 +457,25 @@ class YouTubeOverlay @JvmOverloads constructor(
             showPreviewLoadingIndicator()
         }
         val requestToken = ++previewRequestToken
-        currentPreviewTarget?.let { Glide.with(this).clear(it) }
-        currentPreviewTarget = object : CustomTarget<Bitmap>() {
-            override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+        currentPreviewDisposable?.dispose()
+        currentPreviewDisposable = ImageLoader.loadBitmap(
+            context = context,
+            url = frame.imageUrl,
+            applyBilibiliHeaders = true,
+            onSuccess = { resource ->
                 if (requestToken != previewRequestToken || !swipePreviewActive) {
-                    return
+                    return@loadBitmap
                 }
                 val croppedBitmap = cropFrameBitmap(resource, frame)
                 previewBitmapCache.put(frame.cacheKey, croppedBitmap)
                 secondsView.showPreviewBitmap(croppedBitmap)
-            }
-
-            override fun onLoadCleared(placeholder: Drawable?) = Unit
-
-            override fun onLoadFailed(errorDrawable: Drawable?) {
+            },
+            onFailed = {
                 if (requestToken == previewRequestToken && swipePreviewActive && !secondsView.hasPreviewBitmap()) {
                     showPreviewLoadingIndicator()
                 }
             }
-        }
-
-        Glide.with(this)
-            .asBitmap()
-            .load(buildImageModel(frame.imageUrl))
-            .into(currentPreviewTarget!!)
+        )
     }
 
     private fun cropFrameBitmap(source: Bitmap, frame: VideoSnapshotData.Frame): Bitmap {
@@ -502,8 +493,8 @@ class YouTubeOverlay @JvmOverloads constructor(
 
     private fun cancelPreviewRequest(resetFrameKey: Boolean) {
         previewRequestToken += 1
-        currentPreviewTarget?.let { Glide.with(this).clear(it) }
-        currentPreviewTarget = null
+        currentPreviewDisposable?.dispose()
+        currentPreviewDisposable = null
         if (resetFrameKey) {
             currentPreviewFrameKey = null
             lastQuantizedFrameMs = -1L
@@ -607,13 +598,4 @@ class YouTubeOverlay @JvmOverloads constructor(
         rootConstraintLayout.requestLayout()
     }
 
-    private fun buildImageModel(url: String): Any {
-        return GlideUrl(
-            url,
-            LazyHeaders.Builder()
-                .addHeader("Referer", "https://www.bilibili.com/")
-                .addHeader("User-Agent", NetworkManager.getCurrentUserAgent())
-                .build()
-        )
-    }
 }

@@ -27,7 +27,6 @@ import com.tutu.myblbl.core.ui.focus.tv.TvFocusableAdapter
 import com.tutu.myblbl.model.video.Owner
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.ui.dialog.VideoCardMenuDialog
-import com.bumptech.glide.Glide
 
 data class SearchResultEntry(
     val pageType: SearchType,
@@ -239,17 +238,19 @@ class SearchItemAdapter(
                 binding.textViewOwner.text = ownerName
             }
 
-            Glide.with(binding.imageView)
-                .load(normalizeUrl(item.cover.ifBlank { item.pic }))
-                .placeholder(R.color.thirdBackgroundColor)
-                .into(binding.imageView)
+            ImageLoader.load(
+                imageView = binding.imageView,
+                url = normalizeUrl(item.cover.ifBlank { item.pic }),
+                placeholder = R.color.thirdBackgroundColor
+            )
 
             if (hasOwner) {
-                Glide.with(binding.imageAvatar)
-                    .load(avatar)
-                    .placeholder(R.drawable.default_avatar)
-                    .circleCrop()
-                    .into(binding.imageAvatar)
+                ImageLoader.loadCircle(
+                    imageView = binding.imageAvatar,
+                    url = avatar,
+                    placeholder = R.drawable.default_avatar,
+                    error = R.drawable.default_avatar
+                )
                 binding.imageAvatar.setBadge(
                     officialVerifyType = item.officialVerify?.type ?: -1
                 )
@@ -271,10 +272,11 @@ class SearchItemAdapter(
             binding.textBadge.visibility = if (item.type.contains("media")) View.VISIBLE else View.GONE
             binding.textBadge.text = item.type.removePrefix("media_").ifBlank { "PGC" }
 
-            Glide.with(binding.imageView)
-                .load(normalizeUrl(item.cover.ifBlank { item.pic }))
-                .placeholder(R.color.thirdBackgroundColor)
-                .into(binding.imageView)
+            ImageLoader.load(
+                imageView = binding.imageView,
+                url = normalizeUrl(item.cover.ifBlank { item.pic }),
+                placeholder = R.color.thirdBackgroundColor
+            )
         }
     }
 
@@ -290,11 +292,12 @@ class SearchItemAdapter(
             binding.textView.text = item.uname
             binding.textSub.text = item.usign
 
-            Glide.with(binding.imageView)
-                .load(normalizeUrl(item.upic))
-                .placeholder(R.drawable.default_avatar)
-                .circleCrop()
-                .into(binding.imageView)
+            ImageLoader.loadCircle(
+                imageView = binding.imageView,
+                url = normalizeUrl(item.upic),
+                placeholder = R.drawable.default_avatar,
+                error = R.drawable.default_avatar
+            )
             binding.imageView.setBadge(
                 officialVerifyType = item.officialVerify?.type ?: -1
             )

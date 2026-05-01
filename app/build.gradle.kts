@@ -245,9 +245,11 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:1.9.3")
     implementation("androidx.media3:media3-exoplayer-hls:1.9.3")
 
-    implementation("com.github.bumptech.glide:glide:4.16.0")
-    implementation("com.github.bumptech.glide:okhttp3-integration:4.16.0")
-    annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
+    // Coil 3.x：Kotlin/Coroutine 原生图片加载，默认走 OkHttp，无需注解处理器。
+    implementation(platform("io.coil-kt.coil3:coil-bom:3.0.4"))
+    implementation("io.coil-kt.coil3:coil")
+    implementation("io.coil-kt.coil3:coil-network-okhttp")
+    implementation("io.coil-kt.coil3:coil-gif")
 
     // 协程
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")

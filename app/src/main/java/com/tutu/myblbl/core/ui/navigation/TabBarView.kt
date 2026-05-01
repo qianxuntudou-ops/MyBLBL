@@ -9,7 +9,6 @@ import android.view.LayoutInflater
 import android.view.View
 import android.widget.FrameLayout
 import androidx.appcompat.widget.AppCompatImageView
-import com.bumptech.glide.Glide
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.ui.image.AvatarBadgeView
 import com.tutu.myblbl.core.ui.image.ImageLoader
@@ -185,10 +184,11 @@ class TabBarView @JvmOverloads constructor(
 
     fun setAvatarUrl(avatarUrl: String?) {
         if (avatarUrl.isNullOrBlank()) {
-            Glide.with(imageAvatar)
-                .load(R.drawable.default_avatar)
-                .circleCrop()
-                .into(imageAvatar)
+            ImageLoader.loadDrawableRes(
+                imageView = imageAvatar,
+                resId = R.drawable.default_avatar,
+                circleCrop = true
+            )
             return
         }
 

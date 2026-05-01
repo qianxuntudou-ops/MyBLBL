@@ -7,7 +7,6 @@ import android.view.ViewGroup
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellUserSpaceHeaderBinding
 import com.tutu.myblbl.model.user.UserSpaceInfo
@@ -194,10 +193,11 @@ class UserSpaceHeaderAdapter(
 
             val faceUrl = state.userInfo?.face
             if (faceUrl.isNullOrBlank()) {
-                Glide.with(binding.userSpaceTop.imageAvatar)
-                    .load(R.drawable.default_avatar)
-                    .circleCrop()
-                    .into(binding.userSpaceTop.imageAvatar)
+                ImageLoader.loadDrawableRes(
+                    imageView = binding.userSpaceTop.imageAvatar,
+                    resId = R.drawable.default_avatar,
+                    circleCrop = true
+                )
             } else {
                 ImageLoader.loadCircle(
                     imageView = binding.userSpaceTop.imageAvatar,

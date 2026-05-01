@@ -1,12 +1,14 @@
 package com.tutu.myblbl.ui.adapter
 
 import android.annotation.SuppressLint
+import android.graphics.Outline
 import android.text.TextUtils
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import androidx.core.content.ContextCompat
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellVideoBinding
@@ -53,6 +55,11 @@ class VideoAdapter(
             item.cid > 0 -> "cid:${item.cid}"
             else -> "title:${item.title}|cover:${item.coverUrl}"
         }
+    }
+
+    override fun coverUrlOf(item: VideoModel): String? {
+        val raw = item.bangumi?.cover?.takeIf { it.isNotBlank() } ?: item.coverUrl
+        return raw.takeIf { it.isNotBlank() }
     }
 
     override fun areContentsSame(old: VideoModel, new: VideoModel): Boolean =
@@ -183,6 +190,13 @@ class VideoAdapter(
         }
 
         init {
+            val coverRadiusPx = binding.imageView.resources.getDimension(R.dimen.px15)
+            binding.imageView.clipToOutline = true
+            binding.imageView.outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, coverRadiusPx)
+                }
+            }
             binding.root.setOnClickListener {
                 if (longPressTriggered) {
                     longPressTriggered = false
@@ -237,13 +251,7 @@ class VideoAdapter(
                     width = iconSize
                     height = iconSize
                 }
-                val loadCtx = binding.root.context
-                if (loadCtx !is android.app.Activity || !loadCtx.isDestroyed) {
-                    com.bumptech.glide.Glide.with(loadCtx)
-                        .asGif()
-                        .load(R.drawable.playing)
-                        .into(binding.iconPlaying)
-                }
+                ImageLoader.loadDrawableRes(binding.iconPlaying, R.drawable.playing)
                 val accentColor = ContextCompat.getColor(binding.root.context, R.color.colorAccent)
                 binding.textView.setTextColor(accentColor)
                 binding.textOverflow.setTextColor(accentColor)
@@ -270,10 +278,7 @@ class VideoAdapter(
                 binding.textView.post(split)
             } else {
                 binding.iconPlaying.visibility = View.GONE
-                val clearCtx = binding.root.context
-                if (clearCtx !is android.app.Activity || !clearCtx.isDestroyed) {
-                    com.bumptech.glide.Glide.with(clearCtx).clear(binding.iconPlaying)
-                }
+                ImageLoader.clear(binding.iconPlaying)
                 binding.textView.setTextColor(defaultTextColor)
                 binding.textView.text = title
                 binding.textView.minLines = 2

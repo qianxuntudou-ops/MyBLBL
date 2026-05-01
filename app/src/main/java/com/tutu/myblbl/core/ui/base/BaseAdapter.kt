@@ -7,8 +7,10 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
+import com.tutu.myblbl.MyBLBLApplication
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.ui.focus.tv.TvFocusableAdapter
+import com.tutu.myblbl.core.ui.image.ImageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,6 +31,24 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
     protected open fun areItemsSame(old: MODEL, new: MODEL): Boolean = old == new
     protected open fun areContentsSame(old: MODEL, new: MODEL): Boolean = old == new
     protected open fun getFocusStableKey(item: MODEL): String? = null
+
+    /**
+     * 子类如果是封面型列表（视频卡 / 头像 / 番剧 cover 等），重写返回封面 URL，
+     * 框架会在 [setData] / [addAll] / [submitItemsInBackground] 写入数据后，
+     * 自动把前 [PREFETCH_COVER_COUNT] 张封面下到 Coil 的磁盘 + 内存缓存里。
+     * 这样首屏 RecyclerView 真正绑卡时，bitmap 已经常驻在缓存中，省掉网络等待。
+     */
+    protected open fun coverUrlOf(item: MODEL): String? = null
+
+    private fun maybePrefetchCovers(snapshot: List<MODEL>) {
+        if (snapshot.isEmpty()) return
+        val urls = snapshot.asSequence()
+            .take(PREFETCH_COVER_COUNT)
+            .mapNotNull { coverUrlOf(it) }
+            .toList()
+        if (urls.isEmpty()) return
+        ImageLoader.prefetchVideoCovers(MyBLBLApplication.instance, urls)
+    }
 
     fun contentCount(): Int = items.size
 
@@ -74,6 +94,7 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
         if (showLoadMore && wasEmpty && items.isNotEmpty()) {
             notifyItemInserted(items.size)
         }
+        maybePrefetchCovers(list)
     }
 
     fun getItem(position: Int): MODEL? {
@@ -86,6 +107,7 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
 
     open fun setData(data: List<MODEL>, onComplete: (() -> Unit)? = null) {
         pendingSetDataJob?.cancel()
+        maybePrefetchCovers(data)
         val oldItems = items.toList()
         if (oldItems.isEmpty()) {
             items.clear()
@@ -133,6 +155,7 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
         onComplete: (() -> Unit)? = null
     ) {
         pendingSetDataJob?.cancel()
+        maybePrefetchCovers(newItems)
         val oldItems = items.toList()
         pendingSetDataJob = adapterScope.launch {
             val diffResult = withContext(Dispatchers.Default) {
@@ -199,5 +222,6 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
 
     companion object {
         const val LOAD_MORE_TYPE = -1000
+        private const val PREFETCH_COVER_COUNT = 8
     }
 }

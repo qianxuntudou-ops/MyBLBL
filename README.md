@@ -19,7 +19,7 @@
 - **异步**: Kotlin Coroutines 1.10.2 + Flow + LiveData
 - **网络**: Retrofit 2.9.0 + OkHttp 4.12.0 + Gson
 - **播放器**: Media3 1.9.3 (ExoPlayer)
-- **图片加载**: Glide 4.16.0
+- **图片加载**: Coil 3.0.4 (与 OkHttp 共享 HTTP/2 连接池)
 - **弹幕**: 快手 AkDanmaku 引擎 
 - **数据存储**: DataStore Preferences 1.1.4
 - **UI**: AndroidX (Fragment 1.8.6, Lifecycle 2.8.7, RecyclerView 1.4.0)

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.util.concurrent.ConcurrentHashMap
 
 private val Context.appDataStore by preferencesDataStore(name = "app_settings")
@@ -26,12 +27,26 @@ class AppSettingsDataStore(private val context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cache = ConcurrentHashMap<String, Any?>()
 
+    @Volatile
+    private var cacheInitialized = false
+
+    /**
+     * 同步把 DataStore 里的全部设置加载进 [cache]。
+     * 调用方默认是 `MyBLBLApplication.onCreate` 主线程，DataStore 第一次 `data.first()`
+     * 在电视上一般 30~80ms。这部分时间一次性付清，能避免所有 `getCachedXxx` 在冷启动早期
+     * 拿到默认值（CookieJar、HTTP cache schema 都踩过这个坑）。
+     */
     fun initCache() {
-        scope.launch {
-            val prefs = dataStore.data.first()
-            prefs.asMap().forEach { (key, value) ->
-                cache[key.name] = value
+        if (cacheInitialized) return
+        synchronized(this) {
+            if (cacheInitialized) return
+            runBlocking(Dispatchers.IO) {
+                val prefs = dataStore.data.first()
+                prefs.asMap().forEach { (key, value) ->
+                    cache[key.name] = value
+                }
             }
+            cacheInitialized = true
         }
     }
 

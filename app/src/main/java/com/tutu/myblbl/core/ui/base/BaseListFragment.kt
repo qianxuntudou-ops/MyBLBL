@@ -22,9 +22,15 @@ import com.tutu.myblbl.core.ui.focus.tv.TvListFocusController
 abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>() {
 
     companion object {
+        /**
+         * 推荐/热门/分区/历史多个 Tab 共用同一个 ViewHolder 池，TV 上首屏就有 8~12 张卡片，
+         * 加上预取与 Tab 切换，原来的 20 个 slot 很容易被挤爆。一旦溢出就要重新 inflate
+         * cell_video.xml（嵌套 ConstraintLayout，TV 上单次 inflate 100ms+），首屏会有
+         * 明显的"卡片逐个出现"。这里调大到 60 个，每个 ViewHolder 仅占用 1~2KB 内存。
+         */
         val sharedVideoPool by lazy {
             RecyclerView.RecycledViewPool().apply {
-                setMaxRecycledViews(0, 20)
+                setMaxRecycledViews(0, 60)
             }
         }
     }
@@ -65,6 +71,8 @@ abstract class BaseListFragment<MODEL> : BaseFragment<FragmentBaseListBinding>()
         adapter = createAdapter()
         recyclerView?.adapter = adapter
         recyclerView?.itemAnimator = null
+        recyclerView?.setHasFixedSize(true)
+        recyclerView?.setItemViewCacheSize(8)
         adapter?.registerAdapterDataObserver(restoreObserver)
         recyclerView?.setRecycledViewPool(sharedVideoPool)
         layoutManager = createLayoutManager()

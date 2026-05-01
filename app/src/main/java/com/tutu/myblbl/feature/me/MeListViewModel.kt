@@ -6,6 +6,7 @@ import com.tutu.myblbl.repository.UserRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
 class MeListViewModel(
@@ -26,6 +27,21 @@ class MeListViewModel(
     val hasMore: StateFlow<Boolean> = _hasMore.asStateFlow()
 
     private var historyCursorViewAt: Long = 0
+
+    init {
+        // 订阅「稍后观看」番剧弹幕数补全完成事件：
+        // 用 sourceList 引用判断当前 UI 显示的还是不是这次 enrich 对应的数据。
+        // 一致才用 enrichedList 替换，否则丢弃（避免回写过期数据）。
+        viewModelScope.launch {
+            userRepository.laterWatchEnriched.collectLatest { enrichment ->
+                if (_uiState.value.laterVideos === enrichment.sourceList) {
+                    _uiState.value = _uiState.value.copy(
+                        laterVideos = enrichment.enrichedList
+                    )
+                }
+            }
+        }
+    }
 
     fun isLoggedIn(): Boolean = userRepository.isLoggedIn()
 

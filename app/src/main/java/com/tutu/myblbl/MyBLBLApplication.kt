@@ -2,10 +2,11 @@ package com.tutu.myblbl
 
 import android.app.Application
 import android.os.SystemClock
-import com.bumptech.glide.Glide
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.core.lifecycle.AppBackgroundMonitor
+import com.tutu.myblbl.core.ui.image.ImageLoader
+import com.tutu.myblbl.core.ui.image.MyBLBLCoilInitializer
 import com.tutu.myblbl.di.appModules
 import com.tutu.myblbl.feature.home.RecommendFeedRepository
 import com.tutu.myblbl.feature.player.PlayerInstancePool
@@ -43,6 +44,7 @@ class MyBLBLApplication : Application() {
         trace("initKoin", startMs) { initKoin() }
         trace("initSettings", startMs) { initSettings() }
         trace("initNetwork", startMs) { initNetwork() }
+        trace("initCoil", startMs) { MyBLBLCoilInitializer.bootstrap(this) }
         trace("initBackgroundMonitor", startMs) { AppBackgroundMonitor.init(this) }
         AppLog.i(TAG, "Application.onCreate end elapsed=${SystemClock.elapsedRealtime() - startMs}ms")
     }
@@ -72,12 +74,12 @@ class MyBLBLApplication : Application() {
         NetworkManager.init(this, syncWebViewCookies = false)
         appScope.launch {
             NetworkManager.warmUp()
-            val cookieSyncStartMs = SystemClock.elapsedRealtime()
-            NetworkManager.syncCookiesFromWebView()
-            AppLog.i(
-                TAG,
-                "syncCookiesFromWebView end step=${SystemClock.elapsedRealtime() - cookieSyncStartMs}ms"
-            )
+
+            // 推荐首页只依赖本地持久化的 cookies。CookieJar 在 NetworkManager.init 阶段
+            // 已经从 SP 加载完毕（initSettings 同步阻塞保证 cache 就绪），此处直接发请求即可。
+            // 不再做 WebView cookie 同步：webCookieManager 里的 cookie 全部来自 OkHttp
+            // saveFromResponse 反向写入，跟我们的 SP 同源，冷启动期没有任何"新 cookie"
+            // 可同步；而 WebView 冷加载在电视上 300~800ms，是纯负担。
             if (NetworkManager.isLoggedIn()) {
                 KoinPlatform.getKoin().get<com.tutu.myblbl.event.AppEventHub>()
                     .dispatch(com.tutu.myblbl.event.AppEventHub.Event.UserSessionChanged)
@@ -108,13 +110,13 @@ class MyBLBLApplication : Application() {
         super.onTrimMemory(level)
         when {
             level >= 80 -> { // TRIM_MEMORY_COMPLETE
-                Glide.get(this).clearMemory()
+                ImageLoader.clearMemory(this)
                 if (!PlayerInstancePool.isAttached()) {
                     PlayerInstancePool.releaseNow("trimMemory_complete")
                 }
             }
             level >= 60 -> { // TRIM_MEMORY_MODERATE
-                Glide.get(this).clearMemory()
+                ImageLoader.clearMemory(this)
             }
             level >= 10 -> { // TRIM_MEMORY_RUNNING_LOW
                 if (!PlayerInstancePool.isAttached()) {

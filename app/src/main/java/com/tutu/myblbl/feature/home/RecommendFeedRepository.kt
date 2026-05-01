@@ -1,21 +1,27 @@
 package com.tutu.myblbl.feature.home
 
+import android.content.Context
 import android.os.SystemClock
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.log.HomeVideoCardDebugLogger
+import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.repository.VideoRepository
 import com.tutu.myblbl.repository.cache.HomeCacheStore
 
 class RecommendFeedRepository(
-    private val videoRepository: VideoRepository
+    private val videoRepository: VideoRepository,
+    context: Context
 ) {
+
+    private val appContext = context.applicationContext
 
     companion object {
         private const val TAG = "RecommendFeedRepository"
         private const val CACHE_KEY = "recommendCacheList"
         private const val MAX_CACHED_RECOMMEND_ITEMS = 24
         private const val PRELOAD_PAGE_SIZE = 12
+        private const val COVER_PREFETCH_COUNT = 8
     }
 
     @Volatile
@@ -28,8 +34,18 @@ class RecommendFeedRepository(
             .getOrNull()?.let { page ->
                 preloadedFirstPage = page
                 writeCache(page.items)
+                prefetchCovers(page.items)
             }
         AppLog.i(TAG, "APP_STARTUP recommend preload end elapsed=${SystemClock.elapsedRealtime() - startMs}ms")
+    }
+
+    private fun prefetchCovers(items: List<VideoModel>) {
+        if (items.isEmpty()) return
+        val urls = items.asSequence()
+            .take(COVER_PREFETCH_COUNT)
+            .map { it.bangumi?.cover?.takeIf { c -> c.isNotBlank() } ?: it.coverUrl }
+            .toList()
+        ImageLoader.prefetchVideoCovers(appContext, urls)
     }
 
     fun takePreloadedFirstPage(): NetworkPage? {

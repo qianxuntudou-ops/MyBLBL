@@ -44,7 +44,7 @@ class LiveRecommendViewModel(
             _error.value = null
             _status.value = LiveRecommendStatus.Idle
 
-            liveRepository.getLiveRecommend().fold(
+            liveRepository.getLiveRecommend(forceRefresh = forceRefresh).fold(
                 onSuccess = { data ->
                     _recommendData.value = data
                     lastLoadedAt = System.currentTimeMillis()

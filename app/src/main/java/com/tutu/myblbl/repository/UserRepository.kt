@@ -16,8 +16,16 @@ import com.tutu.myblbl.network.security.NetworkSecurityGateway
 import com.tutu.myblbl.network.session.NetworkSessionGateway
 import com.tutu.myblbl.network.response.BaseBaseResponse
 import com.tutu.myblbl.core.common.log.AppLog
+import com.tutu.myblbl.model.video.VideoModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -30,6 +38,30 @@ class UserRepository(
 
     private val detailCache = mutableMapOf<String, Any>()
     private val detailSemaphore = Semaphore(3)
+
+    private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * 「稍后观看」列表里 PGC 番剧的弹幕数补全完成后，会通过本流推送一次更新。
+     *
+     * 事件结构 [LaterWatchEnrichment] 同时带上 enrich 之前的 source list 引用，
+     * 订阅者用引用相等判断「这次后台补全是不是匹配当前 UI 显示的那一份数据」，
+     * 避免用户已经离开/重新加载后还回写过期结果。
+     *
+     * 用 `extraBufferCapacity = 4` 确保 tryEmit 不会因为没人订阅而丢事件。
+     */
+    private val _laterWatchEnriched = MutableSharedFlow<LaterWatchEnrichment>(
+        replay = 0,
+        extraBufferCapacity = 4
+    )
+    val laterWatchEnriched: SharedFlow<LaterWatchEnrichment> = _laterWatchEnriched.asSharedFlow()
+
+    data class LaterWatchEnrichment(
+        /** enrich 启动时拿到的原始 list 引用，UI 拿来做引用相等判断。 */
+        val sourceList: List<VideoModel>,
+        /** stat 已经补全后的新 list；元素是浅拷贝过 stat 的 VideoModel 副本，不污染原 list。 */
+        val enrichedList: List<VideoModel>
+    )
 
     suspend fun getUserDetailInfo(): BaseResponse<UserDetailInfoModel> {
         return apiService.getUserDetailInfo().also { response ->
@@ -82,6 +114,10 @@ class UserRepository(
             )
         }
 
+    /**
+     * 立刻返回稍后观看的主接口数据。番剧弹幕数补全异步进行，完成后通过
+     * [laterWatchEnriched] 推送同一份 list（其中 [VideoModel.stat.danmaku] 已被原地修改）。
+     */
     suspend fun getLaterWatch(): Result<BaseResponse<LaterWatchWrapper>> =
         runCatching {
             val response = sessionGateway.syncAuthState(
@@ -89,10 +125,27 @@ class UserRepository(
                 source = "getLaterWatch"
             )
             if (response.isSuccess && response.data != null) {
-                enrichPgcDanmakuCount(response.data.list)
+                scheduleEnrichLaterWatch(response.data.list)
             }
             response
         }
+
+    private fun scheduleEnrichLaterWatch(originalList: List<VideoModel>) {
+        if (originalList.isEmpty()) return
+        repoScope.launch {
+            // 给每个 VideoModel 准备一份 stat 副本：enrich 改副本，原 list 完全不变。
+            // 这样 UI 端 DiffUtil 比较 oldList vs enrichedList 时能感知到 stat.danmaku
+            // 实际变化（否则两边指向同一个 stat 对象，contents 永远相等，UI 不刷新）。
+            val refreshed = originalList.map { v ->
+                val s = v.stat
+                if (s != null) v.copy(stat = s.copy()) else v
+            }
+            enrichPgcDanmakuCount(refreshed)
+            _laterWatchEnriched.tryEmit(
+                LaterWatchEnrichment(sourceList = originalList, enrichedList = refreshed)
+            )
+        }
+    }
 
     suspend fun getFollowing(
         mid: Long,

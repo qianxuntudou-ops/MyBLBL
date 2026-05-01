@@ -6,7 +6,7 @@ import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
-import com.bumptech.glide.Glide
+import com.tutu.myblbl.core.ui.image.ImageLoader
 import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellUserBinding
 import com.tutu.myblbl.model.live.LiveAreaCategory
@@ -67,10 +67,11 @@ class LiveAreaAdapter(
 
         fun bind(item: LiveAreaCategory) {
             binding.textView.text = item.title.ifBlank { item.name }
-            Glide.with(binding.imageView)
-                .load(item.pic)
-                .placeholder(R.drawable.default_avatar)
-                .into(binding.imageView)
+            ImageLoader.load(
+                imageView = binding.imageView,
+                url = item.pic,
+                placeholder = R.drawable.default_avatar
+            )
         }
     }
 }

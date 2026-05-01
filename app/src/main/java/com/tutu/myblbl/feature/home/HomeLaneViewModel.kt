@@ -23,7 +23,19 @@ class HomeLaneViewModel(
         if (hasLoadedInitial) return
         hasLoadedInitial = true
         viewModelScope.launch {
-            loadPage(replace = true, fromInitial = true)
+            // cache-then-network：先把磁盘缓存（最长 14 天）打到屏幕上，避免 fragment 重建
+            // 后又得空白等几百 KB 的 getHomeLane 接口；接着再发起网络请求覆盖。
+            val cached = repository.readCachedFeed(type)
+            val hasCache = cached.items.isNotEmpty()
+            if (hasCache) {
+                _uiState.value = FeedUiState(
+                    items = cached.items,
+                    source = FeedSource.CACHE,
+                    listChange = FeedListChange.REPLACE,
+                    hasMore = true
+                )
+            }
+            loadPage(replace = true, fromInitial = !hasCache)
         }
     }
 
@@ -57,12 +69,14 @@ class HomeLaneViewModel(
     ) {
         val current = _uiState.value
         val requestCursor = if (replace) 0L else cursor
+        // 注意 listChange 不在这里强清：cache-then-network 路径会先把 listChange 置为 REPLACE
+        // 让 fragment 渲染 cache 数据；如果这里清成 NONE，StateFlow 会被 conflate 后丢掉那一帧。
+        // 网络成功/失败时会重新写一次 listChange，fragment 拿不到陈旧的 REPLACE 标记。
         _uiState.value = current.copy(
             loadingInitial = fromInitial,
             refreshing = fromRefresh,
             appending = !replace,
-            errorMessage = null,
-            listChange = FeedListChange.NONE
+            errorMessage = null
         )
 
         repository.loadNetworkPage(type = type, cursor = requestCursor, isRefresh = replace)

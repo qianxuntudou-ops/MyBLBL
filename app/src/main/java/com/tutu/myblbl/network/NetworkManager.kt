@@ -16,9 +16,7 @@ import com.tutu.myblbl.network.ua.DesktopUserAgentStore
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.core.common.settings.AppSettingsDataStore
 import com.tutu.myblbl.network.cookie.CookieManager
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONObject
 import org.koin.mp.KoinPlatform
 import retrofit2.Retrofit
@@ -33,6 +31,9 @@ object NetworkManager {
     private const val KEY_CURRENT_UA = "currentUA"
     private const val AUTH_INVALID_CODE = -101
     private const val KEY_REFRESH_TOKEN = "bili_refresh_token"
+    private const val KEY_HTTP_CACHE_SCHEMA = "http_cache_schema"
+    /** 修改 HTTP 协商缓存结构时递增此值，可以在用户下次冷启动时一次性清空旧缓存。*/
+    private const val HTTP_CACHE_SCHEMA = 1
 
     private var appContext: Context? = null
 
@@ -114,7 +115,7 @@ object NetworkManager {
     fun init(context: Context, syncWebViewCookies: Boolean = true) {
         val applicationContext = context.applicationContext
         appContext = applicationContext
-        java.io.File(applicationContext.cacheDir, "http_cache").deleteRecursively()
+        maybeMigrateHttpCache(applicationContext)
         internalCookieManager.init(applicationContext, syncWebViewCookies)
         userAgentStore.init(applicationContext)
         sessionStore.initPersistence(
@@ -122,26 +123,36 @@ object NetworkManager {
         )
     }
 
+    /**
+     * HTTP 协商缓存默认在冷启动间复用，只有 schema 升级时才一次性清空，
+     * 否则像首页推荐这种带 max-age 的接口每次启动都会全量重下，电视上尤其影响首屏。
+     *
+     * 使用 SharedPreferences 同步读写：AppSettingsDataStore 的 initCache 是异步的，
+     * 冷启动早期还未加载完毕时读 schema 会误判为 0 而把缓存删干净。
+     */
+    private fun maybeMigrateHttpCache(applicationContext: Context) {
+        val sp = applicationContext.getSharedPreferences(
+            "network_http_cache_meta",
+            Context.MODE_PRIVATE
+        )
+        val current = sp.getInt(KEY_HTTP_CACHE_SCHEMA, 0)
+        if (current >= HTTP_CACHE_SCHEMA) return
+        runCatching {
+            java.io.File(applicationContext.cacheDir, "http_cache").deleteRecursively()
+        }
+        sp.edit().putInt(KEY_HTTP_CACHE_SCHEMA, HTTP_CACHE_SCHEMA).apply()
+    }
+
+    /**
+     * 触发 lazy 字段初始化：OkHttp client、Gson、Retrofit、ApiService。
+     * 不做 DNS / TLS 预连（首次 API 请求自身即承担首包建连，预连接对 TV
+     * 上 connection pool 5min 过期窗口内的复用增益有限，反而占用一次连接配额）。
+     */
     fun warmUp() {
         internalOkHttpClient
         gson
         retrofit
         apiService
-        prefetchDns()
-    }
-
-    /**
-     * 在后台线程预解析 Bilibili API 主域名，并触发一次 TCP+TLS 预连接。
-     * 冷启动时 warmUp() 在 IO 协程里调用，预连接完成后首包请求可直接复用连接。
-     */
-    private fun prefetchDns() {
-        try {
-            val url = API_BASE.toHttpUrl()
-            val request = Request.Builder().url(url).head().build()
-            internalOkHttpClient.newCall(request).execute().use { /* 只建连，不消费 body */ }
-        } catch (_: Exception) {
-            // 预连接失败不影响正常流程，静默忽略
-        }
     }
 
     fun syncCookiesFromWebView() {

@@ -44,6 +44,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import java.util.Locale
 
@@ -227,10 +228,11 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
         deviceSettings.add(SettingModel("SDK版本", Build.VERSION.SDK_INT.toString()))
         deviceSettings.add(SettingModel("CPU架构", Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"))
         deviceSettings.add(SettingModel("屏幕分辨率", "${resources.displayMetrics.widthPixels}x${resources.displayMetrics.heightPixels}"))
-        deviceSettings.add(SettingModel("硬解支持", buildCodecSupportText()))
+        deviceSettings.add(SettingModel("硬解支持", ""))
 
-        commonSettings[0].info = formatFileSize(getCurrentCacheSize())
         restoreSavedSettings()
+        updateCacheSizeAsync()
+        updateCodecSupportAsync()
     }
 
     private fun setupRecyclerView() {
@@ -678,6 +680,28 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             FileCacheManager.trimToLimit()
             commonSettings[0].info = formatFileSize(getCurrentCacheSize())
             adapter.notifyItemChanged(0)
+        }
+    }
+
+    private fun updateCacheSizeAsync() {
+        updateScope.launch {
+            val size = withContext(Dispatchers.IO) { getCurrentCacheSize() }
+            if (!isAdded) return@launch
+            commonSettings[0].info = formatFileSize(size)
+            if (currentCategory == CATEGORY_COMMON) {
+                adapter.notifyItemChanged(0)
+            }
+        }
+    }
+
+    private fun updateCodecSupportAsync() {
+        updateScope.launch {
+            val text = withContext(Dispatchers.Default) { buildCodecSupportText() }
+            if (!isAdded) return@launch
+            deviceSettings.getOrNull(DEVICE_POSITION_CODEC)?.info = text
+            if (currentCategory == CATEGORY_DEVICE) {
+                adapter.notifyItemChanged(DEVICE_POSITION_CODEC)
+            }
         }
     }
 

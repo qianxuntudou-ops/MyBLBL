@@ -451,6 +451,7 @@ class VideoPlayerViewModel(
 
     private var interactionProgressRestored = false
     private var interactionLoadingEdgeId: Long = -1L
+    private var isSteinsGateVideo = false
 
     fun getInteractionEngine(): InteractionEngine = interactionEngine
 
@@ -639,7 +640,8 @@ class VideoPlayerViewModel(
         preferredQualityId: Int = 0,
         preferredAudioQualityId: Int = 0,
         startupTraceId: String = PlaybackStartupTrace.NO_TRACE,
-        startupTraceStartElapsedMs: Long = 0L
+        startupTraceStartElapsedMs: Long = 0L,
+        isSteinsGate: Boolean = false
     ) {
         currentStartupTraceId = startupTraceId
         currentStartupTraceStartElapsedMs = startupTraceStartElapsedMs
@@ -724,6 +726,7 @@ class VideoPlayerViewModel(
             interactionRepository.clearCache()
             interactionProgressRestored = false
             interactionLoadingEdgeId = -1L
+            isSteinsGateVideo = isSteinsGate
             _videoSnapshot.value = null
             _error.value = null
             _qualities.value = emptyList()
@@ -1545,6 +1548,11 @@ class VideoPlayerViewModel(
             !initialIdentity.bvid.isNullOrBlank()
 
         if (isSameVideoReplay) {
+            // Fetch detail early to get authoritative steinsGate flag.
+            // Awaiting before progress-restore decision ensures interactive
+            // videos never resume regardless of card-data quality.
+            val detailDeferred = async { apiService.getVideoDetail(currentAid, currentBvid) }
+
             // ── Zero-overhead reuse: same bvid+cid, player still has MediaSource ──
             val cachedPlayback = getCachedPlayback(initialIdentity!!.bvid, initialIdentity.cid)
             if (cachedPlayback != null) {
@@ -1554,10 +1562,16 @@ class VideoPlayerViewModel(
                     step = "zero_overhead_reuse",
                     message = "bvid=${initialIdentity.bvid} cid=${initialIdentity.cid}"
                 )
+                // Await detail for steinsGate check before deciding on progress restore
+                val detailResponse = detailDeferred.await()
+                if (detailResponse.isSuccess && detailResponse.data?.view?.steinsGate == true) {
+                    isSteinsGateVideo = true
+                }
+
                 applySelectionSnapshot(cachedPlayback.selectionSnapshot)
                 currentPlayInfo = cachedPlayback.playInfo
                 val playInfo = cachedPlayback.playInfo
-                val resumePositionMs = if (preferLastPlayTime && (playInfo.interaction?.graphVersion ?: 0L) <= 0L) {
+                val resumePositionMs = if (preferLastPlayTime && !isSteinsGateVideo && currentGraphVersion <= 0L) {
                     val cachedResume = VideoPlayerPlayInfoCache.get(
                         initialIdentity.bvid.orEmpty(), initialIdentity.cid
                     )?.lastPlayTime?.takeIf { it > 5000L }
@@ -1579,26 +1593,23 @@ class VideoPlayerViewModel(
                     didApplyLastPlayPosition = true
                     showResumePositionToast(resumePositionMs)
                 }
-                // Fetch detail in background
-                viewModelScope.launch {
-                    val detailResponse = apiService.getVideoDetail(currentAid, currentBvid)
-                    if (detailResponse.isSuccess && detailResponse.data != null) {
-                        val detail = detailResponse.data
-                        _videoInfo.value = detail
-                        currentAid = detail.view?.aid ?: currentAid
-                        currentBvid = detail.view?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
-                        val episodeItems = episodeCatalogBuilder.buildUgcEpisodes(detail)
-                        _episodes.value = episodeItems
-                        _selectedEpisodeIndex.value = episodeItems.indexOfFirst {
-                            it.cid == currentCid || (it.bvid.isNotBlank() && it.bvid == currentBvid)
-                        }.takeIf { it >= 0 } ?: 0
-                        val related = detail.related.orEmpty()
-                        _subtitles.value = detail.view?.subtitle?.list
-                            ?.map { it.toSubtitleInfoModel() }
-                            .orEmpty()
-                        if (related.isNotEmpty()) {
-                            _relatedVideos.value = related
-                        }
+                // Process detail (already fetched above)
+                if (detailResponse.isSuccess && detailResponse.data != null) {
+                    val detail = detailResponse.data
+                    _videoInfo.value = detail
+                    currentAid = detail.view?.aid ?: currentAid
+                    currentBvid = detail.view?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
+                    val episodeItems = episodeCatalogBuilder.buildUgcEpisodes(detail)
+                    _episodes.value = episodeItems
+                    _selectedEpisodeIndex.value = episodeItems.indexOfFirst {
+                        it.cid == currentCid || (it.bvid.isNotBlank() && it.bvid == currentBvid)
+                    }.takeIf { it >= 0 } ?: 0
+                    val related = detail.related.orEmpty()
+                    _subtitles.value = detail.view?.subtitle?.list
+                        ?.map { it.toSubtitleInfoModel() }
+                        .orEmpty()
+                    if (related.isNotEmpty()) {
+                        _relatedVideos.value = related
                     }
                 }
                 if (loadedPlayerExtrasCid != initialIdentity.cid) {
@@ -1614,41 +1625,56 @@ class VideoPlayerViewModel(
 
             if (cachedPlayInfo != null) {
 
-                // Reuse the existing PlayInfo cache — the early-PlayInfo async
-                // inside requestPreparedPlayback will pick it up automatically.
-                val preparedPlayback = requestPreparedPlayback(
-                    identity = initialIdentity,
-                    preferLastPlayTime = preferLastPlayTime,
-                    replaceInPlace = false
-                )
+                // Run detail fetch and requestPreparedPlayback in parallel so
+                // we can check steinsGate before applying progress.
+                val preparedPlaybackDeferred = async {
+                    requestPreparedPlayback(
+                        identity = initialIdentity,
+                        preferLastPlayTime = preferLastPlayTime,
+                        replaceInPlace = false
+                    )
+                }
+
+                // Await detail first to set steinsGate flag
+                val detailResponse = detailDeferred.await()
+                if (detailResponse.isSuccess && detailResponse.data?.view?.steinsGate == true) {
+                    isSteinsGateVideo = true
+                }
                 if (!isActiveVideoLoad(loadGeneration)) return@coroutineScope
+
+                // Now await preparedPlayback — isSteinsGateVideo is already set
+                val preparedPlayback = preparedPlaybackDeferred.await()
+                if (!isActiveVideoLoad(loadGeneration)) return@coroutineScope
+
                 if (preparedPlayback != null) {
-                    applyPreparedPlayback(preparedPlayback)
+                    // Interactive video: override seek to 0 regardless of what
+                    // requestPreparedPlayback decided (it may have used stale isSteinsGateVideo)
+                    val effectivePlayback = if (isSteinsGateVideo && preparedPlayback.seekToStart > 0L) {
+                        preparedPlayback.copy(seekToStart = 0L, resumeHintPositionMs = null)
+                    } else {
+                        preparedPlayback
+                    }
+                    applyPreparedPlayback(effectivePlayback)
                 } else {
                     // Cache was present but build failed (e.g. codec issue) — fall through to cold path
                 }
-                // Regardless of success/failure, we still need video detail for
-                // episodes list, related videos, subtitles, etc.  Fetch it
-                // in the background but do NOT block playback on it.
-                viewModelScope.launch {
-                    val detailResponse = apiService.getVideoDetail(currentAid, currentBvid)
-                    if (detailResponse.isSuccess && detailResponse.data != null) {
-                        val detail = detailResponse.data
-                        _videoInfo.value = detail
-                        currentAid = detail.view?.aid ?: currentAid
-                        currentBvid = detail.view?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
-                        val episodeItems = episodeCatalogBuilder.buildUgcEpisodes(detail)
-                        _episodes.value = episodeItems
-                        _selectedEpisodeIndex.value = episodeItems.indexOfFirst {
-                            it.cid == currentCid || (it.bvid.isNotBlank() && it.bvid == currentBvid)
-                        }.takeIf { it >= 0 } ?: 0
-                        val related = detail.related.orEmpty()
-                        _subtitles.value = detail.view?.subtitle?.list
-                            ?.map { it.toSubtitleInfoModel() }
-                            .orEmpty()
-                        if (related.isNotEmpty()) {
-                            _relatedVideos.value = related
-                        }
+                // Process detail (already fetched above)
+                if (detailResponse.isSuccess && detailResponse.data != null) {
+                    val detail = detailResponse.data
+                    _videoInfo.value = detail
+                    currentAid = detail.view?.aid ?: currentAid
+                    currentBvid = detail.view?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
+                    val episodeItems = episodeCatalogBuilder.buildUgcEpisodes(detail)
+                    _episodes.value = episodeItems
+                    _selectedEpisodeIndex.value = episodeItems.indexOfFirst {
+                        it.cid == currentCid || (it.bvid.isNotBlank() && it.bvid == currentBvid)
+                    }.takeIf { it >= 0 } ?: 0
+                    val related = detail.related.orEmpty()
+                    _subtitles.value = detail.view?.subtitle?.list
+                        ?.map { it.toSubtitleInfoModel() }
+                        .orEmpty()
+                    if (related.isNotEmpty()) {
+                        _relatedVideos.value = related
                     }
                 }
                 return@coroutineScope
@@ -1684,6 +1710,7 @@ class VideoPlayerViewModel(
         _videoInfo.value = detail
         currentAid = detail.view?.aid ?: currentAid
         currentBvid = detail.view?.bvid?.takeIf { it.isNotBlank() } ?: currentBvid
+        isSteinsGateVideo = detail.view?.steinsGate == true
 
         // Auto-detect PGC from redirectUrl: if video detail points to a bangumi page,
         // switch to PGC playback path so the episode list shows all episodes.
@@ -1738,7 +1765,12 @@ class VideoPlayerViewModel(
             return@coroutineScope
         }
         if (preparedPlayback != null) {
-            applyPreparedPlayback(preparedPlayback)
+            val effectivePlayback = if (isSteinsGateVideo && preparedPlayback.seekToStart > 0L) {
+                preparedPlayback.copy(seekToStart = 0L, resumeHintPositionMs = null)
+            } else {
+                preparedPlayback
+            }
+            applyPreparedPlayback(effectivePlayback)
         } else {
             loadPlayUrl(preferLastPlayTime = preferLastPlayTime, loadGeneration = loadGeneration)
         }
@@ -1938,7 +1970,7 @@ class VideoPlayerViewModel(
         }
 
         // 互动视频不使用进度恢复，始终从头开始
-        val isInteractionVideo = currentGraphVersion > 0L || (initialPlayInfo.interaction?.graphVersion ?: 0L) > 0L
+        val isInteractionVideo = currentGraphVersion > 0L || isSteinsGateVideo
         val effectivePreferLastPlayTime = preferLastPlayTime && !isInteractionVideo
 
         val useServerResume = effectivePreferLastPlayTime &&
@@ -2700,6 +2732,7 @@ class VideoPlayerViewModel(
                 val interaction = wrapper.interaction
                 if (interaction != null && interaction.graphVersion > 0L && !currentBvid.isNullOrBlank() && (currentAid ?: 0L) > 0L) {
                     currentGraphVersion = interaction.graphVersion
+                    VideoPlayerPlayInfoCache.markAsSteinsGate(currentBvid!!, currentCid)
                     // 仅在引擎未初始化（首次加载）时触发 loadInteractionInfo
                     // playInteractionChoice 已单独调用 loadInteractionInfo，避免竞态覆盖
                     if (interactionEngine.state.graphVersion == 0L) {
@@ -3346,6 +3379,10 @@ class VideoPlayerViewModel(
         val newIndex = resolveDanmakuSegmentIndex(positionMs)
         if (newIndex <= 0) return
         if (newIndex == currentDanmakuSegmentIndex) {
+            // 重试当前段：如果之前的加载失败或返回了空数据，定期重试
+            if (!danmakuLoadedSegments.contains(newIndex) && !danmakuLoadingSegments.contains(newIndex)) {
+                loadDanmakuSegmentIfNeeded(newIndex)
+            }
             // 邻近预加载：距离下个 segment 边界不足 2 分钟时提前加载
             if (newIndex < danmakuTotalSegments) {
                 val segmentEndMs = newIndex.toLong() * 360_000L
@@ -3461,6 +3498,15 @@ class VideoPlayerViewModel(
                         startElapsedMs = currentStartupTraceStartElapsedMs,
                         step = "danmaku_segment_load_failed",
                         message = "cid=$cid segment=$segmentIndex attempts=2"
+                    )
+                    return@withContext
+                }
+                if (payload.regularItems.isEmpty() && payload.specialItems.isEmpty()) {
+                    PlaybackStartupTrace.log(
+                        traceId = currentStartupTraceId,
+                        startElapsedMs = currentStartupTraceStartElapsedMs,
+                        step = "danmaku_segment_load_empty",
+                        message = "cid=$cid segment=$segmentIndex"
                     )
                     return@withContext
                 }

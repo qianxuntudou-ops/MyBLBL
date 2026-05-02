@@ -154,15 +154,6 @@
         android:shadowColor="@color/black"
         android:shadowRadius="7"
         android:layout_marginEnd="@dimen/px50"/>
-    <ProgressBar
-        android:layout_gravity="bottom"
-        android:id="@+id/bottom_progress_bar"
-        android:layout_width="match_parent"
-        android:layout_height="2.5dp"
-        android:max="100"
-        android:progress="0"
-        android:progressDrawable="@drawable/progress_bar_horizontal"
-        style="?android:attr/progressBarStyleHorizontal"/>
     <androidx.appcompat.widget.AppCompatTextView
         android:textSize="@dimen/px45"
         android:textStyle="bold"
@@ -185,4 +176,13 @@
         android:visibility="gone"
         android:layout_width="match_parent"
         android:layout_height="match_parent"/>
+    <ProgressBar
+        android:layout_gravity="bottom"
+        android:id="@+id/bottom_progress_bar"
+        android:layout_width="match_parent"
+        android:layout_height="2.5dp"
+        android:max="100"
+        android:progress="0"
+        android:progressDrawable="@drawable/progress_bar_horizontal"
+        style="?android:attr/progressBarStyleHorizontal"/>
 </FrameLayout>

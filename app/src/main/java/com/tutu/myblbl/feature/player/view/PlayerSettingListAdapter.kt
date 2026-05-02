@@ -22,9 +22,9 @@ internal class PlayerSettingListAdapter(
     var currentMenuKey: Int = 0
         private set
 
-    fun submitRows(menuKey: Int, newRows: List<PlayerSettingRow>) {
+    fun submitRows(menuKey: Int, newRows: List<PlayerSettingRow>, onCommitted: Runnable? = null) {
         currentMenuKey = menuKey
-        submitList(newRows)
+        submitList(newRows, onCommitted)
     }
 
     override fun getItemViewType(position: Int): Int {

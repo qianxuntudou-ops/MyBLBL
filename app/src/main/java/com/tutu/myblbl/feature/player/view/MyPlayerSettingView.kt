@@ -5,6 +5,7 @@ import android.animation.AnimatorListenerAdapter
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.AttributeSet
+import android.util.Log
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -95,6 +96,8 @@ class MyPlayerSettingView @JvmOverloads constructor(
     private var panelState = preferenceStore.loadDanmakuState(
         MyPlayerSettingMenuBuilder.PanelState()
     )
+    private var lastFocusedMainItemPosition = 1
+    private var lastFocusedDmItemPosition = 1
 
     init {
         LayoutInflater.from(context).inflate(R.layout.my_player_setting_view, this, true)
@@ -143,6 +146,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
 
         visibility = VISIBLE
         menuLevel = LEVEL_MAIN
+        lastFocusedMainItemPosition = 1
         updateMainMenu()
         updateBackIcon()
         translationX = panelWidthPx.toFloat()
@@ -161,6 +165,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
     }
 
     fun onBack(): Boolean {
+        Log.d("SettingFocus", "onBack level=$menuLevel menuKey=${adapter.currentMenuKey} mainPos=$lastFocusedMainItemPosition dmPos=$lastFocusedDmItemPosition")
         return when {
             menuLevel == LEVEL_MAIN -> {
                 showHide(false)
@@ -179,7 +184,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
 
             else -> {
                 menuLevel = LEVEL_MAIN
-                updateMainMenu()
+                updateMainMenu(focusPosition = lastFocusedMainItemPosition)
                 updateBackIcon()
                 true
             }
@@ -187,8 +192,24 @@ class MyPlayerSettingView @JvmOverloads constructor(
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK && isShowing()) {
-            return onBack()
+        if (isShowing() && event.action == KeyEvent.ACTION_DOWN) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_BACK -> return onBack()
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    val focused = findFocus() ?: return super.dispatchKeyEvent(event)
+                    if (focused.parent === recyclerView) {
+                        val lastChild = recyclerView.getChildAt(recyclerView.childCount - 1)
+                        if (focused === lastChild) return true
+                    }
+                }
+                KeyEvent.KEYCODE_DPAD_UP -> {
+                    val focused = findFocus() ?: return super.dispatchKeyEvent(event)
+                    if (focused.parent === recyclerView) {
+                        val firstChild = recyclerView.getChildAt(0)
+                        if (focused === firstChild) return true
+                    }
+                }
+            }
         }
         return super.dispatchKeyEvent(event)
     }
@@ -380,9 +401,21 @@ class MyPlayerSettingView @JvmOverloads constructor(
     }
 
     private fun onItemClicked(item: PlayerSettingRow.Item) {
+        val focusedPos = findFocusedAdapterPosition()
+        Log.d("SettingFocus", "onItemClicked level=$menuLevel item=${item.id} title=${item.title} focusedPos=$focusedPos currentMain=$lastFocusedMainItemPosition currentDm=$lastFocusedDmItemPosition menuKey=${adapter.currentMenuKey}")
         when (menuLevel) {
-            LEVEL_MAIN -> handleMainMenuClick(item.id)
-            LEVEL_SUB -> handleSubMenuClick(item.id)
+            LEVEL_MAIN -> {
+                lastFocusedMainItemPosition = focusedPos
+                Log.d("SettingFocus", "  -> saved mainPos=$lastFocusedMainItemPosition")
+                handleMainMenuClick(item.id)
+            }
+            LEVEL_SUB -> {
+                if (adapter.currentMenuKey == ITEM_DM_SETTING) {
+                    lastFocusedDmItemPosition = focusedPos
+                    Log.d("SettingFocus", "  -> saved dmPos=$lastFocusedDmItemPosition")
+                }
+                handleSubMenuClick(item.id)
+            }
             LEVEL_DM -> handleDmMenuClick(item.id)
         }
     }
@@ -509,9 +542,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
                 onPlayerSettingInnerChange?.onDmSmartShield(panelState.dmSmartShield)
             }
         }
-        when (adapter.currentMenuKey) {
-            ITEM_DM_SETTING -> showDmSettingMenu()
-        }
+        showDmSettingMenu(animateTransition = true)
     }
 
     private fun handleDmToggleClick(itemId: Int): Boolean {
@@ -590,12 +621,14 @@ class MyPlayerSettingView @JvmOverloads constructor(
     }
 
     private fun showDmSettingMenu(animateTransition: Boolean) {
+        Log.d("SettingFocus", "showDmSettingMenu dmPos=$lastFocusedDmItemPosition animate=$animateTransition")
         menuLevel = LEVEL_SUB
         updateBackIcon()
         submitMenuRows(
             menuKey = ITEM_DM_SETTING,
             rows = menuBuilder.buildDmSettingMenu(panelState),
-            animateTransition = animateTransition
+            animateTransition = animateTransition,
+            focusPosition = lastFocusedDmItemPosition
         )
     }
 
@@ -614,20 +647,18 @@ class MyPlayerSettingView @JvmOverloads constructor(
     }
 
     private fun goBackToMainMenu() {
+        Log.d("SettingFocus", "goBackToMainMenu mainPos=$lastFocusedMainItemPosition")
         menuLevel = LEVEL_MAIN
-        updateMainMenu(animateTransition = true)
+        updateMainMenu(animateTransition = true, focusPosition = lastFocusedMainItemPosition)
         updateBackIcon()
     }
 
-    private fun updateMainMenu() {
-        updateMainMenu(animateTransition = false)
-    }
-
-    private fun updateMainMenu(animateTransition: Boolean) {
+    private fun updateMainMenu(animateTransition: Boolean = false, focusPosition: Int = 1) {
         submitMenuRows(
             menuKey = ITEM_MAIN_MENU,
             rows = menuBuilder.buildMainMenu(panelState),
-            animateTransition = animateTransition
+            animateTransition = animateTransition,
+            focusPosition = focusPosition
         )
     }
 
@@ -725,14 +756,15 @@ class MyPlayerSettingView @JvmOverloads constructor(
     private fun submitMenuRows(
         menuKey: Int,
         rows: List<PlayerSettingRow>,
-        animateTransition: Boolean
+        animateTransition: Boolean,
+        focusPosition: Int = 1
     ) {
         recyclerView.animate().cancel()
         recyclerView.animate().setListener(null)
         clearTransientItemStates()
         if (!animateTransition || !isShowing() || adapter.itemCount == 0) {
             recyclerView.alpha = 1f
-            applyMenuRows(menuKey, rows)
+            applyMenuRows(menuKey, rows, focusPosition = focusPosition)
             return
         }
 
@@ -742,7 +774,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
             .setListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: Animator) {
                     recyclerView.animate().setListener(null)
-                    applyMenuRows(menuKey, rows, requestFocusAfter = false)
+                    applyMenuRows(menuKey, rows, requestFocusAfter = false, focusPosition = focusPosition)
                     recyclerView.alpha = 0f
                     recyclerView.animate()
                         .alpha(1f)
@@ -750,7 +782,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
                         .setListener(object : AnimatorListenerAdapter() {
                             override fun onAnimationEnd(animation: Animator) {
                                 recyclerView.animate().setListener(null)
-                                requestMenuFocus()
+                                requestMenuFocus(focusPosition)
                             }
                         })
                         .start()
@@ -762,12 +794,17 @@ class MyPlayerSettingView @JvmOverloads constructor(
     private fun applyMenuRows(
         menuKey: Int,
         rows: List<PlayerSettingRow>,
-        requestFocusAfter: Boolean = true
+        requestFocusAfter: Boolean = true,
+        focusPosition: Int = 1
     ) {
-        adapter.submitRows(menuKey, rows)
-        recyclerView.scrollToPosition(0)
         if (requestFocusAfter) {
-            requestMenuFocus()
+            adapter.submitRows(menuKey, rows) {
+                recyclerView.scrollToPosition(0)
+                requestMenuFocus(focusPosition)
+            }
+        } else {
+            adapter.submitRows(menuKey, rows)
+            recyclerView.scrollToPosition(0)
         }
     }
 
@@ -784,16 +821,29 @@ class MyPlayerSettingView @JvmOverloads constructor(
         }
     }
 
-    private fun requestMenuFocus() {
+    private fun requestMenuFocus(preferredPosition: Int = 1) {
+        Log.d("SettingFocus", "requestMenuFocus preferred=$preferredPosition itemCount=${adapter.itemCount} menuKey=${adapter.currentMenuKey}")
         recyclerView.post {
-            val preferredPosition = if (adapter.itemCount > 1) 1 else 0
-            val targetView = recyclerView.findViewHolderForAdapterPosition(preferredPosition)?.itemView
-                ?: recyclerView.layoutManager?.findViewByPosition(preferredPosition)
+            val pos = preferredPosition.coerceIn(0, (adapter.itemCount - 1).coerceAtLeast(0))
+            val targetView = recyclerView.findViewHolderForAdapterPosition(pos)?.itemView
+                ?: recyclerView.layoutManager?.findViewByPosition(pos)
+            Log.d("SettingFocus", "  post: pos=$pos targetView=$targetView isFocusable=${targetView?.isFocusable}")
             if (targetView?.isFocusable == true) {
                 targetView.requestFocus()
             } else {
                 recyclerView.requestFocus()
             }
+            Log.d("SettingFocus", "  post: focusAfter=${findFocus()}")
+        }
+    }
+
+    private fun findFocusedAdapterPosition(): Int {
+        val focused = findFocus() ?: return 1
+        val itemView = recyclerView.findContainingItemView(focused)
+        return if (itemView != null) {
+            recyclerView.getChildAdapterPosition(itemView).coerceAtLeast(1)
+        } else {
+            1
         }
     }
 

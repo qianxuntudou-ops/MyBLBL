@@ -1410,10 +1410,12 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             bottomProgressBar.isVisible = false
             return
         }
-        if (uiCoordinator.seekState != PlaybackUiCoordinator.SeekState.None) {
-            slimTimelineRenderer.hide()
-        } else {
+        val shouldShow = uiCoordinator.bottomOccupant == PlaybackUiCoordinator.BottomOccupant.SlimTimeline
+                && uiCoordinator.seekState == PlaybackUiCoordinator.SeekState.None
+        if (shouldShow) {
             slimTimelineRenderer.show(latestPlaybackPositionMs, latestPlaybackDurationMs)
+        } else {
+            slimTimelineRenderer.hide()
         }
     }
 
@@ -1533,15 +1535,18 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         uiCoordinator.withState { coord ->
             coord.chromeState = when (visibility) {
                 View.VISIBLE -> PlaybackUiCoordinator.ChromeState.Full
-                else -> PlaybackUiCoordinator.ChromeState.Hidden
+                View.GONE -> PlaybackUiCoordinator.ChromeState.Hidden
+                else -> coord.chromeState
             }
             coord.bottomOccupant = when (visibility) {
                 View.VISIBLE -> PlaybackUiCoordinator.BottomOccupant.FullChrome
-                else -> if (playerSettings.showBottomProgressBar) PlaybackUiCoordinator.BottomOccupant.SlimTimeline else PlaybackUiCoordinator.BottomOccupant.None
+                View.GONE -> if (playerSettings.showBottomProgressBar) PlaybackUiCoordinator.BottomOccupant.SlimTimeline else PlaybackUiCoordinator.BottomOccupant.None
+                else -> coord.bottomOccupant
             }
             coord.hudState = when (visibility) {
                 View.VISIBLE -> PlaybackUiCoordinator.HudState.Chrome
-                else -> PlaybackUiCoordinator.HudState.Ambient
+                View.GONE -> PlaybackUiCoordinator.HudState.Ambient
+                else -> coord.hudState
             }
         }
     }

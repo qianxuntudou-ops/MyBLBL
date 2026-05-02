@@ -2,11 +2,14 @@
 
 package com.tutu.myblbl.feature.dynamic
 
+import android.graphics.Outline
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
+import com.tutu.myblbl.R
 import androidx.recyclerview.widget.RecyclerView.NO_POSITION
 import com.tutu.myblbl.databinding.CellVideoBinding
 import com.tutu.myblbl.model.video.VideoModel
@@ -98,6 +101,13 @@ class DynamicVideoAdapter(
         }
 
         init {
+            val coverRadiusPx = binding.imageView.resources.getDimension(R.dimen.px15)
+            binding.imageView.clipToOutline = true
+            binding.imageView.outlineProvider = object : ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, coverRadiusPx)
+                }
+            }
             binding.root.setOnClickListener {
                 if (longPressTriggered) {
                     longPressTriggered = false

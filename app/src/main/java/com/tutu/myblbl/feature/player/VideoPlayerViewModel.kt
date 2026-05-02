@@ -31,6 +31,9 @@ import com.tutu.myblbl.model.dm.DmModel
 import com.tutu.myblbl.model.dm.SpecialDanmakuModel
 import com.tutu.myblbl.model.dm.SpecialDanmakuParser
 import com.tutu.myblbl.model.interaction.InteractionModel
+import com.tutu.myblbl.model.interaction.InteractionVariableModel
+import com.tutu.myblbl.feature.player.interaction.InteractionEngine
+import com.tutu.myblbl.feature.player.interaction.InteractionRepository
 import com.tutu.myblbl.model.player.PlayInfoModel
 import com.tutu.myblbl.model.player.VideoSnapshotData
 import com.tutu.myblbl.model.proto.DmProtoParser
@@ -436,8 +439,20 @@ class VideoPlayerViewModel(
     private val _specialDanmaku = MutableStateFlow<List<SpecialDanmakuModel>>(emptyList())
     val specialDanmaku: StateFlow<List<SpecialDanmakuModel>> = _specialDanmaku
 
+    // ==================== 互动视频 ====================
+    private val interactionEngine = InteractionEngine()
+    private val interactionRepository = InteractionRepository(apiService)
+
     private val _interactionModel = MutableStateFlow<InteractionModel?>(null)
     val interactionModel: StateFlow<InteractionModel?> = _interactionModel
+
+    private val _interactionHiddenVars = MutableStateFlow<List<InteractionVariableModel>?>(null)
+    val interactionHiddenVars: StateFlow<List<InteractionVariableModel>?> = _interactionHiddenVars
+
+    private var interactionProgressRestored = false
+    private var interactionLoadingEdgeId: Long = -1L
+
+    fun getInteractionEngine(): InteractionEngine = interactionEngine
 
     sealed class DmMaskState {
         object Idle : DmMaskState()
@@ -704,6 +719,11 @@ class VideoPlayerViewModel(
             dmMaskRepository.clearAll()
             onDmMaskReset?.invoke()
             _interactionModel.value = null
+            _interactionHiddenVars.value = null
+            interactionEngine.reset()
+            interactionRepository.clearCache()
+            interactionProgressRestored = false
+            interactionLoadingEdgeId = -1L
             _videoSnapshot.value = null
             _error.value = null
             _qualities.value = emptyList()
@@ -804,6 +824,11 @@ class VideoPlayerViewModel(
         _selectedSubtitleIndex.value = -1
         _currentSubtitleText.value = null
         _interactionModel.value = null
+        _interactionHiddenVars.value = null
+        interactionEngine.reset()
+        interactionRepository.clearCache()
+        interactionProgressRestored = false
+        interactionLoadingEdgeId = -1L
         _dmMaskState.value = DmMaskState.Idle
         dmMaskRepository.clearAll()
         _videoSnapshot.value = null
@@ -839,9 +864,8 @@ class VideoPlayerViewModel(
     }
 
     fun playInteractionChoice(cid: Long, edgeId: Long) {
-        if (cid <= 0L) {
-            return
-        }
+        if (cid <= 0L) return
+        AppLog.d(TAG, "playInteractionChoice: cid=$cid, edgeId=$edgeId")
         reportPlaybackHeartbeat()
         currentCid = cid
         _currentCidLive.value = cid
@@ -1533,7 +1557,7 @@ class VideoPlayerViewModel(
                 applySelectionSnapshot(cachedPlayback.selectionSnapshot)
                 currentPlayInfo = cachedPlayback.playInfo
                 val playInfo = cachedPlayback.playInfo
-                val resumePositionMs = if (preferLastPlayTime) {
+                val resumePositionMs = if (preferLastPlayTime && (playInfo.interaction?.graphVersion ?: 0L) <= 0L) {
                     val cachedResume = VideoPlayerPlayInfoCache.get(
                         initialIdentity.bvid.orEmpty(), initialIdentity.cid
                     )?.lastPlayTime?.takeIf { it > 5000L }
@@ -1913,7 +1937,11 @@ class VideoPlayerViewModel(
             }
         }
 
-        val useServerResume = preferLastPlayTime &&
+        // 互动视频不使用进度恢复，始终从头开始
+        val isInteractionVideo = currentGraphVersion > 0L || (initialPlayInfo.interaction?.graphVersion ?: 0L) > 0L
+        val effectivePreferLastPlayTime = preferLastPlayTime && !isInteractionVideo
+
+        val useServerResume = effectivePreferLastPlayTime &&
             initialPlayInfo.lastPlayCid == identity.cid &&
             initialPlayInfo.lastPlayTime > 5000L
 
@@ -1922,7 +1950,7 @@ class VideoPlayerViewModel(
             else -> playbackPositionMs
         }
 
-        val shouldResume = preferLastPlayTime &&
+        val shouldResume = effectivePreferLastPlayTime &&
             rawResumePosition > 5000L &&
             (initialPlayInfo.timeLength - rawResumePosition) > 5000L
 
@@ -2672,10 +2700,22 @@ class VideoPlayerViewModel(
                 val interaction = wrapper.interaction
                 if (interaction != null && interaction.graphVersion > 0L && !currentBvid.isNullOrBlank() && (currentAid ?: 0L) > 0L) {
                     currentGraphVersion = interaction.graphVersion
-                    loadInteractionInfo(0L, interaction.graphVersion)
+                    // 仅在引擎未初始化（首次加载）时触发 loadInteractionInfo
+                    // playInteractionChoice 已单独调用 loadInteractionInfo，避免竞态覆盖
+                    if (interactionEngine.state.graphVersion == 0L) {
+                        AppLog.d(TAG, "interaction: first load, graphVersion=${interaction.graphVersion}")
+                        loadInteractionInfo(0L, interaction.graphVersion)
+                    } else {
+                        AppLog.d(TAG, "interaction: engine already initialized, skip reload")
+                    }
                 } else if (interaction == null) {
                     currentGraphVersion = 0L
                     _interactionModel.value = null
+                    _interactionHiddenVars.value = null
+                    interactionEngine.reset()
+                    interactionRepository.clearCache()
+                    interactionProgressRestored = false
+                    interactionLoadingEdgeId = -1L
                 }
                 val dmMask = wrapper.dmMask
                 AppLog.d(TAG, "dm_mask received: $dmMask")
@@ -2729,22 +2769,46 @@ class VideoPlayerViewModel(
     private fun loadInteractionInfo(edgeId: Long = 0L, graphVersion: Long? = null) {
         val bvid = currentBvid ?: return
         val aid = currentAid ?: return
-        val resolvedGraphVersion = graphVersion
-            ?: currentGraphVersion
-        if (resolvedGraphVersion <= 0L) {
-            return
-        }
+        val resolvedGraphVersion = graphVersion ?: currentGraphVersion
+        if (resolvedGraphVersion <= 0L) return
+
+        interactionLoadingEdgeId = edgeId
+        AppLog.d(TAG, "loadInteractionInfo: edgeId=$edgeId, graphVersion=$resolvedGraphVersion")
 
         viewModelScope.launch {
-            val response = runCatching {
-                apiService.getInteractionVideoInfo(
-                    bvid = bvid,
-                    aid = aid,
-                    graphVersion = resolvedGraphVersion,
-                    edgeId = edgeId
-                )
-            }.getOrNull()
-            _interactionModel.value = response?.data
+            val model = interactionRepository.loadNode(bvid, aid, resolvedGraphVersion, edgeId)
+            if (model == null) {
+                AppLog.w(TAG, "loadInteractionInfo: failed to load node, edgeId=$edgeId")
+                _interactionModel.value = null
+                return@launch
+            }
+
+            // 防竞态：如果在此期间已有更新的 loadInteractionInfo 调用，丢弃本次结果
+            if (interactionLoadingEdgeId != edgeId) {
+                AppLog.w(TAG, "loadInteractionInfo: stale result for edgeId=$edgeId, current=${interactionLoadingEdgeId}")
+                return@launch
+            }
+
+            if (edgeId == 0L) {
+                interactionEngine.initialize(resolvedGraphVersion, model)
+                AppLog.d(TAG, "loadInteractionInfo: initialized engine, edgeId=${model.edgeId}")
+            } else {
+                interactionEngine.processNode(model)
+                AppLog.d(TAG, "loadInteractionInfo: processed node, edgeId=${model.edgeId}")
+            }
+
+            _interactionModel.value = model
+            _interactionHiddenVars.value = model.hiddenVars
+
+            // 预加载可见选项的下一跳节点
+            val questions = model.edges?.questions
+            if (!questions.isNullOrEmpty()) {
+                val visibleChoices = interactionEngine.getVisibleChoices(questions)
+                val nextEdgeIds = visibleChoices.map { it.id }.distinct()
+                if (nextEdgeIds.isNotEmpty()) {
+                    interactionRepository.preloadNodes(bvid, aid, resolvedGraphVersion, nextEdgeIds)
+                }
+            }
         }
     }
 

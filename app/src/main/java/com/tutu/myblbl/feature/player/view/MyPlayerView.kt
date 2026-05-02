@@ -80,6 +80,8 @@ class MyPlayerView @JvmOverloads constructor(
     private var errorMessageView: TextView? = null
     private var videoSurfaceView: View? = null
 
+    fun getVideoSurfaceView(): View? = videoSurfaceView
+
     private var controller: MyPlayerControlView? = null
     private var settingView: MyPlayerSettingView? = null
     private var tapOverlayView: YouTubeOverlay? = null

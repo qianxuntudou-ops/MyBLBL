@@ -41,7 +41,7 @@ import com.tutu.myblbl.ui.activity.GaiaVgateActivity
 import com.tutu.myblbl.ui.activity.MainActivity
 import com.tutu.myblbl.ui.activity.PlayerActivity
 import com.tutu.myblbl.ui.adapter.VideoAdapter
-import com.tutu.myblbl.feature.player.view.InteractionVideoHandleView
+import com.tutu.myblbl.feature.player.interaction.InteractionOverlayView
 import com.tutu.myblbl.feature.player.view.MyPlayerView
 import com.tutu.myblbl.feature.player.view.OnPlayerSettingChange
 import com.tutu.myblbl.feature.player.view.OnVideoSettingChangeListener
@@ -126,7 +126,7 @@ class VideoPlayerFragment : Fragment() {
     private lateinit var imageNext: AppCompatImageView
     private lateinit var textNext: TextView
     private lateinit var countdownView: com.tutu.myblbl.feature.player.view.CountdownView
-    private lateinit var interactionView: InteractionVideoHandleView
+    private lateinit var interactionView: InteractionOverlayView
 
     private lateinit var relatedAdapter: VideoAdapter
     private lateinit var autoPlayController: VideoPlayerAutoPlayController
@@ -376,17 +376,42 @@ class VideoPlayerFragment : Fragment() {
         viewNext.visibility = View.GONE
         textSubtitle.visibility = View.GONE
         interactionView.visibility = View.GONE
-        interactionView.setCallback(object : InteractionVideoHandleView.InteractionCallback {
+        interactionView.setEngine(viewModel.getInteractionEngine())
+        interactionView.setCallback(object : InteractionOverlayView.Callback {
             override fun onPauseVideo() {
                 player?.pause()
+                playerView.pauseDanmaku()
             }
 
-            override fun onJumpToCid(cid: Long, edgeId: Long) {
-                player?.pause()
+            override fun onResumeVideo() {
+                player?.play()
+                playerView.resumeDanmaku()
+            }
+
+            override fun onHidePlayerUI() {
+                playerView.hideController()
+                playerView.removeControllerHideCallbacks()
+            }
+
+            override fun onShowPlayerUI() {
+                playerView.showController()
+                playerView.resumeDanmaku()
+            }
+
+            override fun onJumpToChoice(targetEdgeId: Long, targetCid: Long) {
+                viewModel.playInteractionChoice(targetCid, targetEdgeId)
+            }
+
+            override fun onGoBackToNode(edgeId: Long, cid: Long) {
                 viewModel.playInteractionChoice(cid, edgeId)
             }
 
-            override fun onGetPlayerView(): View? = playerView
+            override fun onGetVideoSurfaceRect(): android.graphics.Rect? {
+                val surface = playerView.getVideoSurfaceView() ?: return null
+                val loc = IntArray(2)
+                surface.getLocationInWindow(loc)
+                return android.graphics.Rect(loc[0], loc[1], loc[0] + surface.width, loc[1] + surface.height)
+            }
         })
 
         buttonCloseRelated.setOnClickListener {
@@ -918,24 +943,23 @@ class VideoPlayerFragment : Fragment() {
                 launch {
                     viewModel.interactionModel.collect { model ->
                         if (model == null) {
-                            interactionView.visibility = View.GONE
-                            interactionView.removeAllViews()
+                            interactionView.hideAll()
                         } else {
                             interactionView.visibility = View.VISIBLE
-                            interactionView.setModel(model)
+                            interactionView.onNodeLoaded(model)
                         }
+                    }
+                }
+
+                launch {
+                    viewModel.interactionHiddenVars.collect { hiddenVars ->
+                        interactionView.updateVariablesDisplay(hiddenVars)
                     }
                 }
 
                 launch {
                     viewModel.videoSnapshot.collect { snapshot ->
                         playerView.setSeekPreviewSnapshot(snapshot)
-                    }
-                }
-
-                launch {
-                    viewModel.currentCidLive.collect { cid ->
-                        interactionView.setCurrentCid(cid)
                     }
                 }
 

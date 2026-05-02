@@ -147,6 +147,10 @@ data class VideoModel(
     @JsonAdapter(FlexibleBooleanAdapter::class)
     val isChargingArc: Boolean = false,
 
+    @SerializedName("is_steins_gate")
+    @JsonAdapter(FlexibleBooleanAdapter::class)
+    val isSteinsGate: Boolean = false,
+
     @SerializedName("privilege_type")
     val privilegeType: Int = 0,
 

@@ -1,5 +1,6 @@
 package com.tutu.myblbl.model.player
 
+import com.tutu.myblbl.model.interaction.InteractionInfo
 import com.google.gson.JsonElement
 import com.google.gson.annotations.SerializedName
 
@@ -59,7 +60,10 @@ data class PlayInfoModel(
     val lastPlayCid: Long = 0,
 
     @SerializedName("v_voucher")
-    val vVoucher: String = ""
+    val vVoucher: String = "",
+
+    @SerializedName("interaction")
+    val interaction: InteractionInfo? = null
 )
 
 data class Dash(

@@ -56,7 +56,7 @@ import com.tutu.myblbl.feature.player.VideoPlayerResumeHintController
 import com.tutu.myblbl.feature.player.VideoPlayerViewModel
 import com.tutu.myblbl.feature.player.settings.PlayerSettings
 import com.tutu.myblbl.feature.player.settings.PlayerSettingsStore
-import com.tutu.myblbl.feature.player.view.InteractionVideoHandleView
+import com.tutu.myblbl.feature.player.interaction.InteractionOverlayView
 import com.tutu.myblbl.feature.player.view.MyPlayerView
 import com.tutu.myblbl.feature.player.view.OnPlayerSettingChange
 import com.tutu.myblbl.feature.player.view.OnVideoSettingChangeListener
@@ -236,7 +236,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private lateinit var imageNext: AppCompatImageView
     private lateinit var textNext: TextView
     private lateinit var countdownView: com.tutu.myblbl.feature.player.view.CountdownView
-    private lateinit var interactionView: InteractionVideoHandleView
+    private lateinit var interactionView: InteractionOverlayView
 
     private lateinit var relatedAdapter: VideoAdapter
     private lateinit var autoPlayController: VideoPlayerAutoPlayController
@@ -513,13 +513,36 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         viewNext.visibility = View.GONE
         textSubtitle.visibility = View.GONE
         interactionView.visibility = View.GONE
-        interactionView.setCallback(object : InteractionVideoHandleView.InteractionCallback {
-            override fun onPauseVideo() { player?.pause() }
-            override fun onJumpToCid(cid: Long, edgeId: Long) {
+        interactionView.setEngine(viewModel.getInteractionEngine())
+        interactionView.setCallback(object : InteractionOverlayView.Callback {
+            override fun onPauseVideo() {
                 player?.pause()
+                playerView.pauseDanmaku()
+            }
+            override fun onResumeVideo() {
+                player?.play()
+                playerView.resumeDanmaku()
+            }
+            override fun onHidePlayerUI() {
+                playerView.hideController()
+                playerView.removeControllerHideCallbacks()
+            }
+            override fun onShowPlayerUI() {
+                playerView.showController()
+                playerView.resumeDanmaku()
+            }
+            override fun onJumpToChoice(targetEdgeId: Long, targetCid: Long) {
+                viewModel.playInteractionChoice(targetCid, targetEdgeId)
+            }
+            override fun onGoBackToNode(edgeId: Long, cid: Long) {
                 viewModel.playInteractionChoice(cid, edgeId)
             }
-            override fun onGetPlayerView(): View = playerView
+            override fun onGetVideoSurfaceRect(): android.graphics.Rect? {
+                val surface = playerView.getVideoSurfaceView() ?: return null
+                val loc = IntArray(2)
+                surface.getLocationInWindow(loc)
+                return android.graphics.Rect(loc[0], loc[1], loc[0] + surface.width, loc[1] + surface.height)
+            }
         })
         buttonCloseRelated.setOnClickListener { hideContentPanel() }
     }
@@ -999,24 +1022,23 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         lifecycleScope.launch {
             viewModel.interactionModel.collect { model ->
                 if (model == null) {
-                    interactionView.visibility = View.GONE
-                    interactionView.removeAllViews()
+                    interactionView.hideAll()
                 } else {
                     interactionView.visibility = View.VISIBLE
-                    interactionView.setModel(model)
+                    interactionView.onNodeLoaded(model)
                 }
+            }
+        }
+
+        lifecycleScope.launch {
+            viewModel.interactionHiddenVars.collect { hiddenVars ->
+                interactionView.updateVariablesDisplay(hiddenVars)
             }
         }
 
         lifecycleScope.launch {
             viewModel.videoSnapshot.collect { snapshot ->
                 snapshot?.let { playerView.setSeekPreviewSnapshot(it) }
-            }
-        }
-
-        lifecycleScope.launch {
-            viewModel.currentCidLive.collect { cid ->
-                interactionView.setCurrentCid(cid)
             }
         }
 

@@ -78,7 +78,8 @@ class VideoAdapter(
         old.bangumi == new.bangumi &&
         old.historyBadge == new.historyBadge &&
         old.historyBusiness == new.historyBusiness &&
-        old.historyViewAt == new.historyViewAt
+        old.historyViewAt == new.historyViewAt &&
+        old.isSteinsGate == new.isSteinsGate
 
     enum class DisplayStyle {
         DEFAULT,
@@ -357,6 +358,7 @@ class VideoAdapter(
             binding.textPlayCount.text = NumberUtils.formatCount(video.viewCount)
             binding.textDanmakuCount.text = NumberUtils.formatCount(video.danmakuCount)
             binding.textChargeBadge.visibility = if (video.isChargingExclusive) View.VISIBLE else View.GONE
+            binding.textInteractionBadge.visibility = if (video.isSteinsGate) View.VISIBLE else View.GONE
         }
 
         private fun bindHistory(video: VideoModel) {
@@ -386,6 +388,7 @@ class VideoAdapter(
             }
             binding.textViewOwner.text = formatHistoryTime(video.historyViewAt)
             binding.textChargeBadge.visibility = if (video.isChargingExclusive) View.VISIBLE else View.GONE
+            binding.textInteractionBadge.visibility = if (video.isSteinsGate) View.VISIBLE else View.GONE
         }
 
         private fun applyBadge(video: VideoModel) {

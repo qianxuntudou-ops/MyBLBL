@@ -470,6 +470,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         startupTraceId: String,
         startupTraceStartElapsedMs: Long
     ) {
+        playerView.hideController()
         playerView.pauseDanmaku()
         tagCheckDoneForCurrentVideo = false
         sessionCoordinator.replacePlayQueue(playQueue)
@@ -553,6 +554,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             itemWidthPx = (resources.displayMetrics.widthPixels / 5).coerceAtLeast(1)
         )
         relatedAdapter.setOnItemClickListener { _, item ->
+            playerView.hideController()
             hideContentPanel()
             hideNextPreview()
             sessionCoordinator.replacePlayQueue(buildPlayQueue(relatedAdapter.getItemsSnapshot(), item))
@@ -584,8 +586,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             dimBackground = binding.dimBackground,
             recyclerViewRelated = recyclerViewRelated,
             textMoreTitle = textMoreTitle,
-            onPlayEpisode = { index -> viewModel.playEpisode(index) },
+            onPlayEpisode = { index -> playerView.hideController(); viewModel.playEpisode(index) },
             onPlayRelatedVideo = { video, playQueue ->
+                playerView.hideController()
                 sessionCoordinator.replacePlayQueue(playQueue)
                 sessionCoordinator.updateCurrentVideo(video)
                 updatePlaybackPreload()

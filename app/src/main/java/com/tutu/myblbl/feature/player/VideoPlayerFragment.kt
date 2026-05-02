@@ -428,6 +428,7 @@ class VideoPlayerFragment : Fragment() {
             itemWidthPx = (resources.displayMetrics.widthPixels / 5).coerceAtLeast(1)
         )
         relatedAdapter.setOnItemClickListener { _, item ->
+            playerView.hideController()
             hideContentPanel()
             hideNextPreview()
             sessionCoordinator.replacePlayQueue(PlayerActivity.buildPlayQueue(relatedAdapter.getItemsSnapshot(), item))
@@ -459,8 +460,9 @@ class VideoPlayerFragment : Fragment() {
             dimBackground = binding.dimBackground,
             recyclerViewRelated = recyclerViewRelated,
             textMoreTitle = textMoreTitle,
-            onPlayEpisode = { index -> viewModel.playEpisode(index) },
+            onPlayEpisode = { index -> playerView.hideController(); viewModel.playEpisode(index) },
             onPlayRelatedVideo = { video, playQueue ->
+                playerView.hideController()
                 sessionCoordinator.replacePlayQueue(playQueue)
                 sessionCoordinator.updateCurrentVideo(video)
                 updatePlaybackPreload()

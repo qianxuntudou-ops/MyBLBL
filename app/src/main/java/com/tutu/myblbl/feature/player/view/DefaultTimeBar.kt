@@ -20,6 +20,7 @@ import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.TimeBar
 import com.tutu.myblbl.R
+import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
 import java.util.Formatter
 import java.util.Locale
 import java.util.Collections
@@ -58,6 +59,10 @@ class DefaultTimeBar @JvmOverloads constructor(
     private val unplayedPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val adMarkerPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val playedAdMarkerPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    private val sponsorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var sponsorSegments: List<SponsorSegment> = emptyList()
+    private var sponsorDurationMs: Long = 0L
 
     private val scrubberDrawable: Drawable?
     private val scrubberPadding: Int
@@ -325,6 +330,18 @@ class DefaultTimeBar @JvmOverloads constructor(
 
         if (drawnPosition.width() > 0) {
             canvas.drawRect(drawnPosition, playedPaint)
+        }
+
+        // 空降助手标记：在进度之上、进度条头之下绘制
+        if (sponsorSegments.isNotEmpty() && sponsorDurationMs > 0L) {
+            for (segment in sponsorSegments) {
+                val startRatio = segment.startTimeMs.toFloat() / sponsorDurationMs
+                val endRatio = segment.endTimeMs.toFloat() / sponsorDurationMs
+                val left = barLeft + (barWidth * startRatio)
+                val right = barLeft + (barWidth * endRatio)
+                sponsorPaint.color = (segment.categoryColor() and 0x00FFFFFFL).toInt() or 0x99000000.toInt()
+                canvas.drawRect(left, barTop.toFloat(), right, barBottom.toFloat(), sponsorPaint)
+            }
         }
 
         if (duration > 0) {
@@ -701,5 +718,15 @@ class DefaultTimeBar @JvmOverloads constructor(
         } else {
             Long.MAX_VALUE
         }
+    }
+
+    fun setSponsorSegments(segments: List<SponsorSegment>) {
+        sponsorSegments = segments
+        invalidate()
+    }
+
+    fun setSponsorDuration(durationMs: Long) {
+        sponsorDurationMs = durationMs
+        invalidate()
     }
 }

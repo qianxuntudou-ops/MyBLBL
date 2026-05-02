@@ -13,7 +13,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
-import androidx.constraintlayout.widget.ConstraintLayout
+
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -21,7 +21,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.TimeBar
 import com.tutu.myblbl.R
 import com.tutu.myblbl.core.common.log.AppLog
-import com.tutu.myblbl.feature.player.sponsor.SponsorProgressMarkerView
+
 import com.tutu.myblbl.feature.player.sponsor.SponsorSegment
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.LazyThreadSafetyMode
@@ -76,7 +76,6 @@ class MyPlayerControlView @JvmOverloads constructor(
     private lateinit var textTitle: TextView
     private lateinit var textSubTitle: TextView
     private lateinit var timeBar: DefaultTimeBar
-    private var sponsorMarkerView: SponsorProgressMarkerView? = null
     private lateinit var exoPosition: TextView
     private lateinit var exoDuration: TextView
     private lateinit var buttonPlay: ImageView
@@ -170,19 +169,6 @@ class MyPlayerControlView @JvmOverloads constructor(
         textTitle = findViewById(R.id.text_title)
         textSubTitle = findViewById(R.id.text_sub_title)
         timeBar = findViewById(R.id.exo_progress)
-        sponsorMarkerView = SponsorProgressMarkerView(context).apply {
-            id = View.generateViewId()
-        }
-        val cl = timeBar.parent as? ConstraintLayout
-        if (cl != null) {
-            val lp = ConstraintLayout.LayoutParams(0, dp(4)).apply {
-                startToStart = timeBar.id
-                endToEnd = timeBar.id
-                topToTop = timeBar.id
-                bottomToBottom = timeBar.id
-            }
-            cl.addView(sponsorMarkerView, cl.indexOfChild(timeBar), lp)
-        }
         exoPosition = findViewById(R.id.exo_position)
         exoDuration = findViewById(R.id.exo_duration)
         buttonPlay = findViewById(R.id.button_play)
@@ -1012,11 +998,11 @@ class MyPlayerControlView @JvmOverloads constructor(
     fun isVisible(): Boolean = visibility == VISIBLE
 
     fun setSponsorSegments(segments: List<SponsorSegment>) {
-        sponsorMarkerView?.setSegments(segments)
+        timeBar.setSponsorSegments(segments)
     }
 
     fun setSponsorDuration(durationMs: Long) {
-        sponsorMarkerView?.setDuration(durationMs)
+        timeBar.setSponsorDuration(durationMs)
     }
 
     private fun dp(value: Int): Int {

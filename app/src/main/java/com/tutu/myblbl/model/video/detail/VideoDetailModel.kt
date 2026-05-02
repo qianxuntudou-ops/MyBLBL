@@ -120,7 +120,11 @@ data class VideoView(
     val elecArcBadge: String = "",
 
     @SerializedName("privilege_type")
-    val privilegeType: Int = 0
+    val privilegeType: Int = 0,
+
+    @SerializedName("steins_gate")
+    @JsonAdapter(FlexibleBooleanAdapter::class)
+    val steinsGate: Boolean = false
 ) {
     val isChargingExclusive: Boolean
         get() = isUpowerExclusive || privilegeType > 0 || isChargingArc

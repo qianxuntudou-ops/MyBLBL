@@ -75,7 +75,10 @@ data class HistoryVideoModel(
     val rights: HistoryVideoRights? = null,
 
     @SerializedName("dimension")
-    val dimension: Dimension? = null
+    val dimension: Dimension? = null,
+
+    @SerializedName("is_steins_gate")
+    val isSteinsGate: Boolean = false
 ) : Serializable {
     val isChargingExclusive: Boolean
         get() = isUpowerExclusive || privilegeType > 0 || isChargingArc

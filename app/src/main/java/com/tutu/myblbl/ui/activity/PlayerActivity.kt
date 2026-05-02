@@ -482,7 +482,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
             seekPositionMs = seekPositionMs,
             startEpisodeIndex = startEpisodeIndex,
             startupTraceId = startupTraceId,
-            startupTraceStartElapsedMs = startupTraceStartElapsedMs
+            startupTraceStartElapsedMs = startupTraceStartElapsedMs,
+            isSteinsGate = playQueue.firstOrNull()?.isSteinsGate == true
         )
     }
 

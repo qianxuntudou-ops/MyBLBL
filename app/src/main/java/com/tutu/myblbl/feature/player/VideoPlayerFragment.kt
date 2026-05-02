@@ -78,6 +78,7 @@ class VideoPlayerFragment : Fragment() {
         const val ARG_SEASON_ID = "season_id"
         const val ARG_SEEK_POSITION_MS = "seek_position_ms"
         const val ARG_START_EPISODE = "start_episode"
+        const val ARG_IS_STEINS_GATE = "is_steins_gate"
 
         fun newInstance(
             aid: Long = 0L,
@@ -86,7 +87,8 @@ class VideoPlayerFragment : Fragment() {
             epId: Long = 0L,
             seasonId: Long = 0L,
             seekPositionMs: Long = 0L,
-            startEpisodeIndex: Int = -1
+            startEpisodeIndex: Int = -1,
+            isSteinsGate: Boolean = false
         ): VideoPlayerFragment {
             return VideoPlayerFragment().apply {
                 arguments = Bundle().apply {
@@ -97,6 +99,7 @@ class VideoPlayerFragment : Fragment() {
                     putLong(ARG_SEASON_ID, seasonId)
                     putLong(ARG_SEEK_POSITION_MS, seekPositionMs)
                     putInt(ARG_START_EPISODE, startEpisodeIndex)
+                    putBoolean(ARG_IS_STEINS_GATE, isSteinsGate)
                 }
             }
         }
@@ -328,7 +331,8 @@ class VideoPlayerFragment : Fragment() {
                     seasonId = launchContext.seasonId,
                     epId = launchContext.epId,
                     seekPositionMs = launchContext.seekPositionMs,
-                    startEpisodeIndex = launchContext.startEpisodeIndex
+                    startEpisodeIndex = launchContext.startEpisodeIndex,
+                    isSteinsGate = arguments?.getBoolean(ARG_IS_STEINS_GATE, false) == true
                 )
             } else {
                 val snapshot = viewModel.consumeSavedSnapshot()

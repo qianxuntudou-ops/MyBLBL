@@ -34,6 +34,20 @@ internal object VideoPlayerPlayInfoCache {
         }
     }
 
+    private val steinsGateKeys = mutableSetOf<String>()
+
+    @Synchronized
+    fun markAsSteinsGate(bvid: String, cid: Long) {
+        if (bvid.isBlank() || cid <= 0L) return
+        steinsGateKeys.add(buildKey(bvid, cid))
+    }
+
+    @Synchronized
+    fun isSteinsGate(bvid: String, cid: Long): Boolean {
+        if (bvid.isBlank() || cid <= 0L) return false
+        return steinsGateKeys.contains(buildKey(bvid, cid))
+    }
+
     @Synchronized
     fun get(bvid: String, cid: Long): PlayInfoModel? {
         if (bvid.isBlank() || cid <= 0L) return null

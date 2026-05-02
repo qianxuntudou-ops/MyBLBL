@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.appcompat.widget.AppCompatTextView
 import androidx.recyclerview.widget.RecyclerView
+import com.tutu.myblbl.R
 import com.tutu.myblbl.databinding.CellVideoBinding
 import com.tutu.myblbl.model.video.HistoryVideoModel
 import com.tutu.myblbl.core.ui.base.BaseVideoAdapter
@@ -127,6 +128,17 @@ class HistoryVideoAdapter(
         }
 
         init {
+            val coverRadiusPx = binding.imageView.resources.getDimension(R.dimen.px15)
+            binding.imageView.clipToOutline = true
+            binding.imageView.outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, coverRadiusPx)
+                }
+            }
+            val progressLp = binding.progressBar.layoutParams as androidx.constraintlayout.widget.ConstraintLayout.LayoutParams
+            progressLp.marginStart = coverRadiusPx.toInt()
+            progressLp.marginEnd = coverRadiusPx.toInt()
+            binding.progressBar.layoutParams = progressLp
             binding.root.setOnClickListener {
                 if (longPressTriggered) {
                     longPressTriggered = false
@@ -209,13 +221,15 @@ class HistoryVideoAdapter(
             binding.progressBar.max = durationValue.toInt()
             binding.progressBar.progress = progressValue.toInt()
 
-            binding.textDuration.text = if (item.history?.business == "live" && item.badge.isNotBlank()) {
-                item.badge
-            } else {
-                "${NumberUtils.formatDuration(progressValue)}/${NumberUtils.formatDuration(durationValue)}"
+            binding.textDuration.text = when {
+                item.history?.business == "live" && item.badge.isNotBlank() -> item.badge
+                durationValue > 0L -> "${NumberUtils.formatDuration(progressValue)}/${NumberUtils.formatDuration(durationValue)}"
+                item.tagName.isNotBlank() -> item.tagName
+                else -> ""
             }
             binding.textViewOwner.text = TimeUtils.formatHistoryViewTime(item.viewAt)
             binding.textChargeBadge.visibility = if (item.isChargingExclusive) View.VISIBLE else View.GONE
+            binding.textInteractionBadge.visibility = if (item.isSteinsGate) View.VISIBLE else View.GONE
 
             ImageLoader.loadVideoCover(
                 imageView = binding.imageView,

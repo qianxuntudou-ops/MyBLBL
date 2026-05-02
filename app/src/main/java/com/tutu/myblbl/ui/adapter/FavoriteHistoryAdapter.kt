@@ -267,6 +267,7 @@ class FavoriteHistoryAdapter(
                 binding.textDanmakuCount.visibility = View.GONE
             }
             binding.textChargeBadge.visibility = if (item.isChargingExclusive) View.VISIBLE else View.GONE
+            binding.textInteractionBadge.visibility = if (item.isSteinsGate) View.VISIBLE else View.GONE
 
             ImageLoader.loadVideoCover(
                 imageView = binding.imageView,

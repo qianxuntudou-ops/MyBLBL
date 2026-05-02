@@ -89,7 +89,7 @@
     <string name="dm_alpha">弹幕透明度</string>
     <string name="dm_filter_weight">弹幕智能屏蔽等级</string>
     <string name="dm_merge_duplicate">重复弹幕合并</string>
-    <string name="dm_smart_shield">智能防挡</string>
+    <string name="dm_smart_shield">智能防挡（低性能设备不建议开启）</string>
     <string name="dm_show_advanced">高级弹幕和特殊弹幕</string>
     <string name="dm_screen_area">弹幕占屏比</string>
     <string name="dm_setting">弹幕设置</string>

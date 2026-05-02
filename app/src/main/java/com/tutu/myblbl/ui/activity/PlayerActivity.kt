@@ -257,6 +257,8 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
     private var startupTraceSequence: Int = 0
     private var suppressPlaybackEnvironmentSync: Boolean = false
     private var lastKeepScreenOnState: Boolean? = null
+    private var exitTime: Long = 0
+    private val exitInterval = 2000L
 
     private val gaiaVgateLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -776,7 +778,14 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                     isControllerFullyVisible = playerView.isControllerFullyVisible(),
                     hideController = { playerView.hideController() },
                     hidePanel = { hideContentPanel() },
-                    exitPlayer = { finish() },
+                    exitPlayer = {
+                        if (System.currentTimeMillis() - exitTime <= exitInterval) {
+                            finish()
+                        } else {
+                            exitTime = System.currentTimeMillis()
+                            Toast.makeText(applicationContext, "再按一次退出播放", Toast.LENGTH_SHORT).show()
+                        }
+                    },
                 )
             }
         })

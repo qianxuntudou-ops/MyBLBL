@@ -374,7 +374,7 @@ class VideoPlayerFragment : Fragment() {
         imageNext = rootView.findViewById(R.id.imageView_next)
         textNext = rootView.findViewById(R.id.text_next)
         countdownView = rootView.findViewById(R.id.countdown_view)
-        interactionView = binding.interactionView
+        interactionView = playerView.findViewById(R.id.interaction_view)
 
         viewRelated.visibility = View.GONE
         viewNext.visibility = View.GONE
@@ -741,6 +741,7 @@ class VideoPlayerFragment : Fragment() {
                 }
                 progressCoordinator.reset()
                 if (!playbackRequest.replaceInPlace) {
+                    playerView.hideController()
                     playerView.prepareForPlaybackTransition()
                     viewModel.resetPlaybackProgress()
                     latestPlaybackPositionMs = 0L

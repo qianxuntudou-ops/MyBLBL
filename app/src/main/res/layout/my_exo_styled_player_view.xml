@@ -51,6 +51,11 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"/>
     </com.tutu.myblbl.feature.player.view.DanmakuMaskHostLayout>
+    <com.tutu.myblbl.feature.player.interaction.InteractionOverlayView
+        android:id="@+id/interaction_view"
+        android:visibility="gone"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
     <androidx.appcompat.widget.AppCompatImageView
         android:layout_gravity="end|bottom"
         android:id="@+id/image_pause_indicator"

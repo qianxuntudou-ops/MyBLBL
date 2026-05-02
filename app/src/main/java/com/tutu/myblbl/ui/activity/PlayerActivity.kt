@@ -508,7 +508,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
         imageNext = binding.root.findViewById(R.id.imageView_next)
         textNext = binding.root.findViewById(R.id.text_next)
         countdownView = binding.root.findViewById(R.id.countdown_view)
-        interactionView = binding.interactionView
+        interactionView = playerView.findViewById(R.id.interaction_view)
 
         viewRelated.visibility = View.GONE
         viewNext.visibility = View.GONE
@@ -794,6 +794,7 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 }
                 progressCoordinator.reset()
                 if (!playbackRequest.replaceInPlace) {
+                    playerView.hideController()
                     playerView.prepareForPlaybackTransition()
                     viewModel.resetPlaybackProgress()
                     latestPlaybackPositionMs = 0L

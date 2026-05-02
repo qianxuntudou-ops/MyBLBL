@@ -181,7 +181,7 @@ class MyPlayerControlView @JvmOverloads constructor(
                 topToTop = timeBar.id
                 bottomToBottom = timeBar.id
             }
-            cl.addView(sponsorMarkerView, lp)
+            cl.addView(sponsorMarkerView, cl.indexOfChild(timeBar), lp)
         }
         exoPosition = findViewById(R.id.exo_position)
         exoDuration = findViewById(R.id.exo_duration)

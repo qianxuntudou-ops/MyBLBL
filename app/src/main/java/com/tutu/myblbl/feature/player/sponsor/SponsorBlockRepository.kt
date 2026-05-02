@@ -23,11 +23,16 @@ object SponsorBlockRepository {
             .build()
     }
 
+    data class SegmentResult(
+        val segments: List<SponsorSegment> = emptyList(),
+        val error: String? = null
+    )
+
     suspend fun getSegments(
         bvid: String,
         cid: Long = 0L,
         categories: List<String> = SponsorSegment.ALL_CATEGORIES
-    ): List<SponsorSegment> = withContext(Dispatchers.IO) {
+    ): SegmentResult = withContext(Dispatchers.IO) {
         try {
             val params = buildList {
                 add("videoID=$bvid")
@@ -39,30 +44,32 @@ object SponsorBlockRepository {
             val request = Request.Builder()
                 .url(url)
                 .header("User-Agent", "MyBLBL/1.0")
+                .header("origin", "com.tutu.myblbl")
+                .header("x-ext-version", "1.0")
                 .get()
                 .build()
 
             val response = client.newCall(request).execute()
             when (response.code) {
                 200 -> {
-                    val body = response.body?.string() ?: return@withContext emptyList()
+                    val body = response.body?.string() ?: return@withContext SegmentResult()
                     val type = object : TypeToken<List<SponsorSegment>>() {}.type
                     val segments = gson.fromJson<List<SponsorSegment>>(body, type)
                     Log.d(TAG, "获取到 ${segments.size} 个空降片段 for $bvid")
-                    normalizeSegments(segments)
+                    SegmentResult(normalizeSegments(segments))
                 }
                 404 -> {
                     Log.d(TAG, "视频 $bvid 没有空降数据")
-                    emptyList()
+                    SegmentResult()
                 }
                 else -> {
                     Log.w(TAG, "API 返回错误: ${response.code}")
-                    emptyList()
+                    SegmentResult(error = "空降助手服务异常 (${response.code})")
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "获取空降片段失败: ${e.message}")
-            emptyList()
+            SegmentResult(error = "空降助手连接失败，请检查网络")
         }
     }
 

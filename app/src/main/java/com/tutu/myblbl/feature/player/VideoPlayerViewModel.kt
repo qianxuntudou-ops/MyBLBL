@@ -682,6 +682,9 @@ class VideoPlayerViewModel(
         if (bvid?.isNotBlank() == true && cid > 0L && currentSettings.sponsorBlockEnabled) {
             viewModelScope.launch {
                 sponsorBlockUseCase.loadSegments(bvid, cid)
+                sponsorBlockUseCase.lastError?.let { error ->
+                    Toast.makeText(appContext, error, Toast.LENGTH_SHORT).show()
+                }
                 _sponsorSegments.value = sponsorBlockUseCase.getSegments()
             }
         }

@@ -23,14 +23,20 @@ class SponsorBlockUseCase {
     private var lastPositionMs: Long = 0
     private var lastAutoSkipTime: Long = 0
 
+    var lastError: String? = null
+        private set
+
     suspend fun loadSegments(bvid: String, cid: Long) {
         reset()
         try {
-            segments = SponsorBlockRepository.getSegments(bvid, cid)
+            val result = SponsorBlockRepository.getSegments(bvid, cid)
+            segments = result.segments
+            lastError = result.error
             nextSegmentIndex = 0
             Log.d(TAG, "加载了 ${segments.size} 个空降片段")
         } catch (e: Exception) {
             Log.w(TAG, "加载空降片段失败: ${e.message}")
+            lastError = "空降助手加载失败"
         }
     }
 

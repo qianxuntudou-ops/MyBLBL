@@ -2493,7 +2493,8 @@ class VideoPlayerViewModel(
                 qualityId = qualityId,
                 fnval = streamResolver.buildFnval(qualityId),
                 fourk = streamResolver.buildFourk(qualityId),
-                allowWbi = allowWbi
+                allowWbi = allowWbi,
+                seasonId = currentSeasonId ?: 0L
             ) ?: return@forEach
             allowWbi = false
             lastResult = PlayInfoFetchResult(
@@ -2567,6 +2568,7 @@ class VideoPlayerViewModel(
             .orEmpty()
             .map { it.id }
             .distinct()
+        AppLog.i(TAG, "resolvePlayableQualityId: reason=$reason requested=$requestedQualityId apiQuality=${playInfo.quality} streamIds=$streamQualityIds acceptQuality=${playInfo.acceptQuality} supportFormats=${playInfo.supportFormats.orEmpty().map { it.quality }}")
         if (streamQualityIds.isNotEmpty()) {
             if (requestedQualityId in streamQualityIds) {
                 return requestedQualityId
@@ -2575,6 +2577,7 @@ class VideoPlayerViewModel(
                 .takeIf { it in streamQualityIds }
                 ?: streamQualityIds.maxOrNull()
                 ?: requestedQualityId
+            AppLog.i(TAG, "resolvePlayableQualityId: resolved=$fallbackQualityId (fallback)")
             return fallbackQualityId
         }
         if (availableQualities.isEmpty()) {

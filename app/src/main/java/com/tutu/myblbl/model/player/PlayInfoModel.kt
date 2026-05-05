@@ -292,7 +292,12 @@ data class Dolby(
 data class Flac(
     @SerializedName("display")
     val display: Boolean = false,
-    
+
     @SerializedName("audio")
     val audio: DashAudio? = null
+)
+
+data class PgcV2Result(
+    @SerializedName("video_info")
+    val videoInfo: PlayInfoModel? = null
 )

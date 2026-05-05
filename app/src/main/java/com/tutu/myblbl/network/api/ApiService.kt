@@ -16,6 +16,8 @@ import com.tutu.myblbl.model.user.GetFollowUserWrapper
 import com.tutu.myblbl.model.user.ScanQrModel
 import com.tutu.myblbl.model.user.SignInResultModel
 import com.tutu.myblbl.model.user.SsoListModel
+import com.tutu.myblbl.model.user.TvQrCodeData
+import com.tutu.myblbl.model.user.TvPollData
 import com.tutu.myblbl.model.video.VideoModel
 import com.tutu.myblbl.model.video.detail.VideoDetailModel
 import com.tutu.myblbl.model.video.VideoPvModel
@@ -25,6 +27,7 @@ import com.tutu.myblbl.model.video.RegionVideoListWrapper
 import com.tutu.myblbl.model.video.UserDynamicResponse
 import com.tutu.myblbl.model.video.AllDynamicResponse
 import com.tutu.myblbl.model.video.GetVideoByChannelWrapper
+import com.tutu.myblbl.model.player.PgcV2Result
 import com.tutu.myblbl.model.player.PlayInfoModel
 import com.tutu.myblbl.model.player.VideoSnapshotData
 import com.tutu.myblbl.model.recommend.RecommendListDataModel
@@ -511,10 +514,10 @@ interface ApiService {
         @Query("season_id") seasonId: Long
     ): BaseResponse<RelatedRecommendResult>
 
-    @GET("pgc/player/web/playurl")
+    @GET("pgc/player/web/v2/playurl")
     suspend fun getVideoPlayPgcInfo(
         @QueryMap params: Map<String, String>
-    ): Base2Response<PlayInfoModel>
+    ): Base2Response<PgcV2Result>
 
     @GET("pgc/page/pc/bangumi/tab")
     suspend fun getAnimations(
@@ -591,4 +594,23 @@ interface ApiService {
         @Query("offset") offset: String = "",
         @Query("page_size") pageSize: Int = 30
     ): BaseResponse<GetVideoByChannelWrapper>
+
+    // ==================== TV 登录 API ====================
+
+    @FormUrlEncoded
+    @POST("https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code")
+    suspend fun generateTvQrCode(@FieldMap params: Map<String, String>): BaseResponse<TvQrCodeData>
+
+    @FormUrlEncoded
+    @POST("https://passport.bilibili.com/x/passport-tv-login/qrcode/poll")
+    suspend fun pollTvQrCode(@FieldMap params: Map<String, String>): BaseResponse<TvPollData>
+
+    @FormUrlEncoded
+    @POST("https://passport.bilibili.com/x/passport-tv-login/h5/refresh")
+    suspend fun refreshTvToken(@FieldMap params: Map<String, String>): BaseResponse<TvPollData>
+
+    // ==================== APP 播放 API（access_key 签名） ====================
+
+    @GET("https://api.bilibili.com/x/player/playurl")
+    suspend fun getPlayUrlApp(@QueryMap params: Map<String, String>): Base2Response<PlayInfoModel>
 }

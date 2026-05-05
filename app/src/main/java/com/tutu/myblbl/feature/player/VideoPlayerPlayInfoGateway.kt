@@ -1,10 +1,13 @@
 package com.tutu.myblbl.feature.player
 
+import com.tutu.myblbl.model.player.PgcV2Result
 import com.tutu.myblbl.model.player.PlayInfoModel
 import com.tutu.myblbl.model.proto.DmProtoParser
 import com.tutu.myblbl.model.player.VideoSnapshotData
 import com.tutu.myblbl.network.WbiGenerator
 import com.tutu.myblbl.network.api.ApiService
+import com.tutu.myblbl.network.NetworkManager
+import com.tutu.myblbl.network.security.AppSignUtils
 import com.tutu.myblbl.network.security.NetworkSecurityGateway
 import com.tutu.myblbl.network.session.AuthContext
 import com.tutu.myblbl.network.session.NetworkSessionGateway
@@ -60,7 +63,8 @@ class VideoPlayerPlayInfoGateway(
         qualityId: Int,
         fnval: Int,
         fourk: Int,
-        allowWbi: Boolean = true
+        allowWbi: Boolean = true,
+        seasonId: Long = 0L
     ): PlayInfoResult? {
         if (epId != null && epId > 0L) {
             return requestPgcPlayInfo(
@@ -70,7 +74,8 @@ class VideoPlayerPlayInfoGateway(
                 epId = epId,
                 qualityId = qualityId,
                 fnval = fnval,
-                fourk = fourk
+                fourk = fourk,
+                seasonId = seasonId
             )
         }
 
@@ -599,14 +604,29 @@ class VideoPlayerPlayInfoGateway(
         epId: Long,
         qualityId: Int,
         fnval: Int,
-        fourk: Int
+        fourk: Int,
+        seasonId: Long = 0L
     ): PlayInfoResult? {
+        securityGateway.ensureHealthyForPlay()
         securityGateway.prewarmWebSession()
         ensureWbiKeys()
         val hasWbi = hasWbiKeys()
+        AppLog.i(logTag, "requestPgcPlayInfo: epId=$epId cid=$cid qn=$qualityId fnval=$fnval fourk=$fourk hasWbi=$hasWbi hasSession=${cookieManager.hasSessionCookie()} sessData=${cookieManager.getCookieValue("SESSDATA")?.take(8)}...")
+        val cookieHeader = cookieManager.getCookieHeaderFor("https://api.bilibili.com/pgc/player/web/v2/playurl")
+        AppLog.i(logTag, "requestPgcPlayInfo cookies: ${cookieHeader?.take(120)}")
+        // Check VIP status
+        try {
+            val navResponse = apiService.getUserDetailInfo()
+            val vipType = navResponse.data?.vipType ?: 0
+            val vipStatus = navResponse.data?.vipStatus ?: 0
+            val isLogin = navResponse.data?.isLogin ?: false
+            AppLog.i(logTag, "requestPgcPlayInfo auth: isLogin=$isLogin mid=${navResponse.data?.mid} vipType=$vipType vipStatus=$vipStatus")
+        } catch (e: Exception) {
+            AppLog.e(logTag, "requestPgcPlayInfo auth check failed: ${e.message}")
+        }
 
         val baseAttempts = listOf(
-            "primary-drm2" to buildPgcPlayParams(
+            "simple" to buildPgcPlayParams(
                 aid = aid,
                 bvid = bvid,
                 cid = cid,
@@ -614,11 +634,11 @@ class VideoPlayerPlayInfoGateway(
                 qualityId = qualityId,
                 fnval = fnval,
                 fourk = fourk,
+                seasonId = seasonId,
                 includeCid = true,
-                includeVideoIds = true,
-                drmTechType = 2
+                includeVideoIds = true
             ),
-            "primary-drm0" to buildPgcPlayParams(
+            "ep-only" to buildPgcPlayParams(
                 aid = aid,
                 bvid = bvid,
                 cid = cid,
@@ -626,33 +646,9 @@ class VideoPlayerPlayInfoGateway(
                 qualityId = qualityId,
                 fnval = fnval,
                 fourk = fourk,
-                includeCid = true,
-                includeVideoIds = true,
-                drmTechType = 0
-            ),
-            "ep-only-drm2" to buildPgcPlayParams(
-                aid = aid,
-                bvid = bvid,
-                cid = cid,
-                epId = epId,
-                qualityId = qualityId,
-                fnval = fnval,
-                fourk = fourk,
+                seasonId = seasonId,
                 includeCid = false,
-                includeVideoIds = false,
-                drmTechType = 2
-            ),
-            "ep-only-drm0" to buildPgcPlayParams(
-                aid = aid,
-                bvid = bvid,
-                cid = cid,
-                epId = epId,
-                qualityId = qualityId,
-                fnval = fnval,
-                fourk = fourk,
-                includeCid = false,
-                includeVideoIds = false,
-                drmTechType = 0
+                includeVideoIds = false
             )
         )
 
@@ -665,10 +661,36 @@ class VideoPlayerPlayInfoGateway(
             baseAttempts
         }
 
-        var lastResponse: Base2Response<PlayInfoModel>? = null
+        var lastResponse: Base2Response<PgcV2Result>? = null
         attempts.forEachIndexed { index, (label, params) ->
             if (index > 0) {
                 securityGateway.prewarmWebSession(forceUaRefresh = true)
+            }
+            // Debug: log raw PGC API response for first attempt
+            if (index == 0) {
+                try {
+                    val debugUrl = buildPgcDebugUrl(params)
+                    val debugRequest = Request.Builder().url(debugUrl).build()
+                    val debugResponse = okHttpClient.newCall(debugRequest).execute()
+                    val debugBody = debugResponse.body?.string()
+                    if (debugBody != null) {
+                        val rootObj = com.google.gson.JsonParser.parseString(debugBody).asJsonObject
+                        val resultObj = rootObj.getAsJsonObject("result")
+                        val videoInfoRaw = resultObj?.getAsJsonObject("video_info")
+                        val dashRaw = videoInfoRaw?.getAsJsonObject("dash")
+                        val videoArray = dashRaw?.getAsJsonArray("video")
+                        val videoSummary = videoArray?.map { v ->
+                            val obj = v.asJsonObject
+                            "id=${obj.get("id")?.asInt} w=${obj.get("width")?.asInt} h=${obj.get("height")?.asInt} codecId=${obj.get("codecid")?.asInt} bw=${obj.get("bandwidth")?.asLong}"
+                        }?.toString() ?: "null"
+                        val qualityRaw = videoInfoRaw?.get("quality")?.asInt ?: -1
+                        val acceptQ = videoInfoRaw?.getAsJsonArray("accept_quality")?.toString() ?: "null"
+                        val resultKeys = resultObj?.keySet()?.toList()?.toString() ?: "null"
+                        AppLog.i(logTag, "PGC_RAW result.keys=$resultKeys quality=$qualityRaw acceptQ=$acceptQ videos=$videoSummary")
+                    }
+                } catch (e: Exception) {
+                    AppLog.e(logTag, "PGC_RAW debug failed: ${e.message}", e)
+                }
             }
             val response = runCatching {
                 apiService.getVideoPlayPgcInfo(params)
@@ -681,7 +703,7 @@ class VideoPlayerPlayInfoGateway(
             }.getOrNull()
             lastResponse = response
             if (response != null) {
-                if (response.isSuccess && response.result != null) {
+                if (response.isSuccess && response.result?.videoInfo != null) {
                     return response.toPlayInfoResult()
                 }
                 if (!shouldRetryPgcPlayInfo(response)) {
@@ -692,7 +714,29 @@ class VideoPlayerPlayInfoGateway(
 
         if (lastResponse != null) {
         }
-        return lastResponse?.toPlayInfoResult()
+
+        // Web PGC API 画质不足时，尝试 APP API（access_key 签名）
+        val webResult = lastResponse?.toPlayInfoResult()
+        if (webResult != null) {
+            val maxQn = webResult.data?.dash?.video?.maxOfOrNull { it.id } ?: 0
+            if (maxQn <= 32) {
+                AppLog.i(logTag, "requestPgcPlayInfo web API max qn=$maxQn, trying APP API fallback")
+                val appResult = requestAppPlayInfo(
+                    bvid = bvid,
+                    cid = cid,
+                    qualityId = qualityId
+                )
+                if (appResult != null && hasPlayableMedia(appResult.data)) {
+                    val appMaxQn = appResult.data?.dash?.video?.maxOfOrNull { it.id } ?: 0
+                    if (appMaxQn > maxQn) {
+                        AppLog.i(logTag, "requestPgcPlayInfo APP API better: qn=$appMaxQn > $maxQn")
+                        return appResult
+                    }
+                }
+            }
+        }
+
+        return webResult
     }
 
     private fun buildPgcPlayParams(
@@ -703,19 +747,25 @@ class VideoPlayerPlayInfoGateway(
         qualityId: Int,
         fnval: Int,
         fourk: Int,
+        seasonId: Long,
         includeCid: Boolean,
-        includeVideoIds: Boolean,
-        drmTechType: Int
+        includeVideoIds: Boolean
     ): Map<String, String> {
         val params = linkedMapOf(
             "ep_id" to epId.toString(),
             "qn" to qualityId.toString(),
             "fnver" to "0",
             "fnval" to fnval.toString(),
-            "fourk" to fourk.toString(),
-            "from_client" to "BROWSER",
-            "drm_tech_type" to drmTechType.toString()
+            "fourk" to "1",
+            "try_look" to "1",
+            "voice_balance" to "1",
+            "gaia_source" to "pre-load",
+            "isGaiaAvoided" to "true",
+            "web_location" to "1315873"
         )
+        if (seasonId > 0L) {
+            params["season_id"] = seasonId.toString()
+        }
         if (includeCid && cid > 0L) {
             params["cid"] = cid.toString()
         }
@@ -726,8 +776,8 @@ class VideoPlayerPlayInfoGateway(
         return params
     }
 
-    private fun shouldRetryPgcPlayInfo(response: Base2Response<PlayInfoModel>): Boolean {
-        if (response.isSuccess && response.result != null) {
+    private fun shouldRetryPgcPlayInfo(response: Base2Response<PgcV2Result>): Boolean {
+        if (response.isSuccess && response.result?.videoInfo != null) {
             return false
         }
         val message = response.message.trim()
@@ -760,12 +810,21 @@ class VideoPlayerPlayInfoGateway(
         return WbiGenerator.generateWbiParams(params, imgKey, subKey)
     }
 
-    private fun Base2Response<PlayInfoModel>.toPlayInfoResult(): PlayInfoResult {
+    private fun Base2Response<PgcV2Result>.toPlayInfoResult(): PlayInfoResult {
         return PlayInfoResult(
             code = code,
             message = message,
-            data = result
+            data = result?.videoInfo
         )
+    }
+
+    private fun buildPgcDebugUrl(params: Map<String, String>): String {
+        val sb = StringBuilder("https://api.bilibili.com/pgc/player/web/v2/playurl?")
+        params.entries.forEachIndexed { i, (k, v) ->
+            if (i > 0) sb.append("&")
+            sb.append(k).append("=").append(java.net.URLEncoder.encode(v, "UTF-8"))
+        }
+        return sb.toString()
     }
 
     private fun hasPlayableMedia(playInfo: PlayInfoModel?): Boolean {
@@ -785,5 +844,81 @@ class VideoPlayerPlayInfoGateway(
         val md = java.security.MessageDigest.getInstance("MD5")
         val digest = md.digest(raw.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    private suspend fun requestAppPlayInfo(
+        bvid: String?,
+        cid: Long,
+        qualityId: Int,
+        allowRetry: Boolean = true
+    ): PlayInfoResult? {
+        val accessToken = NetworkManager.getTvAccessToken()
+        if (accessToken.isNullOrBlank()) return null
+        if (bvid.isNullOrBlank()) return null
+
+        val params = mutableMapOf(
+            "bvid" to bvid,
+            "cid" to cid.toString(),
+            "qn" to qualityId.toString(),
+            "fnval" to "4048",
+            "fnver" to "0",
+            "fourk" to "1",
+            "access_key" to accessToken,
+            "appkey" to AppSignUtils.TV_APP_KEY,
+            "ts" to AppSignUtils.getTimestamp().toString(),
+            "platform" to "android",
+            "mobi_app" to "android_tv_yst",
+            "device" to "android"
+        )
+        val signedParams = AppSignUtils.signForTvLogin(params)
+
+        val response = runCatching {
+            noCookieApiService.getPlayUrlApp(signedParams)
+        }.onFailure { throwable ->
+            AppLog.e(logTag, "requestAppPlayInfo exception: ${throwable.message}", throwable)
+        }.getOrNull()
+
+        if (response != null) {
+            // -101 表示 access_key 过期，尝试刷新 token 后重试
+            if (response.code == -101 && allowRetry) {
+                AppLog.i(logTag, "requestAppPlayInfo access_key invalid (-101), trying refresh")
+                runCatching {
+                    val tvRefreshToken = NetworkManager.getTvRefreshToken()
+                    if (!tvRefreshToken.isNullOrBlank()) {
+                        val tvAuthRepo = org.koin.mp.KoinPlatform.getKoin()
+                            .get<com.tutu.myblbl.repository.remote.TvAuthRepository>()
+                        val refreshResp = tvAuthRepo.refreshTvToken(accessToken, tvRefreshToken)
+                        if (refreshResp.code == 0 && refreshResp.data != null) {
+                            refreshResp.data.tokenInfo?.let { info ->
+                                NetworkManager.saveTvTokens(info.accessToken, info.refreshToken)
+                            }
+                            refreshResp.data.cookieInfo?.cookies?.let { cookies ->
+                                val domains = refreshResp.data.cookieInfo.domains ?: listOf(".bilibili.com")
+                                val cookieStrings = cookies.map { cookie ->
+                                    val domain = domains.firstOrNull() ?: ".bilibili.com"
+                                    "${cookie.name}=${cookie.value}; domain=$domain; path=/; secure"
+                                }
+                                if (cookieStrings.isNotEmpty()) {
+                                    cookieManager.saveCookies(cookieStrings)
+                                }
+                            }
+                            return requestAppPlayInfo(bvid, cid, qualityId, allowRetry = false)
+                        }
+                    }
+                }.onFailure { e ->
+                    AppLog.e(logTag, "requestAppPlayInfo token refresh failed: ${e.message}")
+                }
+            }
+
+            val dashIds = response.result?.dash?.video?.map { it.id }?.distinct()?.sortedDescending()
+            AppLog.i(logTag, "requestAppPlayInfo: code=${response.code}, dashIds=$dashIds")
+
+            return PlayInfoResult(
+                code = response.code,
+                message = response.message,
+                data = response.result
+            )
+        }
+        return null
     }
 }

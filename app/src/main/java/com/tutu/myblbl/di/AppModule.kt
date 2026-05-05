@@ -63,6 +63,7 @@ val networkModule = module {
 val repositoryModule = module {
     single { com.tutu.myblbl.repository.remote.AllSeriesRepository(get()) }
     single { com.tutu.myblbl.repository.remote.AuthRepository(get(), get()) }
+    single { com.tutu.myblbl.repository.remote.TvAuthRepository(get(named("noCookie"))) }
     single { com.tutu.myblbl.repository.remote.FavoriteRepository(get(), get(), get()) }
     single { com.tutu.myblbl.repository.remote.HomeLaneRepository(get(), get(), get()) }
     single { com.tutu.myblbl.repository.remote.LiveRepository(get(), get()) }

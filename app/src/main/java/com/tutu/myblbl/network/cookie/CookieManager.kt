@@ -65,7 +65,7 @@ class CookieManager : CookieJar {
                 resultCookies.addAll(domainCookies.filter(::isCookieActive))
             }
         }
-        
+
         return resultCookies
             .distinctBy { "${it.name}|${it.domain}|${it.path}" }
             .sortedWith(compareByDescending { it.name == "SESSDATA" })

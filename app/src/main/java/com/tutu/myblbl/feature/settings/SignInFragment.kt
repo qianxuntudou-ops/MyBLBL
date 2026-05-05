@@ -15,15 +15,14 @@ import com.tutu.myblbl.core.common.cache.FileCacheManager
 import com.tutu.myblbl.core.common.log.AppLog
 import com.tutu.myblbl.network.NetworkManager
 import com.tutu.myblbl.network.cookie.CookieManager
-import com.tutu.myblbl.repository.AuthRepository
 import com.tutu.myblbl.repository.UserRepository
+import com.tutu.myblbl.repository.remote.TvAuthRepository
 import com.tutu.myblbl.core.ui.base.BaseFragment
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
-import com.tutu.myblbl.network.WbiGenerator
 
 class SignInFragment : BaseFragment<FragmentSignInBinding>() {
 
@@ -31,11 +30,11 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
         fun newInstance() = SignInFragment()
     }
 
-    private val authRepository: AuthRepository by inject()
+    private val tvAuthRepository: TvAuthRepository by inject()
     private val appEventHub: AppEventHub by inject()
     private val cookieManager: CookieManager by inject()
     private val userRepository: UserRepository by inject()
-    private var qrcodeKey = ""
+    private var authCode = ""
     private var pollingJob: Job? = null
     private val pollingInterval = 1500L
 
@@ -51,14 +50,14 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
 
     private fun loadQrCode() {
         binding.progressBar.visibility = android.view.View.VISIBLE
-        
+
         viewLifecycleOwner.lifecycleScope.launch {
-            val result = authRepository.getQrCode()
-            binding.progressBar.visibility = android.view.View.GONE
-            
-            result.onSuccess { response ->
+            try {
+                val response = tvAuthRepository.generateTvQrCode()
+                binding.progressBar.visibility = android.view.View.GONE
+
                 if (response.isSuccess && response.data != null) {
-                    qrcodeKey = response.data.qrcodeKey
+                    authCode = response.data.authCode
                     val qrUrl = response.data.url
                     displayQrCode(qrUrl)
                     startPolling()
@@ -69,7 +68,8 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
                         Toast.LENGTH_SHORT
                     ).show()
                 }
-            }.onFailure { e ->
+            } catch (e: Exception) {
+                binding.progressBar.visibility = android.view.View.GONE
                 Toast.makeText(
                     requireContext(),
                     getString(R.string.sign_in_qr_failed_format, e.message.orEmpty()),
@@ -122,87 +122,55 @@ class SignInFragment : BaseFragment<FragmentSignInBinding>() {
     private fun startPolling() {
         pollingJob?.cancel()
         pollingJob = viewLifecycleOwner.lifecycleScope.launch {
-            while (isActive && qrcodeKey.isNotEmpty()) {
+            while (isActive && authCode.isNotEmpty()) {
                 delay(pollingInterval)
-                checkSignInResultInternal()
+                checkTvPollResult()
             }
         }
     }
 
-    private suspend fun checkSignInResultInternal() {
-        if (qrcodeKey.isEmpty()) return
+    private suspend fun checkTvPollResult() {
+        if (authCode.isEmpty()) return
 
-        val bRet = WbiGenerator.ensureBRet()
-        val result = authRepository.checkSignInResult(qrcodeKey, bRet)
-        result.onSuccess { response ->
-            val data = response.data
-            if (data != null && data.isSuccess()) {
-                pollingJob?.cancel()
-                saveCookiesFromLoginUrl(data.url)
-                if (data.refreshToken.isNotBlank()) {
-                    NetworkManager.saveLoginRefreshToken(data.refreshToken)
-                }
-                performSsoSync(data.url, bRet)
-                Toast.makeText(requireContext(), "登录成功", Toast.LENGTH_SHORT).show()
-                onLoginSuccess()
-            } else if (data != null && data.code == 86038) {
-                pollingJob?.cancel()
-                loadQrCode()
-            }
-        }
-    }
-
-    private fun saveCookiesFromLoginUrl(url: String) {
-        if (url.isBlank()) return
         try {
-            val cookieNames = setOf("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5")
-            val queryPart = url.substringAfter("?", "")
-            if (queryPart.isBlank()) return
-            val cookieStrings = queryPart.split("&")
-                .filter { pair ->
-                    val name = pair.substringBefore("=", "")
-                    name in cookieNames
-                }
-                .map { pair ->
-                    val name = pair.substringBefore("=", "")
-                    val value = pair.substringAfter("=", "")
-                    "$name=$value; domain=bilibili.com; path=/; secure"
-                }
-            if (cookieStrings.isNotEmpty()) {
-                cookieManager.saveCookies(cookieStrings)
-            }
-        } catch (e: Exception) {
-            AppLog.e("SignInFragment", "saveCookiesFromLoginUrl failed", e)
-        }
-    }
-
-    private suspend fun performSsoSync(loginUrl: String, bRet: String) {
-        try {
-            val csrf = extractCookieValueFromUrl(loginUrl, "bili_jct")
-            if (csrf.isBlank()) return
-
-            val ssoResult = authRepository.getSsoList(csrf)
-            ssoResult.onSuccess { response ->
-                val ssoUrls = response.data?.sso ?: return
-                for (url in ssoUrls) {
-                    try {
-                        authRepository.setSso(url, bRet)
-                    } catch (e: Exception) {
-                        AppLog.d("SignInFragment", "setSso failed for $url: ${e.message}")
+            val response = tvAuthRepository.pollTvQrCode(authCode)
+            when {
+                response.code == 0 && response.data != null -> {
+                    pollingJob?.cancel()
+                    val pollData = response.data
+                    // 注入 cookie
+                    pollData.cookieInfo?.cookies?.let { cookies ->
+                        val domains = pollData.cookieInfo.domains ?: listOf(".bilibili.com")
+                        val cookieStrings = cookies.map { cookie ->
+                            val domain = domains.firstOrNull() ?: ".bilibili.com"
+                            "${cookie.name}=${cookie.value}; domain=$domain; path=/; secure"
+                        }
+                        if (cookieStrings.isNotEmpty()) {
+                            cookieManager.saveCookies(cookieStrings)
+                        }
                     }
+                    // 保存 TV token
+                    pollData.tokenInfo?.let { info ->
+                        NetworkManager.saveTvTokens(info.accessToken, info.refreshToken)
+                    }
+                    Toast.makeText(requireContext(), "登录成功", Toast.LENGTH_SHORT).show()
+                    onLoginSuccess()
+                }
+                response.code == 86038 -> {
+                    // 二维码过期
+                    pollingJob?.cancel()
+                    loadQrCode()
+                }
+                response.code == 86101 -> {
+                    // 未扫码，继续轮询
+                }
+                response.code == 86090 -> {
+                    // 已扫码待确认，继续轮询
                 }
             }
         } catch (e: Exception) {
-            AppLog.w("SignInFragment", "SSO sync failed: ${e.message}")
+            AppLog.w("SignInFragment", "TV poll error: ${e.message}")
         }
-    }
-
-    private fun extractCookieValueFromUrl(url: String, name: String): String {
-        val queryPart = url.substringAfter("?", "")
-        return queryPart.split("&")
-            .firstOrNull { it.startsWith("$name=") }
-            ?.substringAfter("=", "")
-            .orEmpty()
     }
 
     private fun onLoginSuccess() {

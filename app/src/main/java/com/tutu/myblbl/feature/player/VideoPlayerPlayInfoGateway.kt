@@ -79,7 +79,8 @@ class VideoPlayerPlayInfoGateway(
             )
         }
 
-        val resolvedBvid = bvid?.takeIf { it.isNotBlank() } ?: return null
+        val resolvedBvid = bvid?.takeIf { it.isNotBlank() }
+        if (resolvedBvid == null && (aid ?: 0L) <= 0L) return null
 
         securityGateway.ensureHealthyForPlay()
 
@@ -123,12 +124,26 @@ class VideoPlayerPlayInfoGateway(
             return (tryLookResult ?: primaryResult)?.copy(vVoucher = extractedVVoucher)
         }
 
+        // 移动端推荐视频: bvid 为空时 web API 无法工作，直接用 APP API + avid + access_key
+        if (resolvedBvid == null && (aid ?: 0L) > 0L) {
+            val appResult = requestAppPlayInfo(
+                aid = aid,
+                bvid = null,
+                cid = cid,
+                qualityId = qualityId
+            )
+            if (appResult != null && hasPlayableMedia(appResult.data)) {
+                AppLog.i(logTag, "requestPlayInfo: APP API fallback success with avid=$aid cid=$cid")
+                return appResult
+            }
+        }
+
         return primaryResult
     }
 
     private suspend fun requestPrimaryPlayInfo(
         aid: Long?,
-        bvid: String,
+        bvid: String?,
         cid: Long,
         qualityId: Int,
         fnval: Int,
@@ -197,7 +212,7 @@ class VideoPlayerPlayInfoGateway(
 
     private suspend fun requestWbiPlayInfo(
         aid: Long?,
-        bvid: String,
+        bvid: String?,
         cid: Long,
         qualityId: Int,
         fnval: Int,
@@ -207,7 +222,6 @@ class VideoPlayerPlayInfoGateway(
         if (!hasWbiKeys()) return null
 
         val params = mutableMapOf(
-            "bvid" to bvid,
             "cid" to cid.toString(),
             "qn" to qualityId.toString(),
             "fnver" to "0",
@@ -218,7 +232,11 @@ class VideoPlayerPlayInfoGateway(
             "isGaiaAvoided" to "true",
             "web_location" to "1315873"
         )
-        aid?.takeIf { it > 0L }?.let { params["avid"] = it.toString() }
+        if (!bvid.isNullOrBlank()) {
+            params["bvid"] = bvid
+        } else {
+            aid?.takeIf { it > 0L }?.let { params["avid"] = it.toString() }
+        }
 
         val gaiaVtoken = cookieManager.getCookieValue("x-bili-gaia-vtoken")?.trim()
         if (!gaiaVtoken.isNullOrBlank()) {
@@ -254,7 +272,7 @@ class VideoPlayerPlayInfoGateway(
 
     private suspend fun requestNormalPlayInfo(
         aid: Long?,
-        bvid: String,
+        bvid: String?,
         cid: Long,
         qualityId: Int,
         fnval: Int,
@@ -292,7 +310,7 @@ class VideoPlayerPlayInfoGateway(
 
     private suspend fun requestTryLookPlayInfo(
         aid: Long?,
-        bvid: String,
+        bvid: String?,
         cid: Long,
         qualityId: Int,
         fnval: Int,
@@ -318,7 +336,7 @@ class VideoPlayerPlayInfoGateway(
 
     private suspend fun requestWbiTryLookPlayInfo(
         aid: Long?,
-        bvid: String,
+        bvid: String?,
         cid: Long,
         qualityId: Int,
         fnval: Int,
@@ -328,7 +346,6 @@ class VideoPlayerPlayInfoGateway(
         if (!hasWbiKeys()) return null
 
         val params = mutableMapOf(
-            "bvid" to bvid,
             "cid" to cid.toString(),
             "qn" to qualityId.toString(),
             "fnver" to "0",
@@ -340,7 +357,11 @@ class VideoPlayerPlayInfoGateway(
             "isGaiaAvoided" to "true",
             "web_location" to "1315873"
         )
-        aid?.takeIf { it > 0L }?.let { params["avid"] = it.toString() }
+        if (!bvid.isNullOrBlank()) {
+            params["bvid"] = bvid
+        } else {
+            aid?.takeIf { it > 0L }?.let { params["avid"] = it.toString() }
+        }
 
         val session = genPlayUrlSession()
         if (session != null) {
@@ -365,7 +386,7 @@ class VideoPlayerPlayInfoGateway(
 
     private suspend fun requestNormalTryLookPlayInfo(
         aid: Long?,
-        bvid: String,
+        bvid: String?,
         cid: Long,
         qualityId: Int,
         fnval: Int,
@@ -799,6 +820,7 @@ class VideoPlayerPlayInfoGateway(
     }
 
     private suspend fun requestAppPlayInfo(
+        aid: Long? = null,
         bvid: String?,
         cid: Long,
         qualityId: Int,
@@ -806,10 +828,11 @@ class VideoPlayerPlayInfoGateway(
     ): PlayInfoResult? {
         val accessToken = NetworkManager.getTvAccessToken()
         if (accessToken.isNullOrBlank()) return null
-        if (bvid.isNullOrBlank()) return null
+        val hasBvid = !bvid.isNullOrBlank()
+        val hasAid = (aid ?: 0L) > 0L
+        if (!hasBvid && !hasAid) return null
 
         val params = mutableMapOf(
-            "bvid" to bvid,
             "cid" to cid.toString(),
             "qn" to qualityId.toString(),
             "fnval" to "4048",
@@ -822,6 +845,11 @@ class VideoPlayerPlayInfoGateway(
             "mobi_app" to "android_tv_yst",
             "device" to "android"
         )
+        if (hasBvid) {
+            params["bvid"] = bvid!!
+        } else {
+            params["avid"] = aid.toString()
+        }
         val signedParams = AppSignUtils.signForTvLogin(params)
 
         val response = runCatching {
@@ -854,7 +882,7 @@ class VideoPlayerPlayInfoGateway(
                                     cookieManager.saveCookies(cookieStrings)
                                 }
                             }
-                            return requestAppPlayInfo(bvid, cid, qualityId, allowRetry = false)
+                            return requestAppPlayInfo(aid = aid, bvid = bvid, cid = cid, qualityId = qualityId, allowRetry = false)
                         }
                     }
                 }.onFailure { e ->

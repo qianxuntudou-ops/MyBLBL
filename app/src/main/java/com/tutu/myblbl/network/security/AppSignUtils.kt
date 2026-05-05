@@ -7,9 +7,17 @@ object AppSignUtils {
     private const val TV_APP_SEC = "59b43e04ad6965f34319062b478f83dd"
 
     fun signForTvLogin(params: Map<String, String>): Map<String, String> {
+        return sign(params, TV_APP_SEC)
+    }
+
+    fun signForAppApi(params: Map<String, String>): Map<String, String> {
+        return sign(params, TV_APP_SEC)
+    }
+
+    private fun sign(params: Map<String, String>, appSec: String): Map<String, String> {
         val sortedParams = params.toSortedMap()
         val queryString = sortedParams.entries.joinToString("&") { "${it.key}=${it.value}" }
-        val sign = md5(queryString + TV_APP_SEC)
+        val sign = md5(queryString + appSec)
         return sortedParams + ("sign" to sign)
     }
 

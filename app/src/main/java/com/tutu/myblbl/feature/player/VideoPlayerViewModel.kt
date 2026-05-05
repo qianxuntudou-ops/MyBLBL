@@ -1689,8 +1689,19 @@ class VideoPlayerViewModel(
             }
         if (preparedPlaybackDeferred == null && initialIdentity != null) {
         }
-        val detailResponse = apiService.getVideoDetail(currentAid, currentBvid)
+        var detailResponse = apiService.getVideoDetail(currentAid, currentBvid)
+        // bvid 为空且 /view/detail 失败时，回退到 /view?aid= 接口
+        if (!detailResponse.isSuccess && currentBvid.isNullOrBlank() && (currentAid ?: 0L) > 0L) {
+            AppLog.i(TAG, "loadUgcVideoInfo: /view/detail failed(${detailResponse.code}), fallback /view?aid=$currentAid")
+            detailResponse = apiService.getVideoDetailByAid(currentAid!!)
+        }
         if (!detailResponse.isSuccess || detailResponse.data == null) {
+            // 移动端推荐视频: web API 无法识别超大 aid，但有有效 cid，跳过详情直接播放
+            if (currentBvid.isNullOrBlank() && (currentAid ?: 0L) > 0L && currentCid > 0L) {
+                AppLog.i(TAG, "loadUgcVideoInfo: web detail failed, skip to playUrl with avid=$currentAid cid=$currentCid")
+                loadPlayUrl(preferLastPlayTime = preferLastPlayTime, loadGeneration = loadGeneration)
+                return@coroutineScope
+            }
             AppLog.e(
                 TAG,
                 "loadUgcVideoInfo detail failure: code=${detailResponse.code}, message=${detailResponse.errorMessage}"

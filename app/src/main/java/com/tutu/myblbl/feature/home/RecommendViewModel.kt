@@ -29,6 +29,7 @@ class RecommendViewModel(
     private val freshIndexTracker = RecommendFreshIndexTracker()
     private var currentPage = 0
     private var hasLoadedInitial = false
+    private val seenBvids = mutableSetOf<String>()
 
     override fun loadInitial() {
         if (hasLoadedInitial) return
@@ -71,7 +72,9 @@ class RecommendViewModel(
         if (page == 1 && replace && fromInitial) {
             val preloaded = repository.takePreloadedFirstPage()
             if (preloaded != null) {
+                seenBvids.clear()
                 val filteredItems = preloaded.items.filterForDisplay()
+                filteredItems.mapNotNullTo(seenBvids) { it.bvid.takeIf(String::isNotBlank) }
                 freshIndexTracker.markFirstPageLoaded()
                 currentPage = 1
                 _uiState.value = FeedUiState(
@@ -104,13 +107,18 @@ class RecommendViewModel(
             freshIdx = freshIdx
         ).onSuccess { pageResult ->
             val filteredItems = pageResult.items.filterForDisplay()
+            if (replace) {
+                seenBvids.clear()
+            }
+            val dedupedItems = filteredItems.filter { it.bvid.isBlank() || it.bvid !in seenBvids }
+            dedupedItems.mapNotNullTo(seenBvids) { it.bvid.takeIf(String::isNotBlank) }
             if (page == 1) {
                 freshIndexTracker.markFirstPageLoaded()
             }
             val mergedItems = if (replace) {
-                filteredItems
+                dedupedItems
             } else {
-                current.items + filteredItems
+                current.items + dedupedItems
             }
             currentPage = page
             _uiState.value = FeedUiState(

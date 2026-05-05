@@ -30,6 +30,7 @@ import com.tutu.myblbl.model.video.GetVideoByChannelWrapper
 import com.tutu.myblbl.model.player.PgcV2Result
 import com.tutu.myblbl.model.player.PlayInfoModel
 import com.tutu.myblbl.model.player.VideoSnapshotData
+import com.tutu.myblbl.model.recommend.AppFeedDataModel
 import com.tutu.myblbl.model.recommend.RecommendListDataModel
 import com.tutu.myblbl.model.favorite.FavoriteFolderModel
 import com.tutu.myblbl.model.favorite.CheckFavoriteModel
@@ -119,6 +120,11 @@ interface ApiService {
         @Query("plat") plat: Int = 1
     ): BaseResponse<RecommendListDataModel<VideoModel>>
 
+    @GET("https://app.bilibili.com/x/v2/feed/index")
+    suspend fun getAppRecommendList(
+        @QueryMap params: Map<String, String>
+    ): BaseResponse<AppFeedDataModel>
+
     @GET("x/web-interface/popular")
     suspend fun getHotList(
         @Query("pn") page: Int,
@@ -142,6 +148,11 @@ interface ApiService {
     suspend fun getVideoDetail(
         @Query("avid") avid: Long?,
         @Query("bvid") bvid: String?
+    ): BaseResponse<VideoDetailModel>
+
+    @GET("x/web-interface/view")
+    suspend fun getVideoDetailByAid(
+        @Query("aid") aid: Long
     ): BaseResponse<VideoDetailModel>
 
     @GET("x/player/pagelist")

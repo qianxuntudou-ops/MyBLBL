@@ -217,10 +217,7 @@ abstract class VideoFeedFragment : BaseListFragment<VideoModel>(), HomeTabPage, 
             dispatchContentReadyIfNeeded()
             if (pendingScrollToTopAfterRefresh && !isPendingReturnRestore()) {
                 scrollToTop()
-                val focused = activity?.currentFocus
-                if (focused != null && recyclerView?.findContainingItemView(focused) != null) {
-                    tvFocusController?.requestFocusPosition(0)
-                }
+                tvFocusController?.requestFocusPosition(0)
             }
             pendingScrollToTopAfterRefresh = false
         } else {

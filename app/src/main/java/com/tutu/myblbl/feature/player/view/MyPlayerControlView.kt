@@ -13,6 +13,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 
 import androidx.annotation.OptIn
 import androidx.media3.common.C
@@ -84,6 +85,7 @@ class MyPlayerControlView @JvmOverloads constructor(
     private lateinit var buttonRewind: ImageView
     private lateinit var buttonFastForward: ImageView
     private lateinit var buttonDmSwitch: ImageView
+    private lateinit var buttonMirror: ImageView
     private lateinit var buttonSettings: ImageView
     private lateinit var buttonChooseEpisode: ImageView
     private lateinit var buttonMore: ImageView
@@ -101,6 +103,7 @@ class MyPlayerControlView @JvmOverloads constructor(
     private lateinit var bottomBar: ViewGroup
 
     private var dmEnabled: Boolean = true
+    private var mirrorEnabled: Boolean = false
     private var ffDuration: Long = DEFAULT_FAST_FORWARD_MS
     private var needToHideBars: Boolean = true
     private var isScrubbing: Boolean = false
@@ -177,6 +180,7 @@ class MyPlayerControlView @JvmOverloads constructor(
         buttonRewind = findViewById(R.id.button_rewind)
         buttonFastForward = findViewById(R.id.button_fast_forward)
         buttonDmSwitch = findViewById(R.id.button_dm_switch)
+        buttonMirror = findViewById(R.id.button_mirror)
         buttonSettings = findViewById(R.id.exo_settings)
         buttonChooseEpisode = findViewById(R.id.button_choose_episode)
         buttonMore = findViewById(R.id.button_more)
@@ -203,6 +207,7 @@ class MyPlayerControlView @JvmOverloads constructor(
             buttonRewind = buttonRewind,
             buttonFastForward = buttonFastForward,
             buttonDmSwitch = buttonDmSwitch,
+            buttonMirror = buttonMirror,
             buttonSettings = buttonSettings,
             buttonChooseEpisode = buttonChooseEpisode,
             buttonMore = buttonMore,
@@ -226,6 +231,7 @@ class MyPlayerControlView @JvmOverloads constructor(
             buttonRewind,
             buttonFastForward,
             buttonDmSwitch,
+            buttonMirror,
             buttonSettings,
             buttonChooseEpisode,
             buttonMore,
@@ -278,7 +284,16 @@ class MyPlayerControlView @JvmOverloads constructor(
             onDmEnableChangeImpl?.onDmEnable(dmEnabled)
             onVideoSettingChangeListener?.onDmEnableChange(dmEnabled)
         }
-        
+
+        buttonMirror.setOnClickListener {
+            resetHideCallbacks()
+            mirrorEnabled = !mirrorEnabled
+            updateMirrorIcon()
+            val label = if (mirrorEnabled) context.getString(R.string.on) else context.getString(R.string.off)
+            Toast.makeText(context, "${context.getString(R.string.screen_mirror)}：$label", Toast.LENGTH_SHORT).show()
+            onVideoSettingChangeListener?.onMirrorChange(mirrorEnabled)
+        }
+
         buttonSettings.setOnClickListener {
             resetHideCallbacks()
             onMenuShowImpl?.onShowHide(true)
@@ -514,6 +529,14 @@ class MyPlayerControlView @JvmOverloads constructor(
 
     fun showHideDmSwitchButton(show: Boolean) {
         setButtonVisibility(buttonDmSwitch, show)
+    }
+
+    private fun updateMirrorIcon() {
+        buttonMirror.setImageResource(if (mirrorEnabled) R.drawable.ic_mirror_on else R.drawable.ic_mirror_off)
+    }
+
+    fun showHideMirrorButton(show: Boolean) {
+        setButtonVisibility(buttonMirror, show)
     }
 
     fun showHideNextPrevious(show: Boolean) {
@@ -849,6 +872,7 @@ class MyPlayerControlView @JvmOverloads constructor(
             buttonRewind,
             buttonFastForward,
             buttonDmSwitch,
+            buttonMirror,
             buttonSettings,
             buttonChooseEpisode,
             buttonMore,

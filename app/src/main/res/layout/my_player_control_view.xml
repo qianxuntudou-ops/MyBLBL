@@ -178,6 +178,18 @@
                     android:src="@drawable/ic_dm_enable"
                     android:contentDescription="@string/dm_switch"/>
                 <com.tutu.myblbl.feature.player.view.PlayerControlButton
+                    android:id="@+id/button_mirror"
+                    android:background="@drawable/cell_background"
+                    android:padding="8dp"
+                    android:focusable="true"
+                    android:visibility="gone"
+                    android:clickable="true"
+                    android:nextFocusUp="@id/exo_progress"
+                    android:layout_width="50dp"
+                    android:layout_height="50dp"
+                    android:src="@drawable/ic_mirror_off"
+                    android:contentDescription="@string/screen_mirror"/>
+                <com.tutu.myblbl.feature.player.view.PlayerControlButton
                     android:id="@+id/exo_settings"
                     android:background="@drawable/cell_background"
                     android:padding="10dp"

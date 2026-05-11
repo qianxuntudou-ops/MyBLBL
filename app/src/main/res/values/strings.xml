@@ -376,6 +376,7 @@
     <string name="sign_in_qr_failed_format">获取二维码失败: %1$s</string>
     <string name="science">科学</string>
     <string name="screen_ratio">画面缩放</string>
+    <string name="screen_mirror">画面镜像</string>
     <string name="search">搜索</string>
     <string name="search_empty">搜不到东西，换个词试试</string>
     <string name="user_space_video_count">投稿视频 %1$d</string>

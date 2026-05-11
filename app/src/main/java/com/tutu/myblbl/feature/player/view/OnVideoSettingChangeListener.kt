@@ -15,6 +15,7 @@ interface OnVideoSettingChangeListener {
     fun onPrevious() {}
     fun onNext() {}
     fun onDmEnableChange(enabled: Boolean) {}
+    fun onMirrorChange(enabled: Boolean) {}
     fun onChooseEpisode() {}
     fun onMore() {}
     fun onVideoInfo() {}

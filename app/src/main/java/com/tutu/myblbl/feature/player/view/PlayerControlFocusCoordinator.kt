@@ -16,6 +16,7 @@ internal class PlayerControlFocusCoordinator(
     private val buttonRewind: View,
     private val buttonFastForward: View,
     private val buttonDmSwitch: View,
+    private val buttonMirror: View,
     private val buttonSettings: View,
     private val buttonChooseEpisode: View,
     private val buttonMore: View,
@@ -37,6 +38,7 @@ internal class PlayerControlFocusCoordinator(
         REWIND,
         FAST_FORWARD,
         DM_SWITCH,
+        MIRROR,
         SETTINGS,
         EPISODE,
         MORE,
@@ -209,6 +211,7 @@ internal class PlayerControlFocusCoordinator(
             buttonRewind.isFocused -> FocusTarget.REWIND
             buttonFastForward.isFocused -> FocusTarget.FAST_FORWARD
             buttonDmSwitch.isFocused -> FocusTarget.DM_SWITCH
+            buttonMirror.isFocused -> FocusTarget.MIRROR
             buttonSettings.isFocused -> FocusTarget.SETTINGS
             buttonChooseEpisode.isFocused -> FocusTarget.EPISODE
             buttonMore.isFocused -> FocusTarget.MORE
@@ -231,6 +234,7 @@ internal class PlayerControlFocusCoordinator(
             FocusTarget.REWIND -> requestViewOrFallback(buttonRewind)
             FocusTarget.FAST_FORWARD -> requestViewOrFallback(buttonFastForward)
             FocusTarget.DM_SWITCH -> requestViewOrFallback(buttonDmSwitch)
+            FocusTarget.MIRROR -> requestViewOrFallback(buttonMirror)
             FocusTarget.SETTINGS -> requestSettingButtonFocus()
             FocusTarget.EPISODE -> requestEpisodeButtonFocus()
             FocusTarget.MORE -> requestMoreButtonFocus()
@@ -252,6 +256,7 @@ internal class PlayerControlFocusCoordinator(
             buttonRewind.isFocused ||
             buttonFastForward.isFocused ||
             buttonDmSwitch.isFocused ||
+            buttonMirror.isFocused ||
             buttonSettings.isFocused ||
             buttonChooseEpisode.isFocused ||
             buttonMore.isFocused ||

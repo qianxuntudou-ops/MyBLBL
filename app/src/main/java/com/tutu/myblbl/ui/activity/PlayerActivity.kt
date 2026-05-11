@@ -716,6 +716,9 @@ class PlayerActivity : BaseActivity<FragmentVideoPlayerBinding>() {
                 playerView.showHideSettingView(false)
             }
             override fun onAspectRatioChange(ratio: Int) {}
+            override fun onScreenMirrorChange(enabled: Boolean) {
+                playerView.setMirrorEnabled(enabled)
+            }
         })
         playerView.setOnVideoSettingChangeListener(object : OnVideoSettingChangeListener {
             override fun onPrevious() { viewModel.playPrevious() }

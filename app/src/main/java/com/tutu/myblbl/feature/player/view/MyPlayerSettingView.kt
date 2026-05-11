@@ -70,6 +70,7 @@ class MyPlayerSettingView @JvmOverloads constructor(
         internal const val ITEM_ASPECT_RATIO = 6
         internal const val ITEM_DM_SETTING = 7
         internal const val ITEM_LIVE_QUALITY = 8
+        internal const val ITEM_SCREEN_MIRROR = 9
         internal const val ITEM_DM_ENABLE = 101
         internal const val ITEM_DM_ALPHA = 102
         internal const val ITEM_DM_TEXT_SIZE = 103
@@ -429,6 +430,14 @@ class MyPlayerSettingView @JvmOverloads constructor(
             ITEM_AUDIO_QUALITY -> showAudioQualityMenu()
             ITEM_ASPECT_RATIO -> showScreenRatioMenu()
             ITEM_DM_SETTING -> showDmSettingMenu()
+            ITEM_SCREEN_MIRROR -> {
+                val newValue = !panelState.screenMirrorEnabled
+                updateState { it.copy(screenMirrorEnabled = newValue) }
+                onPlayerSettingChange?.onScreenMirrorChange(newValue)
+                val label = if (newValue) context.getString(R.string.on) else context.getString(R.string.off)
+                Toast.makeText(context, "${context.getString(R.string.screen_mirror)}：$label", Toast.LENGTH_SHORT).show()
+                refreshCurrentMenu()
+            }
         }
     }
 

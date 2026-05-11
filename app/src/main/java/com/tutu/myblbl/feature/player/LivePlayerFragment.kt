@@ -201,6 +201,7 @@ class LivePlayerFragment : Fragment() {
         binding.playerView.showHideTimeBar(false)
         binding.playerView.showHideTimeText(false)
         binding.playerView.showHideRefreshButton(true)
+        binding.playerView.showHideMirrorButton(true)
         binding.playerView.setOnVideoSettingChangeListener(object : com.tutu.myblbl.feature.player.view.OnVideoSettingChangeListener {
             override fun onLiveSettings() {
                 binding.playerView.showLiveQualityMenu()
@@ -215,6 +216,10 @@ class LivePlayerFragment : Fragment() {
 
             override fun onClose() {
                 navigateBackFromUi()
+            }
+
+            override fun onMirrorChange(enabled: Boolean) {
+                binding.playerView.setMirrorEnabled(enabled)
             }
         })
         binding.playerView.setOnPlayerSettingChange(object : com.tutu.myblbl.feature.player.view.OnPlayerSettingChange {

@@ -1401,6 +1401,43 @@ class MyPlayerView @JvmOverloads constructor(
         controller?.showHideDmSwitchButton(show)
     }
 
+    fun setMirrorEnabled(enabled: Boolean) {
+        val currentPlayer = player ?: return
+        val frame = contentFrame ?: return
+
+        val currentSurface = videoSurfaceView
+        if (currentSurface != null && (currentSurface is TextureView) == enabled) return
+
+        when (currentSurface) {
+            is SurfaceView -> currentPlayer.clearVideoSurfaceView(currentSurface)
+            is TextureView -> currentPlayer.clearVideoTextureView(currentSurface)
+        }
+        frame.removeView(currentSurface)
+        currentSurface?.removeOnLayoutChangeListener(maskBoundsLayoutListener)
+
+        val layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
+        if (enabled) {
+            val textureView = TextureView(context)
+            textureView.layoutParams = layoutParams
+            textureView.scaleX = -1f
+            videoSurfaceView = textureView
+            frame.addView(textureView, 0)
+            textureView.addOnLayoutChangeListener(maskBoundsLayoutListener)
+            currentPlayer.setVideoTextureView(textureView)
+        } else {
+            val surfaceView = SurfaceView(context)
+            surfaceView.layoutParams = layoutParams
+            videoSurfaceView = surfaceView
+            frame.addView(surfaceView, 0)
+            surfaceView.addOnLayoutChangeListener(maskBoundsLayoutListener)
+            currentPlayer.setVideoSurfaceView(surfaceView)
+        }
+    }
+
+    fun showHideMirrorButton(show: Boolean) {
+        controller?.showHideMirrorButton(show)
+    }
+
     fun showHideNextPrevious(show: Boolean) {
         controller?.showHideNextPrevious(show)
     }

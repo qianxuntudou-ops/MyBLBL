@@ -37,6 +37,7 @@ internal class MyPlayerSettingMenuBuilder(
         val dmAllowBottom: Boolean = false,
         val dmMergeDuplicate: Boolean = true,
         val dmSmartShield: Boolean = true,
+        val screenMirrorEnabled: Boolean = false,
         val liveQualities: List<LiveQualityInfo> = emptyList(),
         val currentLiveQualityQn: Int? = null
     )
@@ -86,6 +87,12 @@ internal class MyPlayerSettingMenuBuilder(
                 title = context.getString(R.string.screen_ratio),
                 value = screenRatioLabels().getOrElse(state.currentScreenRatio) { screenRatioLabels().first() },
                 iconRes = R.drawable.ic_screen_ratio
+            ),
+            PlayerSettingRow.Item(
+                id = MyPlayerSettingView.ITEM_SCREEN_MIRROR,
+                title = context.getString(R.string.screen_mirror),
+                value = state.screenMirrorEnabled.toOpenCloseLabel(),
+                iconRes = if (state.screenMirrorEnabled) R.drawable.ic_mirror_on else R.drawable.ic_mirror_off
             ),
             PlayerSettingRow.Item(
                 id = MyPlayerSettingView.ITEM_DM_SETTING,

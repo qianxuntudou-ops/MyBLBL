@@ -98,7 +98,6 @@ object SponsorBlockRepository {
         val cacheKey = "$bvid:$cid"
         cache[cacheKey]?.let { entry ->
             if (System.currentTimeMillis() - entry.timestamp < CACHE_TTL_MS) {
-                Log.d(TAG, "使用缓存: ${entry.segments.size} 个片段 for $bvid")
                 return@withContext SegmentResult(entry.segments)
             }
             cache.remove(cacheKey)
@@ -106,7 +105,6 @@ object SponsorBlockRepository {
 
         try {
             val hashPrefix = sha256Prefix(bvid)
-            Log.d(TAG, "[$bvid] 哈希前缀: $hashPrefix")
             val params = buildList {
                 categories.forEach { add("category=$it") }
             }
@@ -121,44 +119,28 @@ object SponsorBlockRepository {
                 .build()
 
             val response = client.newCall(request).execute()
-            Log.d(TAG, "[$bvid] API 返回: ${response.code}")
             when (response.code) {
                 200 -> {
-                    val body = response.body?.string() ?: run {
-                        Log.w(TAG, "[$bvid] 响应体为空")
-                        return@withContext SegmentResult()
-                    }
-                    Log.d(TAG, "[$bvid] 响应长度: ${body.length}")
+                    val body = response.body?.string() ?: return@withContext SegmentResult()
                     val type = object : TypeToken<List<HashVideoResponse>>() {}.type
                     val videos = gson.fromJson<List<HashVideoResponse>>(body, type)
-                    Log.d(TAG, "[$bvid] 解析到 ${videos.size} 个视频: ${videos.map { "${it.videoID}(${it.segments.size}段)" }}")
                     val allSegments = videos
                         .find { it.videoID == bvid }
                         ?.segments
-                        ?: run {
-                            Log.d(TAG, "[$bvid] 未在响应中找到匹配的 BVID")
-                            emptyList()
-                        }
-                    Log.d(TAG, "[$bvid] 匹配到 ${allSegments.size} 个原始片段")
-                    allSegments.forEach {
-                        Log.d(TAG, "[$bvid]   - ${it.category} ${it.startTimeMs}ms~${it.endTimeMs}ms actionType=${it.actionType}")
-                    }
+                        ?: emptyList()
                     val segments = normalizeSegments(allSegments)
-                    Log.d(TAG, "[$bvid] 归一化后 ${segments.size} 个片段")
+                    Log.d(TAG, "$bvid: ${segments.size} segments")
                     cache[cacheKey] = CacheEntry(segments)
                     SegmentResult(segments)
                 }
-                404 -> {
-                    Log.d(TAG, "[$bvid] 没有空降数据")
-                    SegmentResult()
-                }
+                404 -> SegmentResult()
                 else -> {
-                    Log.w(TAG, "[$bvid] API 返回错误: ${response.code}")
+                    Log.w(TAG, "$bvid: API error ${response.code}")
                     SegmentResult(error = "空降助手服务异常 (${response.code})")
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "[${bvid}] 获取空降片段失败", e)
+            Log.w(TAG, "$bvid: ${e.message}")
             SegmentResult(error = "空降助手连接失败，请检查网络")
         }
     }

@@ -297,7 +297,7 @@ class VideoPlayerViewModel(
             .getOrNull()
             ?.getCachedString("ipv4_only") != "关"
     }
-    private val playerOkHttpClient = okHttpClient.newBuilder()
+    private val playerOkHttpClient = okhttp3.OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
         .connectionPool(okhttp3.ConnectionPool(5, 30, TimeUnit.SECONDS))

@@ -212,6 +212,19 @@ object ImageLoader {
         onPortraitDetected: ((Boolean) -> Unit)? = null
     ) {
         val optimizedUrl = buildOptimizedVideoCoverUrl(imageView, url)
+        val cachedBitmap = CoverLoader.get(optimizedUrl)
+        if (cachedBitmap != null && !cachedBitmap.isRecycled) {
+            if (placeholder != 0) {
+                imageView.setImageResource(placeholder)
+            }
+            imageView.setImageBitmap(cachedBitmap)
+            if (onPortraitDetected != null) {
+                val w = cachedBitmap.width
+                val h = cachedBitmap.height
+                onPortraitDetected(w > 0 && h > 0 && h > w)
+            }
+            return
+        }
         enqueue(
             imageView = imageView,
             url = optimizedUrl,

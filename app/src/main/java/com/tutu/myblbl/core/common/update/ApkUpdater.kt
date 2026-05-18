@@ -9,12 +9,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.net.Inet4Address
+import java.net.InetAddress
+import java.net.UnknownHostException
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
@@ -33,10 +37,20 @@ object ApkUpdater {
 
     private val okHttpLazy: Lazy<OkHttpClient> = lazy {
         OkHttpClient.Builder()
+            .dns(IPv4OnlyDns)
             .connectTimeout(12, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)
             .build()
+    }
+
+    private object IPv4OnlyDns : Dns {
+        override fun lookup(hostname: String): List<InetAddress> {
+            val addresses = Dns.SYSTEM.lookup(hostname)
+            val ipv4 = addresses.filterIsInstance<Inet4Address>()
+            if (ipv4.isNotEmpty()) return ipv4
+            throw UnknownHostException("No IPv4 address for $hostname")
+        }
     }
 
     private val okHttp: OkHttpClient

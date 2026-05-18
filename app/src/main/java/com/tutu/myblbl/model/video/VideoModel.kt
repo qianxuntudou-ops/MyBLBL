@@ -168,6 +168,9 @@ data class VideoModel(
     val coverUrl: String
         get() = pic.ifEmpty { cover }
 
+    val effectiveCoverUrl: String
+        get() = bangumi?.cover?.takeIf { it.isNotBlank() } ?: coverUrl
+
     val durationValue: Long
         get() = when {
             duration > 0 -> duration

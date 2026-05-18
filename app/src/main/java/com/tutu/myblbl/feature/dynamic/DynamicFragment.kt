@@ -266,6 +266,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                     val videos = withContext(Dispatchers.Default) {
                         ContentFilter.filterVideos(requireContext(), rawVideos)
                     }
+
                     val page = viewModel.loadedPage.value
                     swipeRefreshLayout?.isRefreshing = false
                     if (page <= 1 || videoAdapter.itemCount == 0) {
@@ -273,6 +274,7 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                     } else if (videos.isNotEmpty()) {
                         videoAdapter.addData(videos)
                     }
+
                     videoFocusController?.onDataChanged(
                         if (page <= 1) TvDataChangeReason.REPLACE_PRESERVE_ANCHOR else TvDataChangeReason.APPEND
                     )
@@ -281,6 +283,11 @@ class DynamicFragment : BaseFragment<FragmentDynamicBinding>(), MainTabFocusTarg
                         if (pendingScrollToTop) {
                             pendingScrollToTop = false
                             scrollVideoListToTop()
+                            binding.recyclerViewRight.post {
+                                if (isAdded && view != null && videoAdapter.itemCount > 0) {
+                                    requestPreferredContentFocus(fallbackToAlternate = true)
+                                }
+                            }
                         }
                     }
                 }

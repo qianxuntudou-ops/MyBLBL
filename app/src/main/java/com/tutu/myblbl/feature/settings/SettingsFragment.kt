@@ -446,8 +446,10 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
                 }
             } catch (e: Exception) {
                 AppLog.e("SettingsFragment", "check update failed", e)
-                updateCheckState.value = UpdateCheckState.Error(e.message ?: "未知错误")
+                val msg = e.message ?: "未知错误"
+                updateCheckState.value = UpdateCheckState.Error(msg)
                 updateUpdateEntry()
+                Toast.makeText(requireContext(), "检查失败：$msg", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -656,7 +658,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
                 if (e is kotlinx.coroutines.CancellationException) return@launch
                 dialog.dismiss()
                 AppLog.e("SettingsFragment", "download apk failed", e)
-                Toast.makeText(requireContext(), "下载失败：${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(requireContext(), "下载失败：${e.message ?: "未知错误"}", Toast.LENGTH_LONG).show()
                 updateCheckState.value = UpdateCheckState.Idle
                 updateUpdateEntry()
             }

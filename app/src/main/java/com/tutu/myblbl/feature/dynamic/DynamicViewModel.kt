@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.tutu.myblbl.core.ui.image.CoverLoader
 
 class DynamicViewModel(
     private val userRepository: UserRepository
@@ -82,10 +83,12 @@ class DynamicViewModel(
     private val videoCache = LruCache<String, CachedUpVideos>(15)
     private var loadJob: Job? = null
     private var preloadJob: Job? = null
+    private var followingLoadJob: Job? = null
     private var lastPageSize = 20
     private var loadGeneration = 0
 
     fun loadFollowingList() {
+        if (followingLoadJob?.isActive == true) return
         if (!userRepository.isLoggedIn()) {
             _loading.value = false
             _error.value = null
@@ -108,7 +111,7 @@ class DynamicViewModel(
             return
         }
 
-        viewModelScope.launch {
+        followingLoadJob = viewModelScope.launch {
             _loading.value = true
             _error.value = null
             _status.value = DynamicStatus.Idle
@@ -130,11 +133,8 @@ class DynamicViewModel(
             userRepository.resolveCurrentUserMid()
                 .onSuccess { mid ->
                     currentUserMid = mid
-                    loadFollowingPage(
-                        mid = mid,
-                        page = 1,
-                        defaultItems = defaultItems
-                    )
+                    launch { loadFollowingPage(mid, 1, defaultItems) }
+                    launch { selectUp(ALL_DYNAMIC_ID, lastPageSize) }
                 }
                 .onFailure { exception ->
                     _loading.value = false
@@ -231,7 +231,7 @@ class DynamicViewModel(
         if (upId.isBlank()) {
             return
         }
-        if (!forceRefresh && upId == currentUpId && currentPage > 0) {
+        if (!forceRefresh && upId == currentUpId && (currentPage > 0 || loadJob?.isActive == true)) {
             return
         }
 
@@ -284,14 +284,17 @@ class DynamicViewModel(
                 _screenState.value = ScreenState.Content
             }
 
+            val isAllDynamic = currentUpId == ALL_DYNAMIC_ID
+
             try {
-                if (currentUpId == ALL_DYNAMIC_ID) {
+                if (isAllDynamic) {
                     userRepository.getAllDynamic(
                         page = nextPage,
                         offset = if (nextPage > 1) currentAllDynamicOffset else null
                     ).onSuccess { response ->
+                        val items = response.data?.items.orEmpty()
+
                         if (response.isSuccess) {
-                            val items = response.data?.items.orEmpty()
                             currentVideoItems = if (nextPage == 1) {
                                 items
                             } else {
@@ -302,6 +305,7 @@ class DynamicViewModel(
                             currentAllDynamicOffset = response.data?.offset
                             currentPage = nextPage
                             _loadedPage.value = nextPage
+                            CoverLoader.preload(items.take(6).map { it.effectiveCoverUrl })
                             _videos.value = items
                             _status.value = resolveStatus(currentUpId, currentVideoItems)
                             _screenState.value = ScreenState.Content
@@ -332,8 +336,9 @@ class DynamicViewModel(
 
                 userRepository.getUserDynamic(currentUpId.toLongOrNull() ?: 0L, nextPage, pageSize)
                     .onSuccess { response ->
+                        val items = response.data?.archives.orEmpty()
+
                         if (response.isSuccess) {
-                            val items = response.data?.archives.orEmpty()
                             currentVideoItems = if (nextPage == 1) {
                                 items
                             } else {
@@ -343,6 +348,7 @@ class DynamicViewModel(
                             _hasMoreVideos.value = response.data?.hasMore == true
                             currentPage = nextPage
                             _loadedPage.value = nextPage
+                            CoverLoader.preload(items.take(6).map { it.effectiveCoverUrl })
                             _videos.value = items
                             _status.value = resolveStatus(currentUpId, currentVideoItems)
                             _screenState.value = ScreenState.Content
@@ -442,7 +448,9 @@ class DynamicViewModel(
         super.onCleared()
         loadJob?.cancel()
         preloadJob?.cancel()
+        followingLoadJob?.cancel()
         videoCache.evictAll()
+        CoverLoader.evictAll()
         _followingList.value = emptyList()
         _videos.value = emptyList()
         currentVideoItems = emptyList()

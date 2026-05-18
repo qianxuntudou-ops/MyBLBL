@@ -157,6 +157,15 @@ abstract class BaseAdapter<MODEL, VH : RecyclerView.ViewHolder> : RecyclerView.A
         pendingSetDataJob?.cancel()
         maybePrefetchCovers(newItems)
         val oldItems = items.toList()
+        if (oldItems.isEmpty()) {
+            items.clear()
+            items.addAll(newItems)
+            if (newItems.isNotEmpty()) {
+                notifyItemRangeInserted(0, if (showLoadMore) newItems.size + 1 else newItems.size)
+            }
+            onComplete?.invoke()
+            return
+        }
         pendingSetDataJob = adapterScope.launch {
             val diffResult = withContext(Dispatchers.Default) {
                 DiffUtil.calculateDiff(object : DiffUtil.Callback() {

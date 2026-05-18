@@ -212,6 +212,19 @@ object ImageLoader {
         onPortraitDetected: ((Boolean) -> Unit)? = null
     ) {
         val optimizedUrl = buildOptimizedVideoCoverUrl(imageView, url)
+        val cachedBitmap = CoverLoader.get(optimizedUrl)
+        if (cachedBitmap != null && !cachedBitmap.isRecycled) {
+            if (placeholder != 0) {
+                imageView.setImageResource(placeholder)
+            }
+            imageView.setImageBitmap(cachedBitmap)
+            if (onPortraitDetected != null) {
+                val w = cachedBitmap.width
+                val h = cachedBitmap.height
+                onPortraitDetected(w > 0 && h > 0 && h > w)
+            }
+            return
+        }
         enqueue(
             imageView = imageView,
             url = optimizedUrl,
@@ -219,14 +232,18 @@ object ImageLoader {
             errorRes = error,
             scale = Scale.FILL,
             crossfade = false,
-            onSuccess = if (onPortraitDetected != null) { drawable ->
-                val w = drawable.intrinsicWidth
-                val h = drawable.intrinsicHeight
-                onPortraitDetected(w > 0 && h > 0 && h > w)
-            } else null,
-            onError = if (onPortraitDetected != null) {
-                { AppLog.e(TAG, "loadVideoCover FAILED: url=$optimizedUrl") }
-            } else null
+            onSuccess = { drawable ->
+                if (onPortraitDetected != null) {
+                    val w = drawable.intrinsicWidth
+                    val h = drawable.intrinsicHeight
+                    onPortraitDetected(w > 0 && h > 0 && h > w)
+                }
+            },
+            onError = {
+                if (onPortraitDetected != null) {
+                    AppLog.e(TAG, "loadVideoCover FAILED: url=$optimizedUrl")
+                }
+            }
         )
     }
 
@@ -468,7 +485,7 @@ object ImageLoader {
         return appendImageSuffix(normalized, suffix)
     }
 
-    private fun resolveImageQualityLevel(imageView: ImageView): Int {
+    private fun resolveImageQualityLevel(): Int {
         cachedImageQualityLevel?.let { return it }
         ensureImageQualityFlowCollection()
         appSettings.getCachedString(KEY_IMAGE_QUALITY)?.let { label ->
@@ -479,6 +496,19 @@ object ImageLoader {
             return level.coerceIn(0, 2).also { cachedImageQualityLevel = it }
         }
         return 1.also { cachedImageQualityLevel = it }
+    }
+
+    private fun resolveImageQualityLevel(imageView: ImageView): Int = resolveImageQualityLevel()
+
+    fun buildVideoCoverUrl(url: String?): String {
+        val normalized = normalizeUrl(url)
+        if (!isBilibiliImageUrl(normalized)) return normalized
+        val suffix = when (resolveImageQualityLevel()) {
+            0 -> "@240w_135h_1c.webp"
+            2 -> "@672w_378h_1c.webp"
+            else -> "@480w_270h_1c.webp"
+        }
+        return appendImageSuffix(normalized, suffix)
     }
 
     @Synchronized
